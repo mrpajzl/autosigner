@@ -3,6 +3,8 @@ NODE_ENV = "production"
 NPM_CONFIG_PRODUCTION = "false"
 # Prefer IPv4 to avoid IPv6 EHOSTUNREACH in some hosts
 NODE_OPTIONS = "--dns-result-order=ipv4first"
+HOST = "0.0.0.0"
+PRISMA_LOG_LEVEL = "info"
 
 [phases.setup]
 # Use modern Node/npm compatible with Nuxt 4 & deps
@@ -21,6 +23,6 @@ cmds = ["npm run build"]
 cacheDirectories = ["node_modules/.cache"]
 
 [start]
-cmd = "npx prisma migrate deploy && node .output/server/index.mjs"
+cmd = "npx prisma migrate deploy || npx prisma db push; node .output/server/index.mjs"
 
 
