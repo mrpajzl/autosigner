@@ -1,0 +1,46 @@
+{
+  "name": "nuxt-app",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@nuxt/content": "^3.6.3",
+    "@nuxt/eslint": "^1.8.0",
+    "@nuxt/fonts": "^0.11.4",
+    "@nuxt/icon": "^1.15.0",
+    "@nuxt/image": "^1.11.0",
+    "@nuxt/scripts": "^0.11.10",
+    "@nuxt/test-utils": "^3.19.2",
+    "@nuxt/ui": "^2.18.7",
+    "@prisma/client": "^5.22.0",
+    "bcryptjs": "^3.0.2",
+    "bplist-parser": "^0.3.2",
+    "better-sqlite3": "^12.2.0",
+    "eslint": "^9.33.0",
+    "execa": "^9.6.0",
+    "formidable": "^3.5.4",
+    "fs-extra": "^11.3.1",
+    "nanoid": "^5.1.5",
+    "nuxt": "^4.0.3",
+    "pathe": "^2.0.3",
+    "plist": "^3.1.0",
+    "uuid": "^11.1.0",
+    "vue": "^3.5.18",
+    "vue-router": "^4.5.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@nuxtjs/tailwindcss": "^6.14.0",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^3.4.14",
+    "vite-plugin-mkcert": "^1.17.6"
+  }
+}

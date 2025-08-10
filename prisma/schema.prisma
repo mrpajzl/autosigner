@@ -1,0 +1,79 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  role          String   @default("MANAGER")
+  status        String   @default("PENDING")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  managerProfile ManagerProfile?
+  apps           App[]
+  sessions       Session[]
+}
+
+model ManagerProfile {
+  id              String  @id @default(cuid())
+  userId          String  @unique
+  displayName     String
+  companyName     String?
+  certificatePem  String? // PEM-encoded certificate (encrypted at rest)
+  privateKeyPem   String? // PEM-encoded private key (encrypted at rest)
+  // Encrypted JSON from encrypt() containing iv+data for p12 password
+  p12PasswordEnc  String?
+  // Keep last uploaded provisioning profiles per platform (encrypted at rest)
+  mobileprovisionIos  Bytes?
+  mobileprovisionTvos Bytes?
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  @@index([userId])
+  @@index([token])
+}
+
+model App {
+  id              String   @id @default(cuid())
+  ownerId         String
+  platform        String   @default("IOS") // IOS | TVOS
+  name            String
+  bundleId        String
+  version         String
+  buildNumber     String?
+  ipaFileName     String?
+  originalIpaPath String
+  signedIpaPath   String?
+  manifestPath    String?
+  iconPath        String?
+  sizeBytes       Int?
+  uploadedAt      DateTime @default(now())
+  signedAt        DateTime?
+  status          String   @default("PENDING") // PENDING | SIGNING | SIGNED | FAILED
+
+  owner User @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
+  @@index([bundleId])
+}
+
+// Note: SQLite connector doesn't support enums; using string fields.
