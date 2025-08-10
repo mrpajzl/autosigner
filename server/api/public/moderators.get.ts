@@ -21,6 +21,7 @@ type PublicModerator = {
 }
 
 export default defineEventHandler(async () => {
+  try {
   const managers = await prisma.user.findMany({
     where: { role: { in: ['MANAGER', 'ADMIN', 'SUPERADMIN'] } },
     include: {
@@ -81,6 +82,11 @@ export default defineEventHandler(async () => {
   })
 
   return data
+  } catch (e) {
+    console.error('Failed to fetch public moderators', e)
+    // Avoid failing public homepage if DB is not ready; return empty list
+    return []
+  }
 })
 
 
