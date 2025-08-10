@@ -21,6 +21,6 @@ cmds = ["npm run build"]
 cacheDirectories = ["node_modules/.cache"]
 
 [start]
-cmd = "node .output/server/index.mjs"
+cmd = "npx prisma migrate deploy && node .output/server/index.mjs"
 
 
