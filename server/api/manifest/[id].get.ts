@@ -7,8 +7,13 @@ export default defineEventHandler(async (event) => {
   const app = await prisma.app.findUnique({ where: { id } })
   if (!app) throw createError({ statusCode: 404 })
 
-  // Always prefer current request origin to avoid embedding localhost from env
-  const baseUrl = getRequestURL(event).origin
+  // Prefer configured public base URL (e.g., https://your-domain) to avoid
+  // proxy mis-detection of scheme/host; fall back to current request origin
+  const rc = useRuntimeConfig()
+  const configured = rc?.public?.baseUrl as string | undefined
+  const baseUrl = (configured && configured.length > 0)
+    ? configured.replace(/\/$/, '')
+    : getRequestURL(event).origin
   const assetUrl = app.signedIpaPath ? `${baseUrl}${app.signedIpaPath}` : `${baseUrl}${app.originalIpaPath}`
 
   const manifest = {
