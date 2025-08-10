@@ -1,8 +1,8 @@
 import { PrismaClient } from '@prisma/client'
 
-// Ensure DATABASE_URL is set for Prisma (default to local SQLite file in production if not provided)
+// Ensure DATABASE_URL is set for Prisma (default to bundled SQLite file if not provided)
 if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = 'file:/data/autosigner.db'
+  process.env.DATABASE_URL = 'file:./prisma/dev.db'
 }
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }
