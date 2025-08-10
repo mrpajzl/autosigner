@@ -5,7 +5,7 @@ NPM_CONFIG_PRODUCTION = "false"
 NODE_OPTIONS = "--dns-result-order=ipv4first"
 HOST = "0.0.0.0"
 PRISMA_LOG_LEVEL = "info"
-DATABASE_URL = "file:./prisma/dev.db"
+DATABASE_URL = "file:/app/prisma/dev.db"
 
 [phases.setup]
 # Use modern Node/npm compatible with Nuxt 4 & deps
@@ -24,6 +24,6 @@ cmds = ["npm run build"]
 cacheDirectories = ["node_modules/.cache"]
 
 [start]
-cmd = "npx prisma migrate deploy || true; npx prisma db push; node .output/server/index.mjs"
+cmd = "mkdir -p /app/prisma; npx prisma migrate deploy || true; npx prisma db push; node .output/server/index.mjs"
 
 
