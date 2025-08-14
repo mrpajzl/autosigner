@@ -1,8 +1,9 @@
 import { PrismaClient } from '@prisma/client'
 
-// Ensure DATABASE_URL is set for Prisma (default to bundled SQLite file if not provided)
+// Ensure DATABASE_URL is set for Prisma (default to repo SQLite file if not provided)
+// Use a relative URL so it works in local dev without container paths
 if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = 'file:/app/prisma/dev.db'
+  process.env.DATABASE_URL = 'file:./prisma/dev.db'
 }
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient }

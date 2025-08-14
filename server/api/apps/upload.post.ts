@@ -6,6 +6,7 @@ import { execa } from 'execa'
 import path from 'node:path'
 import plist from 'plist'
 import { encrypt } from '../../utils/crypto'
+import { signApp } from '../../utils/signer'
 import { createRequire } from 'node:module'
 
 export const config = { api: { bodyParser: false } }
@@ -88,7 +89,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Fire-and-forget signing in background (best-effort)
+  // Fire-and-forget signing in background (best-effort), reusing stored manager assets
   ;(async () => {
     try {
       const outputDir = path.join(uploadDir, app.id)
@@ -152,60 +153,7 @@ export default defineEventHandler(async (event) => {
         console.error('Failed to persist manager profile assets', e)
       }
 
-      // Try using isign if available; otherwise, mark failed with note.
-      let signedIpaPublic: string | undefined
-      try {
-        await execa('bash', ['-lc', `command -v isign`])
-        const signedPath = path.join(outputDir, `${app.id}-signed.ipa`)
-        // Let isign infer identifier from original IPA unless user provided one
-        const certArg = certPem
-        const keyArg = keyPem
-          const args = [
-          'isign',
-          ...(bundleId ? ['-i', bundleId] : []),
-          ...(profilePath ? ['-p', profilePath] : []),
-          ...(certArg ? ['-c', certArg] : []),
-          ...(keyArg ? ['-k', keyArg] : []),
-          '-o', signedPath,
-          // Use the absolute path of the uploaded IPA we just saved
-          originalIpaAbsPath
-        ]
-        await execa('bash', ['-lc', args.map((a) => `'${a}'`).join(' ')])
-        signedIpaPublic = `/uploads/${user.id}/${app.id}/${path.basename(signedPath)}`
-      } catch {
-        // Fallback: assume original IPA (not signed)
-        signedIpaPublic = app.originalIpaPath
-      }
-
-      // Generate manifest only for iOS; tvOS uses direct download
-      let manifestPublic: string | undefined
-      if (platform === 'IOS') {
-        const baseUrl = useRuntimeConfig().public.baseUrl || getRequestURL(event).origin
-        const manifest = {
-          items: [
-            {
-              assets: [
-                { kind: 'software-package', url: `${baseUrl}${signedIpaPublic}` }
-              ],
-              metadata: {
-                'bundle-identifier': bundleId,
-                'bundle-version': version || '0.0.0',
-                kind: 'software',
-                title: name
-              }
-            }
-          ]
-        }
-        const plistXml = plist.build(manifest as any)
-        const manifestPath = path.join(outputDir, 'manifest.plist')
-        await fse.writeFile(manifestPath, plistXml)
-        manifestPublic = `/uploads/${user.id}/${app.id}/manifest.plist`
-      }
-
-      await prisma.app.update({
-        where: { id: app.id },
-        data: { status: 'SIGNED', signedAt: new Date(), signedIpaPath: signedIpaPublic, manifestPath: manifestPublic }
-      })
+      await signApp(app.id)
     } catch (e) {
       await prisma.app.update({ where: { id: app.id }, data: { status: 'FAILED' } })
       console.error('Signing failed', e)

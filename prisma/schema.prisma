@@ -22,6 +22,8 @@ model User {
   managerProfile ManagerProfile?
   apps           App[]
   sessions       Session[]
+  certificates   Certificate[]
+  provisioningProfiles ProvisioningProfile[]
 }
 
 model ManagerProfile {
@@ -77,3 +79,33 @@ model App {
 }
 
 // Note: SQLite connector doesn't support enums; using string fields.
+
+model Certificate {
+  id             String   @id @default(cuid())
+  userId         String
+  displayName    String?
+  p12Data        Bytes
+  // Encrypted JSON from encrypt() containing iv+data
+  p12PasswordEnc String?
+  createdAt      DateTime @default(now())
+  active         Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, active])
+}
+
+model ProvisioningProfile {
+  id        String   @id @default(cuid())
+  userId    String
+  platform  String   // IOS | TVOS
+  name      String?
+  uuid      String?
+  teamId    String?
+  expiresAt DateTime?
+  data      Bytes     // raw .mobileprovision data
+  createdAt DateTime @default(now())
+  active    Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id])
+  @@index([userId, platform, active])
+}

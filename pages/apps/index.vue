@@ -7,7 +7,10 @@
             <UIcon name="i-heroicons-rectangle-stack" />
             <span class="font-semibold">My Apps</span>
           </div>
-          <UButton to="/upload" icon="i-heroicons-arrow-up-tray" color="white" variant="soft" label="Upload" />
+          <div class="flex gap-2">
+            <UButton to="/apps/new" icon="i-heroicons-plus-circle" color="white" variant="soft" label="New App" />
+            <UButton to="/upload" icon="i-heroicons-arrow-up-tray" color="white" variant="soft" label="Legacy Upload" />
+          </div>
         </div>
       </template>
       <UTable :rows="apps" :columns="columns" class="min-w-full" />

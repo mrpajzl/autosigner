@@ -8,6 +8,7 @@
           <NuxtLink to="/" class="hover:text-white">Dashboard</NuxtLink>
           <NuxtLink to="/apps" class="hover:text-white">Apps</NuxtLink>
           <NuxtLink to="/upload" class="hover:text-white">Upload</NuxtLink>
+          <NuxtLink to="/apps/new" class="hover:text-white">New App</NuxtLink>
           <NuxtLink to="/admin/approvals" class="hover:text-white">Approvals</NuxtLink>
         </nav>
       </div>
@@ -31,7 +32,7 @@ const colorMode = useColorMode()
 const toggleTheme = () => { colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark' }
 const { data: me } = await useFetch<{ id: string; email: string } | null>('/api/auth/me')
 const userMenu = [[
-  { label: 'Profile', icon: 'i-heroicons-user' },
+  { label: 'Profile', icon: 'i-heroicons-user', to: '/profile' },
   { label: 'Sign out', icon: 'i-heroicons-arrow-left-on-rectangle', click: async () => { await $fetch('/api/auth/signout', { method: 'POST' }); navigateTo('/') } }
 ]]
 </script>

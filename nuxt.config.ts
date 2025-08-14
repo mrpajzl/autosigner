@@ -89,7 +89,11 @@ export default defineNuxtConfig({
       // Ensure key routes exist even if scanner misbehaves
       ensure('/', './pages/index.vue', 'index')
       ensure('/apps', './pages/apps/index.vue', 'apps')
+      ensure('/apps/new', './pages/apps/new.vue', 'apps-new')
       ensure('/upload', './pages/upload.vue', 'upload')
+      ensure('/profile', './pages/profile/index.vue', 'profile-index')
+      ensure('/profile/certificates', './pages/profile/certificates.vue', 'profile-certificates')
+      ensure('/profile/profiles', './pages/profile/profiles.vue', 'profile-profiles')
       ensure('/auth/login', './pages/auth/login.vue', 'auth-login')
       ensure('/admin/approvals', './pages/admin/approvals.vue', 'admin-approvals')
     }

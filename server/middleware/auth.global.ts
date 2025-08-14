@@ -22,8 +22,10 @@ export default defineEventHandler(async (event) => {
   const protectedPrefixes = [
     '/apps',
     '/upload',
+    '/profile',
     '/admin',
     '/api/apps',
+    '/api/profile',
     '/api/stats'
   ]
   const isProtected = protectedPrefixes.some((p) => url === p || url.startsWith(p + '/'))

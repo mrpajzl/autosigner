@@ -11,7 +11,7 @@
             <key>kind</key>
             <string>software-package</string>
             <key>url</key>
-            <string>http://localhost:3000/uploads/cme4hggij0000xzipktw11i8w/Falle_mrpajzl_ios.ipa</string>
+            <string>https://192.168.1.109:3000/uploads/cme4hggij0000xzipktw11i8w/Falle_mrpajzl_ios.ipa</string>
           </dict>
         </array>
         <key>metadata</key>
