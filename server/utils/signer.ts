@@ -105,7 +105,7 @@ export async function signApp(appId: string): Promise<void> {
       items: [
         {
           assets: [
-            { kind: 'software-package', url: `${baseUrl}${signedIpaPublic}` }
+            { kind: 'software-package', url: `${baseUrl}/api/download/${(signedIpaPublic || '').replace(/^\//, '')}` }
           ],
           metadata: {
             'bundle-identifier': app.bundleId,

@@ -10,13 +10,18 @@
     </div>
 
     <div v-for="mod in moderators" :key="mod.id" class="grid gap-6 md:grid-cols-3">
+      <div class="md:col-span-3">
+        <div class="flex items-center gap-3">
+          <UIcon name="i-heroicons-user-circle" class="text-red-500" />
+          <h2 class="text-xl font-semibold tracking-wide">{{ mod.name }}</h2>
+        </div>
+      </div>
       <UCard class="glass">
         <template #header>
           <div class="flex items-center gap-3">
             <UIcon name="i-heroicons-computer-desktop" class="text-red-500" />
             <div>
               <p class="font-semibold">Apple TV</p>
-              <p class="text-xs text-white/60">Moderator: {{ mod.name }}</p>
             </div>
           </div>
         </template>
@@ -36,7 +41,6 @@
             <UIcon name="i-heroicons-device-phone-mobile" class="text-red-500" />
             <div>
               <p class="font-semibold">iPhone, iPad, Mac M1</p>
-              <p class="text-xs text-white/60">Moderator: {{ mod.name }}</p>
             </div>
           </div>
         </template>
@@ -56,7 +60,6 @@
             <UIcon name="i-heroicons-identification" class="text-red-500" />
             <div>
               <p class="font-semibold">Certifikáty, Profily</p>
-              <p class="text-xs text-white/60">Moderator: {{ mod.name }}</p>
             </div>
           </div>
         </template>

@@ -14,7 +14,9 @@ export default defineEventHandler(async (event) => {
   const baseUrl = (configured && configured.length > 0)
     ? configured.replace(/\/$/, '')
     : getRequestURL(event).origin
-  const assetUrl = app.signedIpaPath ? `${baseUrl}${app.signedIpaPath}` : `${baseUrl}${app.originalIpaPath}`
+  const ipaPath = app.signedIpaPath || app.originalIpaPath
+  const rel = (ipaPath || '').replace(/^\//, '')
+  const assetUrl = `${baseUrl}/api/download/${rel}`
 
   const manifest = {
     items: [

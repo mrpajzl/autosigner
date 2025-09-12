@@ -21,7 +21,7 @@
           <UButton icon="i-heroicons-moon" variant="ghost" color="white" @click="toggleTheme" />
           <div v-if="me">
             <UDropdown :items="userMenu">
-              <UButton color="white" variant="soft" icon="i-heroicons-user-circle" :label="me.email" />
+              <UButton color="white" variant="soft" icon="i-heroicons-user-circle" :label="me.nickname || me.email" />
             </UDropdown>
           </div>
           <div v-else>
@@ -65,7 +65,7 @@ const userMenu = [[
 
 const pageTitle = computed(() => route.meta?.title ?? 'AutoSigner')
 const mobileOpen = ref(false)
-const { data: me } = useFetch('/api/auth/me')
+const { data: me } = useFetch<{ id: string; email: string; nickname?: string | null } | null>('/api/auth/me')
 
 function toggleTheme() {
   colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'

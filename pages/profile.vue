@@ -12,7 +12,7 @@
 
       <form class="space-y-4" @submit.prevent="onSubmit">
         <div class="grid md:grid-cols-2 gap-4">
-          <UFormGroup label="Display Name">
+          <UFormGroup label="Nickname">
             <UInput v-model="displayName" placeholder="Shown on dashboard" />
           </UFormGroup>
           <UFormGroup label="Company Name">
