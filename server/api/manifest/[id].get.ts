@@ -18,16 +18,30 @@ export default defineEventHandler(async (event) => {
   const rel = (ipaPath || '').replace(/^\//, '')
   const assetUrl = `${baseUrl}/api/download/${rel}`
 
+  const platformIdentifier = app.platform?.toUpperCase() === 'TVOS'
+    ? 'com.apple.platform.appletvos'
+    : 'com.apple.platform.iphoneos'
+
+  const iconRel = (app.iconPath || '').replace(/^\//, '')
+  const iconUrl = iconRel ? `${baseUrl}/${iconRel}` : undefined
+
+  const assets: any[] = [
+    { kind: 'software-package', url: assetUrl }
+  ]
+  if (iconUrl) {
+    assets.push({ kind: 'display-image', url: iconUrl })
+    assets.push({ kind: 'full-size-image', url: iconUrl })
+  }
+
   const manifest = {
     items: [
       {
-        assets: [
-          { kind: 'software-package', url: assetUrl }
-        ],
+        assets,
         metadata: {
           'bundle-identifier': app.bundleId,
           'bundle-version': app.version,
           kind: 'software',
+          'platform-identifier': platformIdentifier,
           title: app.name
         }
       }

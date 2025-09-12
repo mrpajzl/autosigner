@@ -101,16 +101,26 @@ export async function signApp(appId: string): Promise<void> {
   let manifestPublic: string | undefined
   if (platform === 'IOS') {
     const baseUrl = (useRuntimeConfig().public.baseUrl || '').toString().replace(/\/$/, '')
+    const platformIdentifier = platform === 'TVOS' ? 'com.apple.platform.appletvos' : 'com.apple.platform.iphoneos'
+    const iconRel = (app.iconPath || '').replace(/^\//, '')
+    const iconUrl = iconRel ? `${baseUrl}/${iconRel}` : undefined
+    const assets: any[] = [
+      { kind: 'software-package', url: `${baseUrl}/api/download/${(signedIpaPublic || '').replace(/^\//, '')}` }
+    ]
+    if (iconUrl) {
+      assets.push({ kind: 'display-image', url: iconUrl })
+      assets.push({ kind: 'full-size-image', url: iconUrl })
+    }
+
     const manifest = {
       items: [
         {
-          assets: [
-            { kind: 'software-package', url: `${baseUrl}/api/download/${(signedIpaPublic || '').replace(/^\//, '')}` }
-          ],
+          assets,
           metadata: {
             'bundle-identifier': app.bundleId,
             'bundle-version': app.version || '0.0.0',
             kind: 'software',
+            'platform-identifier': platformIdentifier,
             title: app.name
           }
         }
