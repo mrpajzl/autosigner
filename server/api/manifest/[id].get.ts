@@ -23,9 +23,7 @@ export default defineEventHandler(async (event) => {
   const assetUrl = `${baseUrl}/api/download/${rel}`
 
   function shellQuote(p: string): string {
-    return `'${p.replace(/'/g, `'
-'"'"'
-'`)}`
+    return `'${p.replace(/'/g, `'\'`)}'`
   }
 
   async function tryExtractBundleIdFromIpa(): Promise<string | undefined> {
