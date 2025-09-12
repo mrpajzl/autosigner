@@ -104,7 +104,7 @@ function installLink(app: PublicApp) {
     ? publicConfig.baseUrl.replace(/\/$/, '')
     : (typeof window !== 'undefined' ? window.location.origin : '')
   const manifestUrl = `${origin}/api/manifest/${app.id}`
-  return `itms-services://?action=download-manifest&url=${encodeURIComponent(manifestUrl)}`
+  return `itms-services://?action=download-manifest&url=${manifestUrl}`
 }
 
 function tvosLink(app: PublicApp) {
