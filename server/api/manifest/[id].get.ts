@@ -1,6 +1,5 @@
 import { prisma } from '../../utils/db'
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const plist = require('plist') as any
+import plist from 'plist'
 import { execa } from 'execa'
 import path from 'node:path'
 import fs from 'node:fs'
