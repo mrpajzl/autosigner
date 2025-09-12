@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const name = getField('name') || 'Unnamed App'
-  const bundleId = getField('bundleId') || ''
+  let bundleId = getField('bundleId') || ''
   let version = getField('version')
   const platform = (getField('platform') || 'IOS').toUpperCase()
   const ipaFile = Array.isArray(files.ipa) ? files.ipa[0] : (files.ipa as formidable.File)
@@ -53,6 +53,14 @@ export default defineEventHandler(async (event) => {
     } catch {
       // ignore; will stay undefined and fail later if required downstream
     }
+  }
+
+  // If no bundleId provided, try to extract CFBundleIdentifier from IPA
+  if (!bundleId) {
+    try {
+      const fromIpa = await extractBundleIdFromIpa(originalIpaAbsPath)
+      if (fromIpa) bundleId = fromIpa
+    } catch {}
   }
 
   // Replace previous version if same filename for this user+platform exists
@@ -196,6 +204,36 @@ async function extractVersionFromIpa(ipaPath: string): Promise<string | undefine
 
   const v = parsed?.CFBundleShortVersionString || parsed?.CFBundleVersion
   return typeof v === 'string' ? v : undefined
+}
+
+async function extractBundleIdFromIpa(ipaPath: string): Promise<string | undefined> {
+  const infoPath = await (async () => {
+    try {
+      const { stdout } = await execa('bash', ['-lc', `unzip -Z1 ${shellQuote(ipaPath)} | grep -E '^Payload/[^/]+\\.app/Info\\.plist$' | head -n1`])
+      return stdout.trim() || undefined
+    } catch {
+      try {
+        const { stdout } = await execa('bash', ['-lc', `zipinfo -1 ${shellQuote(ipaPath)} | grep -E '^Payload/[^/]+\\.app/Info\\.plist$' | head -n1`])
+        return stdout.trim() || undefined
+      } catch {
+        return undefined
+      }
+    }
+  })()
+  if (!infoPath) return undefined
+
+  const { stdout: b64 } = await execa('bash', ['-lc', `unzip -p ${shellQuote(ipaPath)} ${shellQuote(infoPath)} | base64`])
+  const buf = Buffer.from(b64, 'base64')
+
+  const head = buf.subarray(0, 8).toString('utf8')
+  let parsed: any
+  if (head.startsWith('bplist')) {
+    parsed = await parseBinaryPlist(buf)
+  } else {
+    parsed = plist.parse(buf.toString('utf8'))
+  }
+  const id = parsed?.CFBundleIdentifier
+  return typeof id === 'string' && id.length > 0 ? id : undefined
 }
 
 async function parseBinaryPlist(buf: Buffer): Promise<any> {

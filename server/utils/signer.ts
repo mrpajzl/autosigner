@@ -109,8 +109,9 @@ export async function signApp(appId: string): Promise<void> {
     ]
     if (iconUrl) {
       assets.push({ kind: 'display-image', url: iconUrl })
-      assets.push({ kind: 'full-size-image', url: iconUrl })
     }
+    // Add full-size-image pointing to IPA URL to mimic working example
+    assets.push({ kind: 'full-size-image', url: `${baseUrl}/api/download/${(signedIpaPublic || '').replace(/^\//, '')}` })
 
     const manifest = {
       items: [
