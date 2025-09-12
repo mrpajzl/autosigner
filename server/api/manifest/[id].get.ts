@@ -1,5 +1,6 @@
 import { prisma } from '../../utils/db'
-import plist from 'plist'
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const plist = require('plist') as any
 import { execa } from 'execa'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -21,24 +22,32 @@ export default defineEventHandler(async (event) => {
   const rel = (ipaPath || '').replace(/^\//, '')
   const assetUrl = `${baseUrl}/api/download/${rel}`
 
+  function shellQuote(p: string): string {
+    return `'${p.replace(/'/g, `'
+'"'"'
+'`)}`
+  }
+
   async function tryExtractBundleIdFromIpa(): Promise<string | undefined> {
     try {
       const abs = path.join(process.cwd(), 'public', rel)
+      // Find Info.plist entry path
       let infoPlist = ''
       try {
-        const { stdout } = await execa('unzip', ['-Z1', abs])
-        infoPlist = stdout.split('\n').map(s => s.trim()).find(s => /^Payload\/[^/]+\.app\/Info\.plist$/.test(s)) || ''
+        const { stdout } = await execa('bash', ['-lc', `unzip -Z1 ${shellQuote(abs)} | grep -E '^Payload/[^/]+\\.app/Info\\.plist$' | head -n1`])
+        infoPlist = stdout.trim()
       } catch {}
       if (!infoPlist) {
         try {
-          const { stdout } = await execa('zipinfo', ['-1', abs])
-          infoPlist = stdout.split('\n').map(s => s.trim()).find(s => /^Payload\/[^/]+\.app\/Info\.plist$/.test(s)) || ''
+          const { stdout } = await execa('bash', ['-lc', `zipinfo -1 ${shellQuote(abs)} | grep -E '^Payload/[^/]+\\.app/Info\\.plist$' | head -n1`])
+          infoPlist = stdout.trim()
         } catch {}
       }
       if (!infoPlist) return undefined
 
-      const { stdout: plistBuf } = await execa('unzip', ['-p', abs, infoPlist], { encoding: 'buffer' } as any)
-      const buf: Buffer = plistBuf as unknown as Buffer
+      // Extract as base64 to safely build a Buffer
+      const { stdout: b64 } = await execa('bash', ['-lc', `unzip -p ${shellQuote(abs)} ${shellQuote(infoPlist)} | base64`])
+      const buf = Buffer.from(b64, 'base64')
       const head = buf.subarray(0, 8).toString('utf8')
       if (head.startsWith('bplist')) {
         try {
@@ -69,6 +78,15 @@ export default defineEventHandler(async (event) => {
   const hasPng = fs.existsSync(pngPath)
   const pngUrl = `${baseUrl}/png.png`
 
+  // Resolve real bundle identifier and persist if missing in DB
+  const realBundleId = (app.bundleId && app.bundleId.length > 0)
+    ? app.bundleId
+    : (await tryExtractBundleIdFromIpa()) || ''
+  if ((!app.bundleId || app.bundleId.length === 0) && realBundleId) {
+    // Best-effort persist; do not block manifest response
+    prisma.app.update({ where: { id: app.id }, data: { bundleId: realBundleId } }).catch(() => {})
+  }
+
   const assets: any[] = [
     { kind: 'software-package', url: assetUrl }
   ]
@@ -85,7 +103,7 @@ export default defineEventHandler(async (event) => {
       {
         assets,
         metadata: {
-          'bundle-identifier': (app.bundleId && app.bundleId.length > 0) ? app.bundleId : (await tryExtractBundleIdFromIpa()) || '',
+          'bundle-identifier': realBundleId,
           'bundle-version': app.version,
           kind: 'software',
           'platform-identifier': platformIdentifier,
@@ -97,6 +115,7 @@ export default defineEventHandler(async (event) => {
 
   const xml = plist.build(manifest as any)
   setHeader(event, 'content-type', 'text/xml')
+  setHeader(event, 'cache-control', 'no-store, no-cache, must-revalidate, max-age=0')
   return xml
 })
 
