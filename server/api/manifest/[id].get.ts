@@ -1,4 +1,5 @@
 import { prisma } from '../../utils/db'
+// @ts-ignore - plist has no bundled types in this project; shim handles runtime
 import plist from 'plist'
 import { execa } from 'execa'
 import path from 'node:path'
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event) => {
   const assetUrl = `${baseUrl}/api/download/${rel}`
 
   function shellQuote(p: string): string {
-    return `'${p.replace(/'/g, `'\'`)}'`
+    return `'${p.replace(/'/g, `\'\''`)}'`
   }
 
   async function tryExtractBundleIdFromIpa(): Promise<string | undefined> {
