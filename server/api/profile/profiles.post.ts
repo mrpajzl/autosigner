@@ -1,5 +1,5 @@
 import formidable from 'formidable'
-import { requireUser } from '../../utils/auth'
+import { requireAnyRole } from '../../utils/auth'
 import { prisma } from '../../utils/db'
 import plist from 'plist'
 import { execa } from 'execa'
@@ -22,7 +22,7 @@ async function parseMobileProvision(buf: Buffer): Promise<{ uuid?: string; teamI
 }
 
 export default defineEventHandler(async (event) => {
-  const user = await requireUser(event)
+  const user = await requireAnyRole(event, ['MANAGER', 'SUPERADMIN'])
   const form = formidable({ multiples: false })
   const { fields, files } = await new Promise<{ fields: formidable.Fields; files: formidable.Files }>((resolve, reject) => {
     form.parse(event.node.req, (err, fields, files) => (err ? reject(err) : resolve({ fields, files })))

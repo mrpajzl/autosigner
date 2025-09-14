@@ -6,10 +6,8 @@
         <NuxtLink to="/" class="font-semibold">AutoSigner</NuxtLink>
         <nav class="hidden md:flex items-center gap-3 text-sm text-white/80">
           <NuxtLink to="/" class="hover:text-white">Dashboard</NuxtLink>
-          <NuxtLink to="/apps" class="hover:text-white">Apps</NuxtLink>
-          <NuxtLink to="/upload" class="hover:text-white">Upload</NuxtLink>
-          <NuxtLink to="/apps/new" class="hover:text-white">New App</NuxtLink>
-          <NuxtLink to="/admin/approvals" class="hover:text-white">Approvals</NuxtLink>
+          <NuxtLink v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'" to="/apps" class="hover:text-white">Apps</NuxtLink>
+          <NuxtLink v-if="me?.role === 'SUPERADMIN'" to="/admin/approvals" class="hover:text-white">Users</NuxtLink>
         </nav>
       </div>
       <div class="flex items-center gap-2">

@@ -21,7 +21,6 @@ export default defineEventHandler(async (event) => {
   // Only protect app/account areas and their APIs
   const protectedPrefixes = [
     '/apps',
-    '/upload',
     '/profile',
     '/admin',
     '/api/apps',

@@ -2,8 +2,8 @@
   <UCard class="glass max-w-sm mx-auto">
     <template #header>
       <div class="flex items-center gap-2">
-        <UIcon name="i-heroicons-arrow-right-end-on-rectangle" />
-        <span class="font-semibold">Sign in</span>
+        <UIcon name="i-heroicons-user-plus" />
+        <span class="font-semibold">Register</span>
       </div>
     </template>
     <UForm :state="state" class="space-y-4" @submit="onSubmit">
@@ -13,10 +13,10 @@
       <UFormGroup label="Password" name="password">
         <UInput v-model="state.password" type="password" placeholder="••••••••" />
       </UFormGroup>
-      <div class="flex justify-between items-center">
-        <NuxtLink to="/auth/register" class="text-xs text-white/70 hover:text-white">Create an account</NuxtLink>
-        <UButton type="submit" color="white" variant="soft" :loading="loading" icon="i-heroicons-arrow-right-end-on-rectangle" label="Sign in" />
+      <div class="flex justify-end">
+        <UButton type="submit" color="white" variant="soft" :loading="loading" icon="i-heroicons-user-plus" label="Create account" />
       </div>
+      <p class="text-xs text-white/70">After registering, an admin must promote you to moderator to upload apps.</p>
     </UForm>
   </UCard>
 </template>
@@ -28,14 +28,13 @@ const loading = ref(false)
 async function onSubmit() {
   loading.value = true
   try {
-    await $fetch('/api/auth/login', { method: 'POST', body: { email: state.email, password: state.password } })
-    navigateTo('/')
+    await $fetch('/api/auth/register', { method: 'POST', body: { email: state.email, password: state.password } })
+    useToast().add({ title: 'Registered', description: 'You can sign in after approval.', color: 'green' })
+    navigateTo('/auth/login')
   } catch (e: any) {
-    useToast().add({ title: 'Sign in failed', description: e?.data?.message || e?.message, color: 'red' })
+    useToast().add({ title: 'Registration failed', description: e?.data?.message || e?.message, color: 'red' })
   } finally {
     loading.value = false
   }
 }
 </script>
-
-

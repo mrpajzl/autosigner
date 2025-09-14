@@ -28,6 +28,10 @@
         <span>Signing uses your active certificate and provisioning profile from Profile pages.</span>
         <UButton to="/profile" color="white" variant="soft" size="xs" icon="i-heroicons-user" label="Manage Profile" />
       </div>
+      <div class="flex justify-between items-center text-xs text-white/60" v-if="state.appId">
+        <span>Updating existing app</span>
+        <code class="px-2 py-1 bg-white/10 rounded">{{ state.appId }}</code>
+      </div>
       <div class="flex justify-end">
         <UButton type="submit" color="white" variant="soft" icon="i-heroicons-rocket-launch" :loading="loading" label="Upload & Sign" />
       </div>
@@ -53,7 +57,15 @@ const platforms = [
   { label: 'tvOS', value: 'TVOS' }
 ]
 
-const state = reactive({ name: '', bundleId: '', version: '', platform: 'IOS' as 'IOS' | 'TVOS' })
+const route = useRoute()
+
+const state = reactive({
+  appId: (route.query.appId as string) || '',
+  name: (route.query.name as string) || '',
+  bundleId: (route.query.bundleId as string) || '',
+  version: (route.query.version as string) || '',
+  platform: ((route.query.platform as string) || 'IOS') as 'IOS' | 'TVOS'
+})
 const files = reactive<{ ipa?: File }>({})
 const loading = ref(false)
 
@@ -61,6 +73,7 @@ function onFile(e: Event) { files.ipa = (e.target as HTMLInputElement).files?.[0
 
 async function onSubmit() {
   const body = new FormData()
+  if (state.appId) body.set('appId', state.appId)
   body.set('name', state.name)
   if (state.bundleId) body.set('bundleId', state.bundleId)
   if (state.version) body.set('version', state.version)
@@ -69,7 +82,7 @@ async function onSubmit() {
   loading.value = true
   try {
     await $fetch('/api/apps/upload', { method: 'POST', body })
-    useToast().add({ title: 'Upload started', color: 'green' })
+    useToast().add({ title: state.appId ? 'Update started' : 'Upload started', color: 'green' })
     navigateTo('/apps')
   } catch (e: any) {
     useToast().add({ title: 'Upload failed', description: e?.data?.message || e.message, color: 'red' })

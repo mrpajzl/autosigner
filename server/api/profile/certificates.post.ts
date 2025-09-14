@@ -1,13 +1,13 @@
 import formidable from 'formidable'
 import fse from 'fs-extra'
-import { requireUser } from '../../utils/auth'
+import { requireAnyRole } from '../../utils/auth'
 import { prisma } from '../../utils/db'
 import { encrypt } from '../../utils/crypto'
 
 export const config = { api: { bodyParser: false } }
 
 export default defineEventHandler(async (event) => {
-  const user = await requireUser(event)
+  const user = await requireAnyRole(event, ['MANAGER', 'SUPERADMIN'])
 
   const form = formidable({ multiples: false })
   const { fields, files } = await new Promise<{ fields: formidable.Fields; files: formidable.Files }>((resolve, reject) => {

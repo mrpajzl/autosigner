@@ -5,9 +5,10 @@ import { H3Event, getCookie, setCookie, deleteCookie } from 'h3'
 
 const SESSION_COOKIE = 'as_session'
 
-export async function registerUser(email: string, password: string, role: 'SUPERADMIN' | 'MANAGER' = 'MANAGER') {
+export async function registerUser(email: string, password: string, role: 'SUPERADMIN' | 'MANAGER' | 'USER' = 'USER') {
   const passwordHash = await bcrypt.hash(password, 12)
-  return prisma.user.create({ data: { email, passwordHash, role, status: role === 'SUPERADMIN' ? 'APPROVED' : 'PENDING' } })
+  const status = role === 'SUPERADMIN' ? 'APPROVED' : 'PENDING'
+  return prisma.user.create({ data: { email, passwordHash, role, status } })
 }
 
 export async function login(event: H3Event, email: string, password: string) {
@@ -42,6 +43,12 @@ export async function requireUser(event: H3Event) {
 export async function requireRole(event: H3Event, role: 'SUPERADMIN' | 'MANAGER') {
   const user = await requireUser(event)
   if (user.role !== role) throw createError({ statusCode: 403, message: 'Forbidden' })
+  return user
+}
+
+export async function requireAnyRole(event: H3Event, roles: Array<'SUPERADMIN' | 'MANAGER'>) {
+  const user = await requireUser(event)
+  if (!roles.includes(user.role as any)) throw createError({ statusCode: 403, message: 'Forbidden' })
   return user
 }
 

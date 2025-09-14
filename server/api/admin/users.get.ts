@@ -3,8 +3,11 @@ import { requireRole } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
   await requireRole(event, 'SUPERADMIN')
-  const pending = await prisma.user.findMany({ where: { status: 'PENDING' }, select: { id: true, email: true, createdAt: true, role: true } })
-  return pending
+  const users = await prisma.user.findMany({
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, email: true, role: true, status: true, createdAt: true }
+  })
+  return users
 })
 
 

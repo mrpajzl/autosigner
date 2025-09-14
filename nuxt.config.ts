@@ -90,11 +90,12 @@ export default defineNuxtConfig({
       ensure('/', './pages/index.vue', 'index')
       ensure('/apps', './pages/apps/index.vue', 'apps')
       ensure('/apps/new', './pages/apps/new.vue', 'apps-new')
-      ensure('/upload', './pages/upload.vue', 'upload')
+      // legacy upload removed
       ensure('/profile', './pages/profile/index.vue', 'profile-index')
       ensure('/profile/certificates', './pages/profile/certificates.vue', 'profile-certificates')
       ensure('/profile/profiles', './pages/profile/profiles.vue', 'profile-profiles')
       ensure('/auth/login', './pages/auth/login.vue', 'auth-login')
+      ensure('/auth/register', './pages/auth/register.vue', 'auth-register')
       ensure('/admin/approvals', './pages/admin/approvals.vue', 'admin-approvals')
     }
   }

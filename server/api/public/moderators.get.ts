@@ -23,7 +23,7 @@ type PublicModerator = {
 export default defineEventHandler(async () => {
   try {
   const managers = await prisma.user.findMany({
-    where: { role: { in: ['MANAGER', 'ADMIN', 'SUPERADMIN'] } },
+    where: { role: { in: ['MANAGER', 'SUPERADMIN'] } },
     include: {
       managerProfile: true,
       apps: {

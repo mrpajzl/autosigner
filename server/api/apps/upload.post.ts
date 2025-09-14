@@ -1,9 +1,12 @@
-import { requireUser } from '../../utils/auth'
+import { requireAnyRole } from '../../utils/auth'
+// @ts-ignore - formidable types provided via local shim
 import formidable from 'formidable'
+// @ts-ignore - fs-extra types provided via local shim
 import fse from 'fs-extra'
 import { prisma } from '../../utils/db'
 import { execa } from 'execa'
 import path from 'node:path'
+// @ts-ignore - plist types provided via local shim
 import plist from 'plist'
 import { encrypt } from '../../utils/crypto'
 import { signApp } from '../../utils/signer'
@@ -12,14 +15,14 @@ import { createRequire } from 'node:module'
 export const config = { api: { bodyParser: false } }
 
 export default defineEventHandler(async (event) => {
-  const user = await requireUser(event)
+  const user = await requireAnyRole(event, ['MANAGER', 'SUPERADMIN'])
 
   const uploadDir = path.join(process.cwd(), 'public', 'uploads', user.id)
   await fse.ensureDir(uploadDir)
 
   const form = formidable({ multiples: true, uploadDir, keepExtensions: true })
   const { fields, files } = await new Promise<{ fields: formidable.Fields; files: formidable.Files }>((resolve, reject) => {
-    form.parse(event.node.req, (err, fields, files) => (err ? reject(err) : resolve({ fields, files })))
+    form.parse(event.node.req, (err: any, fields: any, files: any) => (err ? reject(err) : resolve({ fields, files })))
   })
 
   const getField = (key: keyof typeof fields): string | undefined => {
@@ -30,10 +33,11 @@ export default defineEventHandler(async (event) => {
     return s.length ? s : undefined
   }
 
-  const name = getField('name') || 'Unnamed App'
+  const appId = getField('appId')
+  const nameFromForm = getField('name') || 'Unnamed App'
   let bundleId = getField('bundleId') || ''
   let version = getField('version')
-  const platform = (getField('platform') || 'IOS').toUpperCase()
+  const platformFromForm = (getField('platform') || 'IOS').toUpperCase()
   const ipaFile = Array.isArray(files.ipa) ? files.ipa[0] : (files.ipa as formidable.File)
   if (!ipaFile?.filepath) throw createError({ statusCode: 400, message: 'IPA required' })
 
@@ -63,18 +67,31 @@ export default defineEventHandler(async (event) => {
     } catch {}
   }
 
-  // Replace previous version if same filename for this user+platform exists
-  let app = await prisma.app.findFirst({ where: { ownerId: user.id, platform, ipaFileName: originalIpaFileName } })
-  if (app) {
+  let app
+
+  if (appId) {
+    // Update existing app (must belong to user)
+    const existing = await prisma.app.findUnique({ where: { id: appId } })
+    if (!existing || existing.ownerId !== user.id) throw createError({ statusCode: 404, message: 'Not found' })
+
     // Clean any previous build artifacts for this app id
-    const existingOutputDir = path.join(uploadDir, app.id)
+    const existingOutputDir = path.join(uploadDir, existing.id)
     await fse.remove(existingOutputDir).catch(() => {})
+
+    // Fill from form or fall back to existing values
+    const nextName = nameFromForm || existing.name
+    const nextBundleId = bundleId || existing.bundleId
+    const nextVersion = version || existing.version || '0.0.0'
+
     app = await prisma.app.update({
-      where: { id: app.id },
+      where: { id: existing.id },
       data: {
-        name,
-        bundleId,
-        version: version || '0.0.0',
+        name: nextName,
+        bundleId: nextBundleId,
+        version: nextVersion,
+        // Keep platform fixed to existing app to avoid accidental mismatch
+        platform: existing.platform,
+        ipaFileName: originalIpaFileName,
         originalIpaPath: `/uploads/${user.id}/${originalIpaFileName}`,
         signedIpaPath: null,
         manifestPath: null,
@@ -83,18 +100,39 @@ export default defineEventHandler(async (event) => {
       }
     })
   } else {
-    app = await prisma.app.create({
-      data: {
-        ownerId: user.id,
-        platform,
-        name,
-        bundleId,
-        version: version || '0.0.0',
-        ipaFileName: originalIpaFileName,
-        originalIpaPath: `/uploads/${user.id}/${originalIpaFileName}`,
-        status: 'SIGNING'
-      }
-    })
+    // Replace previous version if same filename for this user+platform exists
+    app = await prisma.app.findFirst({ where: { ownerId: user.id, platform: platformFromForm, ipaFileName: originalIpaFileName } })
+    if (app) {
+      // Clean any previous build artifacts for this app id
+      const existingOutputDir = path.join(uploadDir, app.id)
+      await fse.remove(existingOutputDir).catch(() => {})
+      app = await prisma.app.update({
+        where: { id: app.id },
+        data: {
+          name: nameFromForm,
+          bundleId,
+          version: version || '0.0.0',
+          originalIpaPath: `/uploads/${user.id}/${originalIpaFileName}`,
+          signedIpaPath: null,
+          manifestPath: null,
+          signedAt: null,
+          status: 'SIGNING'
+        }
+      })
+    } else {
+      app = await prisma.app.create({
+        data: {
+          ownerId: user.id,
+          platform: platformFromForm,
+          name: nameFromForm,
+          bundleId,
+          version: version || '0.0.0',
+          ipaFileName: originalIpaFileName,
+          originalIpaPath: `/uploads/${user.id}/${originalIpaFileName}`,
+          status: 'SIGNING'
+        }
+      })
+    }
   }
 
   // Fire-and-forget signing in background (best-effort), reusing stored manager assets
@@ -143,8 +181,8 @@ export default defineEventHandler(async (event) => {
         }
         if (profilePath) {
           const profileBuf = await fse.readFile(profilePath)
-          if (platform === 'IOS') updateData.mobileprovisionIos = profileBuf
-          else if (platform === 'TVOS') updateData.mobileprovisionTvos = profileBuf
+          if (app.platform === 'IOS') updateData.mobileprovisionIos = profileBuf
+          else if (app.platform === 'TVOS') updateData.mobileprovisionTvos = profileBuf
         }
         if (Object.keys(updateData).length > 0) {
           await prisma.managerProfile.upsert({
