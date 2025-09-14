@@ -65,6 +65,30 @@ async function ensureManagerAssetsOnDisk(userId: string, platform: 'IOS' | 'TVOS
   return { certPemPath, keyPemPath, profilePath, p12Password }
 }
 
+async function resolveIsignCommand(): Promise<{ cmd: string; baseArgs: string[] } | null> {
+  // Try common binary locations first
+  const binaryCandidates = [
+    'isign',
+    '/opt/homebrew/bin/isign',
+    '/usr/local/bin/isign'
+  ]
+  for (const cand of binaryCandidates) {
+    try {
+      await execa(cand, ['--help'])
+      return { cmd: cand, baseArgs: [] }
+    } catch {}
+  }
+  // Try python module fallback with common python executables
+  const pythonCandidates = ['python3', '/opt/homebrew/bin/python3', '/usr/local/bin/python3', 'python']
+  for (const py of pythonCandidates) {
+    try {
+      await execa(py, ['-c', 'import isign'])
+      return { cmd: py, baseArgs: ['-m', 'isign'] }
+    } catch {}
+  }
+  return null
+}
+
 export async function signApp(appId: string): Promise<void> {
   const app = await prisma.app.findUnique({ where: { id: appId } })
   if (!app) throw new Error('App not found')
@@ -79,11 +103,8 @@ export async function signApp(appId: string): Promise<void> {
   const { certPemPath, keyPemPath, profilePath } = await ensureManagerAssetsOnDisk(app.ownerId, platform, outputDir)
 
   // Basic preflight checks to avoid silent fallbacks
-  try {
-    await execa('bash', ['-lc', 'command -v isign'])
-  } catch {
-    throw new Error('Signing tool isign is not installed on the server')
-  }
+  const isignResolved = await resolveIsignCommand()
+  if (!isignResolved) throw new Error('Signing tool isign is not installed (binary or python module)')
   if (!certPemPath || !keyPemPath || !profilePath) {
     throw new Error('Missing signing assets (certificate/key/profile). Upload and activate them in Profile first.')
   }
@@ -110,7 +131,7 @@ export async function signApp(appId: string): Promise<void> {
   let signedIpaPublic: string | undefined
   const signedPath = path.join(outputDir, `${app.id}-signed.ipa`)
   const args = [
-    'isign',
+    ...isignResolved.baseArgs,
     ...(app.bundleId ? ['-i', app.bundleId] : []),
     '-p', profilePath,
     '-c', certPemPath,
@@ -118,7 +139,7 @@ export async function signApp(appId: string): Promise<void> {
     '-o', signedPath,
     originalIpaAbsPath
   ]
-  await execa('bash', ['-lc', args.map((a) => `'${a}'`).join(' ')])
+  await execa(isignResolved.cmd, args)
   signedIpaPublic = `/uploads/${app.ownerId}/${app.id}/${path.basename(signedPath)}`
 
   let manifestPublic: string | undefined
