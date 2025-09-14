@@ -16,6 +16,16 @@
         <template #actions-data="{ row }">
           <div class="flex gap-2">
             <UButton
+              icon="i-heroicons-arrow-path"
+              color="white"
+              variant="soft"
+              size="xs"
+              :loading="resigningId === row.id"
+              @click="onResign(row)"
+            >
+              Re-sign
+            </UButton>
+            <UButton
               icon="i-heroicons-arrow-up-on-square"
               color="white"
               variant="soft"
@@ -58,6 +68,7 @@ if (!me.value || (me.value.role !== 'MANAGER' && me.value.role !== 'SUPERADMIN')
 const { data: apps, refresh } = await useFetch('/api/apps')
 
 const deletingId = ref<string | null>(null)
+const resigningId = ref<string | null>(null)
 
 function onUploadVersion(row: any) {
   const q = new URLSearchParams({
@@ -68,6 +79,20 @@ function onUploadVersion(row: any) {
     platform: String(row.platform || 'IOS')
   })
   navigateTo(`/apps/new?${q.toString()}`)
+}
+
+async function onResign(row: any) {
+  if (!row?.id) return
+  try {
+    resigningId.value = row.id as string
+    await $fetch(`/api/apps/${row.id}/resign`, { method: 'POST' })
+    useToast().add({ title: 'Re-sign started', description: 'This may take a moment.', color: 'green' })
+    await refresh()
+  } catch (e: any) {
+    useToast().add({ title: 'Re-sign failed', description: e?.data?.message || e?.message || 'Unknown error', color: 'red' })
+  } finally {
+    resigningId.value = null
+  }
 }
 
 async function onDelete(row: any) {

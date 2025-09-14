@@ -78,25 +78,48 @@ export async function signApp(appId: string): Promise<void> {
 
   const { certPemPath, keyPemPath, profilePath } = await ensureManagerAssetsOnDisk(app.ownerId, platform, outputDir)
 
-  let signedIpaPublic: string | undefined
+  // Basic preflight checks to avoid silent fallbacks
   try {
     await execa('bash', ['-lc', 'command -v isign'])
-    const signedPath = path.join(outputDir, `${app.id}-signed.ipa`)
-    const args = [
-      'isign',
-      ...(app.bundleId ? ['-i', app.bundleId] : []),
-      ...(profilePath ? ['-p', profilePath] : []),
-      ...(certPemPath ? ['-c', certPemPath] : []),
-      ...(keyPemPath ? ['-k', keyPemPath] : []),
-      '-o', signedPath,
-      originalIpaAbsPath
-    ]
-    await execa('bash', ['-lc', args.map((a) => `'${a}'`).join(' ')])
-    signedIpaPublic = `/uploads/${app.ownerId}/${app.id}/${path.basename(signedPath)}`
-  } catch (e) {
-    // Fallback to original IPA if signing is not possible
-    signedIpaPublic = app.originalIpaPath
+  } catch {
+    throw new Error('Signing tool isign is not installed on the server')
   }
+  if (!certPemPath || !keyPemPath || !profilePath) {
+    throw new Error('Missing signing assets (certificate/key/profile). Upload and activate them in Profile first.')
+  }
+
+  // Inspect provisioning profile for device support (optional diagnostics)
+  try {
+    const { stdout } = await execa('bash', ['-lc', 'openssl smime -inform der -verify -noverify -in /dev/stdin -out /dev/stdout'], { input: await fse.readFile(profilePath) })
+    const obj: any = plist.parse(stdout)
+    const devices: string[] | undefined = obj?.ProvisionedDevices
+    const allDevices: boolean | undefined = obj?.ProvisionsAllDevices
+    const profileName: string | undefined = obj?.Name
+    console.log('Signing with provisioning profile', {
+      appId: app.id,
+      ownerId: app.ownerId,
+      platform,
+      profileName,
+      devicesCount: Array.isArray(devices) ? devices.length : 0,
+      allDevices: Boolean(allDevices)
+    })
+  } catch (e) {
+    console.warn('Failed to inspect provisioning profile before signing', e)
+  }
+
+  let signedIpaPublic: string | undefined
+  const signedPath = path.join(outputDir, `${app.id}-signed.ipa`)
+  const args = [
+    'isign',
+    ...(app.bundleId ? ['-i', app.bundleId] : []),
+    '-p', profilePath,
+    '-c', certPemPath,
+    '-k', keyPemPath,
+    '-o', signedPath,
+    originalIpaAbsPath
+  ]
+  await execa('bash', ['-lc', args.map((a) => `'${a}'`).join(' ')])
+  signedIpaPublic = `/uploads/${app.ownerId}/${app.id}/${path.basename(signedPath)}`
 
   let manifestPublic: string | undefined
   if (platform === 'IOS') {
