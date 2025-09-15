@@ -65,28 +65,19 @@ async function ensureManagerAssetsOnDisk(userId: string, platform: 'IOS' | 'TVOS
   return { certPemPath, keyPemPath, profilePath, p12Password }
 }
 
-async function resolveIsignCommand(): Promise<{ cmd: string; baseArgs: string[] } | null> {
-  // Try common binary locations first
-  const binaryCandidates = [
-    'isign',
-    '/opt/homebrew/bin/isign',
-    '/usr/local/bin/isign'
-  ]
-  for (const cand of binaryCandidates) {
-    try {
-      await execa(cand, ['--help'])
-      return { cmd: cand, baseArgs: [] }
-    } catch {}
-  }
-  // Try python module fallback with common python executables
-  const pythonCandidates = ['python3', '/opt/homebrew/bin/python3', '/usr/local/bin/python3', 'python']
-  for (const py of pythonCandidates) {
-    try {
-      await execa(py, ['-c', 'import isign'])
-      return { cmd: py, baseArgs: ['-m', 'isign'] }
-    } catch {}
-  }
-  return null
+async function resolveApplesignBin(): Promise<string> {
+  const candidate = path.join(process.cwd(), 'node_modules', '.bin', 'applesign')
+  try {
+    await execa(candidate, ['--help'])
+    return candidate
+  } catch {}
+  // Fallback: try to resolve via Node require path (bin file co-located)
+  try {
+    const { stdout } = await execa('bash', ['-lc', `node -e "const p=require.resolve('applesign/package.json');const b=require('fs').readFileSync(p,'utf8');const m=JSON.parse(b);const path=require('path');const bin=(typeof m.bin==='string'?m.bin:m.bin.applesign);process.stdout.write(path.join(path.dirname(p), bin))"`])
+    await execa(stdout, ['--help'])
+    return stdout
+  } catch {}
+  throw new Error('applesign is not installed')
 }
 
 export async function signApp(appId: string): Promise<void> {
@@ -103,8 +94,7 @@ export async function signApp(appId: string): Promise<void> {
   const { certPemPath, keyPemPath, profilePath } = await ensureManagerAssetsOnDisk(app.ownerId, platform, outputDir)
 
   // Basic preflight checks to avoid silent fallbacks
-  const isignResolved = await resolveIsignCommand()
-  if (!isignResolved) throw new Error('Signing tool isign is not installed (binary or python module)')
+  const applesignBin = await resolveApplesignBin()
   if (!certPemPath || !keyPemPath || !profilePath) {
     throw new Error('Missing signing assets (certificate/key/profile). Upload and activate them in Profile first.')
   }
@@ -130,16 +120,16 @@ export async function signApp(appId: string): Promise<void> {
 
   let signedIpaPublic: string | undefined
   const signedPath = path.join(outputDir, `${app.id}-signed.ipa`)
+  // applesign CLI: applesign -p profile -c cert.pem -k key.pem -I bundleId -o out.ipa in.ipa
   const args = [
-    ...isignResolved.baseArgs,
-    ...(app.bundleId ? ['-i', app.bundleId] : []),
     '-p', profilePath,
     '-c', certPemPath,
     '-k', keyPemPath,
+    ...(app.bundleId ? ['-I', app.bundleId] as string[] : []),
     '-o', signedPath,
     originalIpaAbsPath
   ]
-  await execa(isignResolved.cmd, args)
+  await execa(applesignBin, args)
   signedIpaPublic = `/uploads/${app.ownerId}/${app.id}/${path.basename(signedPath)}`
 
   let manifestPublic: string | undefined
