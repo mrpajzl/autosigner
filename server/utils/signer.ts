@@ -1,7 +1,11 @@
 import path from 'node:path'
+// @ts-ignore
 import fse from 'fs-extra'
 import { execa } from 'execa'
+// @ts-ignore
 import plist from 'plist'
+// @ts-ignore
+import bplist from 'bplist-parser'
 import { prisma } from './db'
 import { decrypt } from './crypto'
 
@@ -10,7 +14,31 @@ function getAbsolutePublicPath(publicPath: string): string {
   return path.join(process.cwd(), 'public', rel)
 }
 
-async function ensureManagerAssetsOnDisk(userId: string, platform: 'IOS' | 'TVOS', intoDir: string): Promise<{ certPemPath?: string; keyPemPath?: string; profilePath?: string; p12Password?: string }> {
+function parsePlistBuffer(buf: Buffer): any {
+  const head = buf.subarray(0, 8).toString('utf8')
+  if (head.startsWith('bplist')) {
+    try {
+      const arr = (bplist as any).parseBuffer(buf)
+      return Array.isArray(arr) ? arr[0] : arr
+    } catch {
+      return undefined
+    }
+  }
+  // Extract XML segment defensively
+  let xml = buf.toString('utf8')
+  const start = xml.indexOf('<?xml')
+  const end = xml.lastIndexOf('</plist>')
+  if (start >= 0 && end >= 0) {
+    xml = xml.slice(start, end + '</plist>'.length)
+  }
+  try {
+    return plist.parse(xml)
+  } catch {
+    return undefined
+  }
+}
+
+async function ensureManagerAssetsOnDisk(userId: string, platform: 'IOS' | 'TVOS', intoDir: string): Promise<{ certPemPath?: string; keyPemPath?: string; profilePath?: string; p12Password?: string; p12Path?: string }> {
   const prof = await prisma.managerProfile.findUnique({ where: { userId } })
   const activeCert = await prisma.certificate.findFirst({ where: { userId, active: true }, orderBy: { createdAt: 'desc' } })
   const activeProfile = await prisma.provisioningProfile.findFirst({ where: { userId, platform, active: true }, orderBy: { createdAt: 'desc' } })
@@ -20,11 +48,12 @@ async function ensureManagerAssetsOnDisk(userId: string, platform: 'IOS' | 'TVOS
   let keyPemPath: string | undefined
   let profilePath: string | undefined
   let p12Password: string | undefined
+  let p12Path: string | undefined
 
   // Prefer new Certificate records (p12 → extract PEMs); fallback to legacy ManagerProfile fields
   if (activeCert?.p12Data) {
     try {
-      const p12Path = path.join(intoDir, 'cert.p12')
+      p12Path = path.join(intoDir, 'cert.p12')
       await fse.writeFile(p12Path, Buffer.from(activeCert.p12Data))
       certPemPath = path.join(intoDir, 'cert.pem')
       keyPemPath = path.join(intoDir, 'key.pem')
@@ -32,6 +61,7 @@ async function ensureManagerAssetsOnDisk(userId: string, platform: 'IOS' | 'TVOS
       const passArg = pass ? ['-passin', `pass:${pass}`] : []
       await execa('bash', ['-lc', [`openssl`, `pkcs12`, `-in`, p12Path, `-clcerts`, `-nokeys`, `-out`, certPemPath, ...passArg].map(String).join(' ')])
       await execa('bash', ['-lc', [`openssl`, `pkcs12`, `-in`, p12Path, `-nocerts`, `-nodes`, `-out`, keyPemPath, ...passArg].map(String).join(' ')])
+      p12Password = pass
     } catch {}
   } else if (prof?.certificatePem) {
     try {
@@ -62,23 +92,10 @@ async function ensureManagerAssetsOnDisk(userId: string, platform: 'IOS' | 'TVOS
     await fse.writeFile(profilePath, Buffer.from(mobileprov))
   }
 
-  return { certPemPath, keyPemPath, profilePath, p12Password }
+  return { certPemPath, keyPemPath, profilePath, p12Password, p12Path }
 }
 
-async function resolveApplesignBin(): Promise<string> {
-  const candidate = path.join(process.cwd(), 'node_modules', '.bin', 'applesign')
-  try {
-    await execa(candidate, ['--help'])
-    return candidate
-  } catch {}
-  // Fallback: try to resolve via Node require path (bin file co-located)
-  try {
-    const { stdout } = await execa('bash', ['-lc', `node -e "const p=require.resolve('applesign/package.json');const b=require('fs').readFileSync(p,'utf8');const m=JSON.parse(b);const path=require('path');const bin=(typeof m.bin==='string'?m.bin:m.bin.applesign);process.stdout.write(path.join(path.dirname(p), bin))"`])
-    await execa(stdout, ['--help'])
-    return stdout
-  } catch {}
-  throw new Error('applesign is not installed')
-}
+// Remove macOS-only applesign path; Linux-only signer uses ldid
 
 export async function signApp(appId: string): Promise<void> {
   const app = await prisma.app.findUnique({ where: { id: appId } })
@@ -91,10 +108,16 @@ export async function signApp(appId: string): Promise<void> {
 
   const originalIpaAbsPath = getAbsolutePublicPath(app.originalIpaPath)
 
-  const { certPemPath, keyPemPath, profilePath } = await ensureManagerAssetsOnDisk(app.ownerId, platform, outputDir)
+  const { certPemPath, keyPemPath, profilePath, p12Path, p12Password } = await ensureManagerAssetsOnDisk(app.ownerId, platform, outputDir)
 
   // Basic preflight checks to avoid silent fallbacks
-  const applesignBin = await resolveApplesignBin()
+  // Prefer ldid on Linux; applesign requires macOS keychain identities
+  // Linux-only: require ldid
+  try {
+    await execa('bash', ['-lc', 'command -v ldid'])
+  } catch {
+    throw new Error('ldid is not installed')
+  }
   if (!certPemPath || !keyPemPath || !profilePath) {
     throw new Error('Missing signing assets (certificate/key/profile). Upload and activate them in Profile first.')
   }
@@ -120,16 +143,73 @@ export async function signApp(appId: string): Promise<void> {
 
   let signedIpaPublic: string | undefined
   const signedPath = path.join(outputDir, `${app.id}-signed.ipa`)
-  // applesign CLI: applesign -p profile -c cert.pem -k key.pem -I bundleId -o out.ipa in.ipa
-  const args = [
-    '-p', profilePath,
-    '-c', certPemPath,
-    '-k', keyPemPath,
-    ...(app.bundleId ? ['-I', app.bundleId] as string[] : []),
-    '-o', signedPath,
-    originalIpaAbsPath
-  ]
-  await execa(applesignBin, args)
+  // ldid flow only:
+  // 1) Unzip IPA
+  // 2) Extract entitlements from provisioning profile
+  // 3) Re-sign main binary and frameworks with ldid -S<entitlements> -K key.pem -M cert.pem
+  // 4) Repack IPA
+  const workDir = `${originalIpaAbsPath}.${Date.now().toString(36)}`
+  await fse.ensureDir(workDir)
+  await execa('unzip', ['-o', originalIpaAbsPath, '-d', workDir])
+  const payloadDir = path.join(workDir, 'Payload')
+  const appDirs = (await fse.readdir(payloadDir) as string[]).filter((n: string) => n.endsWith('.app'))
+  if (appDirs.length === 0) throw new Error('No .app found in IPA')
+  const appDir = path.join(payloadDir, appDirs[0])
+
+  // Extract entitlements plist from mobileprovision (handle XML or binary plist)
+  const provExec: any = await execa('bash', ['-lc', 'openssl smime -inform der -verify -noverify -in /dev/stdin -out /dev/stdout'], { input: await fse.readFile(profilePath), encoding: 'buffer' } as any)
+  const provBuf: Buffer = provExec.stdout as Buffer
+  const provObj: any = parsePlistBuffer(provBuf) || {}
+  const entitlementsObj = provObj?.Entitlements || {}
+  const entitlementsPlist = plist.build(entitlementsObj as any)
+  const entPath = path.join(workDir, 'entitlements.plist')
+  await fse.writeFile(entPath, entitlementsPlist)
+
+  // Sign main executable (handle XML or binary Info.plist)
+  const infoPlistPath = path.join(appDir, 'Info.plist')
+  const infoBuf = await fse.readFile(infoPlistPath)
+  const info = parsePlistBuffer(infoBuf) as any
+  const execName = info.CFBundleExecutable as string
+  const execPath = path.join(appDir, execName)
+  if (p12Path) {
+    const args = ['-S', entPath, '-K', p12Path]
+    if (p12Password && p12Password.length > 0) args.push('-U', p12Password)
+    args.push(execPath)
+    await execa('ldid', args)
+  } else {
+    await execa('ldid', ['-S', entPath, '-K', keyPemPath!, '-M', certPemPath!, execPath])
+  }
+
+  // Sign embedded frameworks and plugins (best-effort)
+  const signDirIfExists = async (dir: string) => {
+    if (await fse.pathExists(dir)) {
+      const items = await fse.readdir(dir)
+      for (const item of items) {
+        const p = path.join(dir, item)
+        try {
+          if (p12Path) {
+            const fwArgs = ['-S', entPath, '-K', p12Path]
+            if (p12Password && p12Password.length > 0) fwArgs.push('-U', p12Password)
+            fwArgs.push(p)
+            await execa('ldid', fwArgs)
+          } else {
+            await execa('ldid', ['-S', entPath, '-K', keyPemPath!, '-M', certPemPath!, p])
+          }
+        } catch {}
+      }
+    }
+  }
+  await signDirIfExists(path.join(appDir, 'Frameworks'))
+  await signDirIfExists(path.join(appDir, 'PlugIns'))
+
+  // Embed provisioning profile
+  await fse.copyFile(profilePath, path.join(appDir, 'embedded.mobileprovision'))
+
+  // Repack IPA
+  const cwd = path.dirname(workDir)
+  const base = path.basename(workDir)
+  await execa('bash', ['-lc', `cd '${cwd}' && zip -qry '${signedPath}' '${base}/Payload'`])
+  await fse.remove(workDir)
   signedIpaPublic = `/uploads/${app.ownerId}/${app.id}/${path.basename(signedPath)}`
 
   let manifestPublic: string | undefined

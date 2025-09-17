@@ -9,7 +9,7 @@ DATABASE_URL = "file:/app/prisma/dev.db"
 
 [phases.setup]
 # Use modern Node/npm compatible with Nuxt 4 & deps
-nixPkgs = ["nodejs_22", "openssl", "unzip", "zip"]
+nixPkgs = ["nodejs_22", "openssl", "unzip", "zip", "ldid"]
 nixLibs = ["gcc-unwrapped"]
 
 [phases.install]
