@@ -124,7 +124,7 @@ export async function signApp(appId: string): Promise<void> {
 
   // Inspect provisioning profile for device support (optional diagnostics)
   try {
-    const { stdout } = await execa('bash', ['-lc', 'openssl smime -inform der -verify -noverify -in /dev/stdin -out /dev/stdout'], { input: await fse.readFile(profilePath) })
+    const { stdout } = await execa('openssl', ['smime', '-inform', 'der', '-verify', '-noverify', '-in', profilePath, '-out', '-'])
     const obj: any = plist.parse(stdout)
     const devices: string[] | undefined = obj?.ProvisionedDevices
     const allDevices: boolean | undefined = obj?.ProvisionsAllDevices
@@ -157,8 +157,8 @@ export async function signApp(appId: string): Promise<void> {
   const appDir = path.join(payloadDir, appDirs[0])
 
   // Extract entitlements plist from mobileprovision (handle XML or binary plist)
-  const provExec: any = await execa('bash', ['-lc', 'openssl smime -inform der -verify -noverify -in /dev/stdin -out /dev/stdout'], { input: await fse.readFile(profilePath), encoding: 'buffer' } as any)
-  const provBuf: Buffer = provExec.stdout as Buffer
+  const provExec: any = await execa('openssl', ['smime', '-inform', 'der', '-verify', '-noverify', '-in', profilePath, '-out', '-'], { encoding: 'buffer' } as any)
+  const provBuf: Buffer = provExec.stdout as unknown as Buffer
   const provObj: any = parsePlistBuffer(provBuf) || {}
   const entitlementsObj = provObj?.Entitlements || {}
   const entitlementsPlist = plist.build(entitlementsObj as any)
