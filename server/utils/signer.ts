@@ -106,7 +106,20 @@ export async function signApp(appId: string): Promise<void> {
   const outputDir = path.join(uploadDir, app.id)
   await fse.ensureDir(outputDir)
 
-  const originalIpaAbsPath = getAbsolutePublicPath(app.originalIpaPath)
+  // Choose input IPA: prefer signed IPA if present on disk; otherwise original
+  const pickIpaPath = (): string => {
+    const candidates: (string | null | undefined)[] = [app.signedIpaPath, app.originalIpaPath]
+    for (const p of candidates) {
+      if (!p) continue
+      const abs = getAbsolutePublicPath(p)
+      if (fse.existsSync(abs)) return abs
+    }
+    return ''
+  }
+  const originalIpaAbsPath = pickIpaPath()
+  if (!originalIpaAbsPath) {
+    throw new Error('Source IPA not found on server storage. Re-upload the app to sign.')
+  }
 
   const { certPemPath, keyPemPath, profilePath, p12Path, p12Password } = await ensureManagerAssetsOnDisk(app.ownerId, platform, outputDir)
 
