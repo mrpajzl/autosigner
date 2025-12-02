@@ -405,7 +405,7 @@ async function signAppLocally(appId: string): Promise<void> {
 
   // Log signing operation
   try {
-    const { stdout } = await execa('openssl', ['smime', '-inform', 'der', '-verify', '-noverify', '-in', profilePath, '-out', '-'])
+    const { stdout } = await execa('security', ['cms', '-D', '-i', profilePath])
     const obj: any = plist.parse(stdout)
     const devices: string[] | undefined = obj?.ProvisionedDevices
     const allDevices: boolean | undefined = obj?.ProvisionsAllDevices
@@ -442,13 +442,23 @@ async function signAppLocally(appId: string): Promise<void> {
     const appDir = path.join(payloadDir, appDirs[0])
 
     // 2) Extract entitlements from provisioning profile
-    const provExec: any = await execa('openssl', ['smime', '-inform', 'der', '-verify', '-noverify', '-in', profilePath, '-out', '-'], { encoding: 'buffer' } as any)
-    const provBuf: Buffer = provExec.stdout as unknown as Buffer
-    const provObj: any = parsePlistBuffer(provBuf) || {}
+    // Use a temp file approach for more reliable extraction
+    const provTempPlist = path.join(workDir, 'profile_content.plist')
+    await execa('security', ['cms', '-D', '-i', profilePath, '-o', provTempPlist])
+    const provContent = await fse.readFile(provTempPlist, 'utf8')
+    const provObj: any = plist.parse(provContent)
+    
     const entitlementsObj = provObj?.Entitlements || {}
+    console.log('Extracted entitlements:', JSON.stringify(entitlementsObj, null, 2))
+    
+    if (!entitlementsObj || Object.keys(entitlementsObj).length === 0) {
+      throw new Error('Failed to extract entitlements from provisioning profile')
+    }
+    
     const entitlementsPlist = plist.build(entitlementsObj as any)
     const entPath = path.join(workDir, 'entitlements.plist')
     await fse.writeFile(entPath, entitlementsPlist)
+    console.log('Wrote entitlements to:', entPath)
 
     // 3) Embed the new provisioning profile
     await fse.copyFile(profilePath, path.join(appDir, 'embedded.mobileprovision'))
