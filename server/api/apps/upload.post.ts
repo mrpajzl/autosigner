@@ -190,7 +190,7 @@ export default defineEventHandler(async (event) => {
             update: updateData,
             create: {
               userId: user.id,
-              displayName: user.email,
+              displayName: user.nickname,
               ...updateData
             }
           })

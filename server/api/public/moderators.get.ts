@@ -70,7 +70,7 @@ export default defineEventHandler(async () => {
 
     return {
       id: u.id,
-      name: u.managerProfile?.displayName || u.email,
+      name: u.managerProfile?.displayName || u.nickname,
       iosApps,
       tvosApps,
       profileUpdatedAt: u.managerProfile ? u.managerProfile.createdAt.toISOString() : null,

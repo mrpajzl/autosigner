@@ -7,14 +7,13 @@
       </div>
     </template>
     <UForm :state="state" class="space-y-4" @submit="onSubmit">
-      <UFormGroup label="Email" name="email">
-        <UInput v-model="state.email" type="email" placeholder="you@example.com" />
+      <UFormGroup label="Nickname" name="nickname">
+        <UInput v-model="state.nickname" type="text" placeholder="Your nickname" />
       </UFormGroup>
       <UFormGroup label="Password" name="password">
         <UInput v-model="state.password" type="password" placeholder="••••••••" />
       </UFormGroup>
-      <div class="flex justify-between items-center">
-        <NuxtLink to="/auth/register" class="text-xs text-white/70 hover:text-white">Create an account</NuxtLink>
+      <div class="flex justify-end">
         <UButton type="submit" color="white" variant="soft" :loading="loading" icon="i-heroicons-arrow-right-end-on-rectangle" label="Sign in" />
       </div>
     </UForm>
@@ -22,13 +21,13 @@
 </template>
 
 <script setup lang="ts">
-const state = reactive({ email: '', password: '' })
+const state = reactive({ nickname: '', password: '' })
 const loading = ref(false)
 
 async function onSubmit() {
   loading.value = true
   try {
-    await $fetch('/api/auth/login', { method: 'POST', body: { email: state.email, password: state.password } })
+    await $fetch('/api/auth/login', { method: 'POST', body: { nickname: state.nickname, password: state.password } })
     navigateTo('/')
   } catch (e: any) {
     useToast().add({ title: 'Sign in failed', description: e?.data?.message || e?.message, color: 'red' })

@@ -60,7 +60,7 @@ export default defineEventHandler(async (event) => {
   const mp = await prisma.managerProfile.upsert({
     where: { userId: user.id },
     update: updateData,
-    create: { userId: user.id, displayName: user.email, ...updateData }
+    create: { userId: user.id, displayName: user.nickname, ...updateData }
   })
 
   // Trigger background re-sign for this user's apps

@@ -15,11 +15,8 @@
         <UButton icon="i-heroicons-moon" variant="ghost" color="white" @click="toggleTheme" />
         <template v-if="me">
           <UDropdown :items="userMenu">
-            <UButton color="white" variant="soft" icon="i-heroicons-user-circle" :label="me.nickname || me.email" />
+            <UButton color="white" variant="soft" icon="i-heroicons-user-circle" :label="me.nickname" />
           </UDropdown>
-        </template>
-        <template v-else>
-          <UButton to="/auth/login" color="white" variant="soft" icon="i-heroicons-arrow-right-end-on-rectangle" label="Sign in" />
         </template>
       </div>
     </div>
@@ -29,7 +26,7 @@
 <script setup lang="ts">
 const colorMode = useColorMode()
 const toggleTheme = () => { colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark' }
-const { data: me } = await useFetch<{ id: string; email: string; nickname?: string | null } | null>('/api/auth/me', {
+const { data: me } = await useFetch<{ id: string; nickname: string; role: string } | null>('/api/auth/me', {
   default: () => null
 })
 const userMenu = [[

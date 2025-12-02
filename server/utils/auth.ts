@@ -5,14 +5,13 @@ import { H3Event, getCookie, setCookie, deleteCookie } from 'h3'
 
 const SESSION_COOKIE = 'as_session'
 
-export async function registerUser(email: string, password: string, role: 'SUPERADMIN' | 'MANAGER' | 'USER' = 'USER') {
+export async function createUser(nickname: string, password: string, role: 'SUPERADMIN' | 'MANAGER' | 'USER' = 'USER') {
   const passwordHash = await bcrypt.hash(password, 12)
-  const status = role === 'SUPERADMIN' ? 'APPROVED' : 'PENDING'
-  return prisma.user.create({ data: { email, passwordHash, role, status } })
+  return prisma.user.create({ data: { nickname, passwordHash, role, status: 'APPROVED' } })
 }
 
-export async function login(event: H3Event, email: string, password: string) {
-  const user = await prisma.user.findUnique({ where: { email } })
+export async function login(event: H3Event, nickname: string, password: string) {
+  const user = await prisma.user.findUnique({ where: { nickname } })
   if (!user) throw createError({ statusCode: 401, message: 'Invalid credentials' })
   const ok = await bcrypt.compare(password, user.passwordHash)
   if (!ok) throw createError({ statusCode: 401, message: 'Invalid credentials' })
