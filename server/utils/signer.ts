@@ -242,6 +242,7 @@ async function cleanupKeychain(keychainPath: string): Promise<void> {
 
 /**
  * Create a password-less P12 for ldid (which doesn't properly support passwords)
+ * Works with both OpenSSL 3.x and LibreSSL (macOS built-in)
  */
 async function createPasswordlessP12(
   p12Path: string,
@@ -252,35 +253,46 @@ async function createPasswordlessP12(
   const tempKey = path.join(outputDir, '.ldid.key.pem')
   const tempCert = path.join(outputDir, '.ldid.cert.pem')
   
+  // Check if openssl supports -legacy flag (OpenSSL 3.x does, LibreSSL doesn't)
+  let useLegacy = false
+  try {
+    const { stdout } = await execa('openssl', ['version'])
+    useLegacy = stdout.includes('OpenSSL 3') || stdout.includes('OpenSSL 1.1')
+  } catch {}
+  
   // Extract private key
-  await execa('openssl', [
+  const keyArgs = [
     'pkcs12', '-in', p12Path,
     '-nocerts', '-nodes',
     '-out', tempKey,
-    '-passin', `pass:${p12Password}`,
-    '-legacy'
-  ])
+    '-passin', `pass:${p12Password}`
+  ]
+  if (useLegacy) keyArgs.push('-legacy')
+  await execa('openssl', keyArgs)
   
   // Extract certificate
-  await execa('openssl', [
+  const certArgs = [
     'pkcs12', '-in', p12Path,
     '-clcerts', '-nokeys',
     '-out', tempCert,
-    '-passin', `pass:${p12Password}`,
-    '-legacy'
-  ])
+    '-passin', `pass:${p12Password}`
+  ]
+  if (useLegacy) certArgs.push('-legacy')
+  await execa('openssl', certArgs)
   
-  // Re-create P12 without password and without legacy encryption
-  await execa('openssl', [
+  // Re-create P12 without password
+  const exportArgs = [
     'pkcs12', '-export',
     '-inkey', tempKey,
     '-in', tempCert,
     '-out', noPassP12,
-    '-passout', 'pass:',
-    '-keypbe', 'NONE',
-    '-certpbe', 'NONE',
-    '-nomacver'
-  ])
+    '-passout', 'pass:'
+  ]
+  // Only use -keypbe/-certpbe NONE if supported (not LibreSSL)
+  if (useLegacy) {
+    exportArgs.push('-keypbe', 'NONE', '-certpbe', 'NONE')
+  }
+  await execa('openssl', exportArgs)
   
   // Cleanup temp files
   await fse.remove(tempKey)
