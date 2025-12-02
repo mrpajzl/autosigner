@@ -8,11 +8,11 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/bash</string>
-        <string>/Users/ondrejzraly/Projects/autosigner/scripts/start-server.sh</string>
+        <string>scripts/start-server.sh</string>
     </array>
     
     <key>WorkingDirectory</key>
-    <string>/Users/ondrejzraly/Projects/autosigner</string>
+    <string>/Users/ondrejzraly/autosigner</string>
     
     <key>EnvironmentVariables</key>
     <dict>
@@ -32,10 +32,10 @@
     </dict>
     
     <key>StandardOutPath</key>
-    <string>/Users/ondrejzraly/Projects/autosigner/logs/stdout.log</string>
+    <string>/Users/ondrejzraly/autosigner/logs/stdout.log</string>
     
     <key>StandardErrorPath</key>
-    <string>/Users/ondrejzraly/Projects/autosigner/logs/stderr.log</string>
+    <string>/Users/ondrejzraly/autosigner/logs/stderr.log</string>
 </dict>
 </plist>
 
