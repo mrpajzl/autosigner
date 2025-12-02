@@ -12,6 +12,10 @@ import { prisma } from './db'
 import { decrypt } from './crypto'
 import { useRuntimeConfig } from '#imports'
 
+// Cleanup configuration
+const WORK_DIR_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour - stale work directories older than this will be cleaned
+const CLEANUP_BATCH_SIZE = 50 // Maximum directories to clean in one batch
+
 function getAbsolutePublicPath(publicPath: string): string {
   const rel = publicPath.startsWith('/') ? publicPath.slice(1) : publicPath
   return path.join(process.cwd(), 'public', rel)
@@ -376,6 +380,247 @@ async function codesignApp(
   await execa('codesign', ['--verify', '--deep', '--strict', appPath])
 }
 
+/**
+ * Clean up stale work directories for a specific user's upload folder
+ * Work directories match pattern: {ipaFileName}.{timestamp}
+ */
+async function cleanupUserWorkDirectories(userUploadDir: string): Promise<number> {
+  let cleanedCount = 0
+  
+  if (!await fse.pathExists(userUploadDir)) {
+    return cleanedCount
+  }
+  
+  try {
+    const entries = await fse.readdir(userUploadDir, { withFileTypes: true })
+    
+    for (const entry of entries) {
+      // Skip if not a directory
+      if (!entry.isDirectory()) continue
+      
+      // Match work directory pattern: {filename}.ipa.{timestamp}
+      // The timestamp is a base36 encoded Date.now()
+      const match = entry.name.match(/^(.+\.ipa)\.([a-z0-9]+)$/)
+      if (!match) continue
+      
+      const workDirPath = path.join(userUploadDir, entry.name)
+      
+      try {
+        const stat = await fse.stat(workDirPath)
+        const ageMs = Date.now() - stat.mtimeMs
+        
+        // Only clean up directories older than the threshold
+        if (ageMs > WORK_DIR_MAX_AGE_MS) {
+          await fse.remove(workDirPath)
+          cleanedCount++
+          console.log(`Cleaned up stale work directory: ${workDirPath}`)
+        }
+      } catch (e) {
+        console.warn(`Failed to clean work directory ${workDirPath}:`, e)
+      }
+      
+      // Limit batch size to avoid blocking for too long
+      if (cleanedCount >= CLEANUP_BATCH_SIZE) break
+    }
+  } catch (e) {
+    console.warn(`Failed to cleanup user upload directory ${userUploadDir}:`, e)
+  }
+  
+  return cleanedCount
+}
+
+/**
+ * Clean up all stale work directories across all users
+ * This can be called periodically or after signing operations
+ */
+export async function cleanupAllStaleWorkDirectories(): Promise<{ totalCleaned: number; errors: string[] }> {
+  const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
+  let totalCleaned = 0
+  const errors: string[] = []
+  
+  if (!await fse.pathExists(uploadsDir)) {
+    return { totalCleaned, errors }
+  }
+  
+  try {
+    const userDirs = await fse.readdir(uploadsDir, { withFileTypes: true })
+    
+    for (const userDir of userDirs) {
+      if (!userDir.isDirectory()) continue
+      
+      const userUploadDir = path.join(uploadsDir, userDir.name)
+      try {
+        const cleaned = await cleanupUserWorkDirectories(userUploadDir)
+        totalCleaned += cleaned
+      } catch (e) {
+        const msg = `Failed to cleanup for user ${userDir.name}: ${e}`
+        errors.push(msg)
+        console.error(msg)
+      }
+    }
+  } catch (e) {
+    const msg = `Failed to list uploads directory: ${e}`
+    errors.push(msg)
+    console.error(msg)
+  }
+  
+  if (totalCleaned > 0) {
+    console.log(`Cleanup complete: removed ${totalCleaned} stale work directories`)
+  }
+  
+  return { totalCleaned, errors }
+}
+
+/**
+ * Clean up work directories for a specific IPA file
+ * Call this after successful signing to remove all old work directories for that IPA
+ */
+async function cleanupIpaWorkDirectories(ipaPath: string): Promise<number> {
+  const parentDir = path.dirname(ipaPath)
+  const ipaBasename = path.basename(ipaPath)
+  let cleanedCount = 0
+  
+  try {
+    const entries = await fse.readdir(parentDir, { withFileTypes: true })
+    
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      
+      // Match work directories for this specific IPA
+      if (entry.name.startsWith(`${ipaBasename}.`)) {
+        const workDirPath = path.join(parentDir, entry.name)
+        try {
+          await fse.remove(workDirPath)
+          cleanedCount++
+          console.log(`Cleaned up IPA work directory: ${workDirPath}`)
+        } catch (e) {
+          console.warn(`Failed to remove work directory ${workDirPath}:`, e)
+        }
+      }
+    }
+  } catch (e) {
+    console.warn(`Failed to cleanup IPA work directories for ${ipaPath}:`, e)
+  }
+  
+  return cleanedCount
+}
+
+/**
+ * Clean up orphaned app directories (directories that exist on disk but not in the database)
+ * This handles cases where database deletion succeeded but file cleanup failed
+ */
+export async function cleanupOrphanedAppDirectories(): Promise<{ totalCleaned: number; errors: string[] }> {
+  const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
+  let totalCleaned = 0
+  const errors: string[] = []
+
+  if (!await fse.pathExists(uploadsDir)) {
+    return { totalCleaned, errors }
+  }
+
+  try {
+    // Get all users who have uploaded apps
+    const users = await prisma.user.findMany({
+      select: { id: true }
+    })
+    const userIds = new Set(users.map(u => u.id))
+
+    const userDirs = await fse.readdir(uploadsDir, { withFileTypes: true })
+
+    for (const userDir of userDirs) {
+      if (!userDir.isDirectory()) continue
+      const userId = userDir.name
+
+      // Skip if this is not a valid user ID (might be a user that was deleted)
+      if (!userIds.has(userId)) {
+        // User doesn't exist anymore, clean up their entire upload directory
+        const userUploadDir = path.join(uploadsDir, userId)
+        try {
+          await fse.remove(userUploadDir)
+          totalCleaned++
+          console.log(`Cleaned up orphaned user directory: ${userUploadDir}`)
+        } catch (e) {
+          const msg = `Failed to remove orphaned user directory ${userUploadDir}: ${e}`
+          errors.push(msg)
+          console.warn(msg)
+        }
+        continue
+      }
+
+      const userUploadDir = path.join(uploadsDir, userId)
+      
+      // Get all app IDs for this user from the database
+      const apps = await prisma.app.findMany({
+        where: { ownerId: userId },
+        select: { id: true, ipaFileName: true }
+      })
+      const appIds = new Set(apps.map(a => a.id))
+      const ipaFileNames = new Set(apps.map(a => a.ipaFileName).filter(Boolean))
+
+      const entries = await fse.readdir(userUploadDir, { withFileTypes: true })
+
+      for (const entry of entries) {
+        // Skip IPA files - these are original uploads
+        if (entry.name.endsWith('.ipa') && !entry.isDirectory()) {
+          // Check if this IPA file is still referenced by any app
+          if (!ipaFileNames.has(entry.name)) {
+            // Orphaned IPA file
+            const ipaPath = path.join(userUploadDir, entry.name)
+            try {
+              await fse.remove(ipaPath)
+              totalCleaned++
+              console.log(`Cleaned up orphaned IPA file: ${ipaPath}`)
+            } catch (e) {
+              const msg = `Failed to remove orphaned IPA ${ipaPath}: ${e}`
+              errors.push(msg)
+            }
+          }
+          continue
+        }
+
+        // Skip work directories (handled by cleanupUserWorkDirectories)
+        if (entry.name.includes('.ipa.')) continue
+
+        // Check if this directory matches an app ID
+        if (entry.isDirectory() && !appIds.has(entry.name)) {
+          // Orphaned app directory
+          const appDir = path.join(userUploadDir, entry.name)
+          try {
+            await fse.remove(appDir)
+            totalCleaned++
+            console.log(`Cleaned up orphaned app directory: ${appDir}`)
+          } catch (e) {
+            const msg = `Failed to remove orphaned app directory ${appDir}: ${e}`
+            errors.push(msg)
+          }
+        }
+      }
+    }
+  } catch (e) {
+    const msg = `Failed during orphaned cleanup: ${e}`
+    errors.push(msg)
+    console.error(msg)
+  }
+
+  if (totalCleaned > 0) {
+    console.log(`Orphaned cleanup complete: removed ${totalCleaned} items`)
+  }
+
+  return { totalCleaned, errors }
+}
+
+/**
+ * Run full cleanup: stale work directories + orphaned items
+ */
+export async function runFullCleanup(): Promise<{
+  staleWorkDirs: { totalCleaned: number; errors: string[] }
+  orphaned: { totalCleaned: number; errors: string[] }
+}> {
+  const staleWorkDirs = await cleanupAllStaleWorkDirectories()
+  const orphaned = await cleanupOrphanedAppDirectories()
+  return { staleWorkDirs, orphaned }
+}
+
 export async function signApp(appId: string): Promise<void> {
   await signAppLocally(appId)
 }
@@ -423,6 +668,7 @@ async function signAppLocally(appId: string): Promise<void> {
   }
 
   let keychainPath: string | undefined
+  let workDir: string | undefined
 
   try {
     // Import certificate into temporary keychain for codesign
@@ -432,7 +678,7 @@ async function signAppLocally(appId: string): Promise<void> {
     console.log('Imported certificate, identity:', signingIdentity)
 
     // 1) Unzip IPA
-    const workDir = `${originalIpaAbsPath}.${Date.now().toString(36)}`
+    workDir = `${originalIpaAbsPath}.${Date.now().toString(36)}`
     await fse.ensureDir(workDir)
     await execa('unzip', ['-o', originalIpaAbsPath, '-d', workDir])
     
@@ -490,17 +736,24 @@ async function signAppLocally(appId: string): Promise<void> {
     
     // Use ditto or zip to repack
     await execa('bash', ['-c', `cd "${workDir}" && zip -qry "${signedPath}" Payload`])
-    
-    // Cleanup work directory
-    await fse.remove(workDir)
 
     // Finalize
     await finalizeSignedArtifact(app, signedPath)
+    
+    // Clean up ALL old work directories for this IPA after successful signing
+    // This ensures we don't leave stale directories from previous signing attempts
+    await cleanupIpaWorkDirectories(originalIpaAbsPath)
     
   } catch (e) {
     console.error('Signing failed:', e)
     throw e
   } finally {
+    // Always cleanup work directory (if it was created)
+    if (workDir) {
+      await fse.remove(workDir).catch((err) => {
+        console.warn(`Failed to cleanup work directory ${workDir}:`, err)
+      })
+    }
     // Cleanup temporary keychain
     if (keychainPath) {
       await cleanupKeychain(keychainPath)
