@@ -332,19 +332,23 @@ async function ldidSignApp(
 }
 
 /**
- * Sign an .app bundle using macOS codesign (fallback)
+ * Sign an .app bundle using macOS codesign
  */
 async function codesignApp(
   appPath: string,
   identity: string,
   entitlementsPath: string,
-  _keychainPath?: string
+  keychainPath?: string
 ): Promise<void> {
   const codesignArgs = [
     '--force',
     '--sign', identity,
     '--entitlements', entitlementsPath,
   ]
+  
+  if (keychainPath) {
+    codesignArgs.push('--keychain', keychainPath)
+  }
   
   // First, sign all frameworks and plugins
   const frameworksDir = path.join(appPath, 'Frameworks')
@@ -418,10 +422,14 @@ async function signAppLocally(appId: string): Promise<void> {
     console.warn('Failed to inspect provisioning profile before signing', e)
   }
 
+  let keychainPath: string | undefined
+
   try {
-    // Create password-less P12 for ldid (it doesn't properly support passwords)
-    const noPassP12 = await createPasswordlessP12(p12Path, p12Password || '', outputDir)
-    console.log('Created password-less P12 for ldid signing')
+    // Import certificate into temporary keychain for codesign
+    const keychain = await importCertToKeychain(p12Path, p12Password || '')
+    keychainPath = keychain.keychainPath
+    const signingIdentity = keychain.identity
+    console.log('Imported certificate, identity:', signingIdentity)
 
     // 1) Unzip IPA
     const workDir = `${originalIpaAbsPath}.${Date.now().toString(36)}`
@@ -464,8 +472,8 @@ async function signAppLocally(appId: string): Promise<void> {
     const codeSignatureDir = path.join(appDir, '_CodeSignature')
     await fse.remove(codeSignatureDir).catch(() => {})
 
-    // 6) Sign the app using ldid
-    await ldidSignApp(appDir, noPassP12, entPath)
+    // 6) Sign the app using codesign
+    await codesignApp(appDir, signingIdentity, entPath, keychainPath)
 
     // 7) Repack IPA
     const signedPath = path.join(outputDir, `${app.id}-signed.ipa`)
@@ -482,6 +490,11 @@ async function signAppLocally(appId: string): Promise<void> {
   } catch (e) {
     console.error('Signing failed:', e)
     throw e
+  } finally {
+    // Cleanup temporary keychain
+    if (keychainPath) {
+      await cleanupKeychain(keychainPath)
+    }
   }
 }
 
