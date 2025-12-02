@@ -1,17 +1,20 @@
 {
-  "name": "nuxt-app",
+  "name": "autosigner",
   "type": "module",
+  "description": "iOS/tvOS IPA signing service for M4 Mac server",
   "engines": {
     "node": ">=22.12.0"
   },
   "private": true,
   "scripts": {
     "build": "prisma generate && nuxt build",
-    "dev": "nuxt dev",
+    "dev:local": "npx prisma generate && nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "start": "NODE_OPTIONS=--dns-result-order=ipv4first node .output/server/index.mjs",
-    "postinstall": "nuxt prepare"
+    "start": "dotenv -e .env -- node .output/server/index.mjs",
+    "postinstall": "nuxt prepare",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev"
   },
   "dependencies": {
     "@nuxt/content": "^3.6.3",
@@ -24,9 +27,8 @@
     "@nuxt/ui": "^2.18.7",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.2",
-    "applesign": "^2.3.0",
-    "bplist-parser": "^0.3.2",
     "better-sqlite3": "^12.2.0",
+    "bplist-parser": "^0.3.2",
     "eslint": "^9.33.0",
     "execa": "^9.6.0",
     "formidable": "^3.5.4",
@@ -43,6 +45,7 @@
   "devDependencies": {
     "@nuxtjs/tailwindcss": "^6.14.0",
     "autoprefixer": "^10.4.21",
+    "dotenv-cli": "^11.0.0",
     "postcss": "^8.5.6",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.14",

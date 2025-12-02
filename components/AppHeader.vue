@@ -7,6 +7,7 @@
         <nav class="hidden md:flex items-center gap-3 text-sm text-white/80">
           <NuxtLink to="/" class="hover:text-white">Dashboard</NuxtLink>
           <NuxtLink v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'" to="/apps" class="hover:text-white">Apps</NuxtLink>
+          <NuxtLink v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'" to="/signing" class="hover:text-white">Signing</NuxtLink>
           <NuxtLink v-if="me?.role === 'SUPERADMIN'" to="/admin/approvals" class="hover:text-white">Users</NuxtLink>
         </nav>
       </div>
@@ -28,7 +29,9 @@
 <script setup lang="ts">
 const colorMode = useColorMode()
 const toggleTheme = () => { colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark' }
-const { data: me } = await useFetch<{ id: string; email: string; nickname?: string | null } | null>('/api/auth/me')
+const { data: me } = await useFetch<{ id: string; email: string; nickname?: string | null } | null>('/api/auth/me', {
+  default: () => null
+})
 const userMenu = [[
   { label: 'Profile', icon: 'i-heroicons-user', to: '/profile' },
   { label: 'Sign out', icon: 'i-heroicons-arrow-left-on-rectangle', click: async () => { await $fetch('/api/auth/signout', { method: 'POST' }); navigateTo('/') } }

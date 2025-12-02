@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 // @ts-ignore
 import fse from 'fs-extra'
 import { execa } from 'execa'
@@ -6,12 +7,22 @@ import { execa } from 'execa'
 import plist from 'plist'
 // @ts-ignore
 import bplist from 'bplist-parser'
+import type { App as AppModel } from '@prisma/client'
 import { prisma } from './db'
 import { decrypt } from './crypto'
+import { useRuntimeConfig } from '#imports'
 
 function getAbsolutePublicPath(publicPath: string): string {
   const rel = publicPath.startsWith('/') ? publicPath.slice(1) : publicPath
   return path.join(process.cwd(), 'public', rel)
+}
+
+function getPublicBaseUrl(): string {
+  try {
+    return (useRuntimeConfig().public.baseUrl || '').toString().replace(/\/$/, '')
+  } catch {
+    return ''
+  }
 }
 
 function parsePlistBuffer(buf: Buffer): any {
@@ -38,66 +49,322 @@ function parsePlistBuffer(buf: Buffer): any {
   }
 }
 
-async function ensureManagerAssetsOnDisk(userId: string, platform: 'IOS' | 'TVOS', intoDir: string): Promise<{ certPemPath?: string; keyPemPath?: string; profilePath?: string; p12Password?: string; p12Path?: string }> {
+interface SigningAssets {
+  p12Path?: string
+  p12Password?: string
+  profilePath?: string
+  certIdentity?: string
+}
+
+async function ensureManagerAssetsOnDisk(userId: string, platform: 'IOS' | 'TVOS', intoDir: string): Promise<SigningAssets> {
   const prof = await prisma.managerProfile.findUnique({ where: { userId } })
   const activeCert = await prisma.certificate.findFirst({ where: { userId, active: true }, orderBy: { createdAt: 'desc' } })
   const activeProfile = await prisma.provisioningProfile.findFirst({ where: { userId, platform, active: true }, orderBy: { createdAt: 'desc' } })
 
   await fse.ensureDir(intoDir)
-  let certPemPath: string | undefined
-  let keyPemPath: string | undefined
-  let profilePath: string | undefined
-  let p12Password: string | undefined
   let p12Path: string | undefined
+  let p12Password: string | undefined
+  let profilePath: string | undefined
 
-  // Prefer new Certificate records (p12 → extract PEMs); fallback to legacy ManagerProfile fields
+  // Get P12 certificate
   if (activeCert?.p12Data) {
     try {
       p12Path = path.join(intoDir, 'cert.p12')
       await fse.writeFile(p12Path, Buffer.from(activeCert.p12Data))
-      certPemPath = path.join(intoDir, 'cert.pem')
-      keyPemPath = path.join(intoDir, 'key.pem')
-      const pass = activeCert.p12PasswordEnc ? decrypt(JSON.parse(activeCert.p12PasswordEnc)).toString('utf8') : undefined
-      const passArg = pass ? ['-passin', `pass:${pass}`] : []
-      await execa('bash', ['-lc', [`openssl`, `pkcs12`, `-in`, p12Path, `-clcerts`, `-nokeys`, `-out`, certPemPath, ...passArg].map(String).join(' ')])
-      await execa('bash', ['-lc', [`openssl`, `pkcs12`, `-in`, p12Path, `-nocerts`, `-nodes`, `-out`, keyPemPath, ...passArg].map(String).join(' ')])
-      p12Password = pass
-    } catch {}
-  } else if (prof?.certificatePem) {
-    try {
-      const payload = JSON.parse(prof.certificatePem)
-      const buf = decrypt(payload)
-      certPemPath = path.join(intoDir, 'cert.pem')
-      await fse.writeFile(certPemPath, buf)
-    } catch {}
+      if (activeCert.p12PasswordEnc) {
+        p12Password = decrypt(JSON.parse(activeCert.p12PasswordEnc)).toString('utf8')
+      }
+    } catch (e) {
+      console.error('Failed to write P12 certificate:', e)
+    }
   }
-  if (prof?.privateKeyPem && !keyPemPath) {
-    try {
-      const payload = JSON.parse(prof.privateKeyPem)
-      const buf = decrypt(payload)
-      keyPemPath = path.join(intoDir, 'key.pem')
-      await fse.writeFile(keyPemPath, buf)
-    } catch {}
-  }
-  if (prof?.p12PasswordEnc) {
+
+  // Legacy password fallback
+  if (!p12Password && prof?.p12PasswordEnc) {
     try {
       const payload = JSON.parse(prof.p12PasswordEnc)
       const buf = decrypt(payload)
       p12Password = buf.toString('utf8')
     } catch {}
   }
+
+  // Get provisioning profile
   const mobileprov = activeProfile?.data || (platform === 'IOS' ? prof?.mobileprovisionIos : prof?.mobileprovisionTvos)
   if (mobileprov) {
     profilePath = path.join(intoDir, 'profile.mobileprovision')
     await fse.writeFile(profilePath, Buffer.from(mobileprov))
   }
 
-  return { certPemPath, keyPemPath, profilePath, p12Password, p12Path }
+  return { p12Path, p12Password, profilePath }
 }
 
-// Remove macOS-only applesign path; Linux-only signer uses ldid
+/**
+ * Download and cache Apple WWDR intermediate certificates and Root CA
+ */
+const APPLE_CERTS = [
+  { name: 'AppleWWDRCAG3.cer', url: 'https://www.apple.com/certificateauthority/AppleWWDRCAG3.cer' },
+  { name: 'AppleWWDRCAG2.cer', url: 'https://www.apple.com/certificateauthority/AppleWWDRCAG2.cer' },
+  { name: 'AppleIncRootCertificate.cer', url: 'https://www.apple.com/appleca/AppleIncRootCertificate.cer' },
+  { name: 'AppleRootCA-G2.cer', url: 'https://www.apple.com/certificateauthority/AppleRootCA-G2.cer' },
+  { name: 'AppleRootCA-G3.cer', url: 'https://www.apple.com/certificateauthority/AppleRootCA-G3.cer' },
+]
+
+async function ensureAppleCerts(cacheDir: string): Promise<string[]> {
+  await fse.ensureDir(cacheDir)
+  const certPaths: string[] = []
+  
+  for (const cert of APPLE_CERTS) {
+    const certPath = path.join(cacheDir, cert.name)
+    if (!await fse.pathExists(certPath)) {
+      try {
+        const response = await fetch(cert.url)
+        if (response.ok) {
+          const buffer = Buffer.from(await response.arrayBuffer())
+          await fse.writeFile(certPath, buffer)
+        }
+      } catch (e) {
+        console.warn(`Failed to download ${cert.name}:`, e)
+        continue
+      }
+    }
+    if (await fse.pathExists(certPath)) {
+      certPaths.push(certPath)
+    }
+  }
+  
+  return certPaths
+}
+
+/**
+ * Import P12 certificate into a temporary keychain and return the signing identity
+ */
+async function importCertToKeychain(
+  p12Path: string,
+  p12Password: string = '',
+  keychainName?: string
+): Promise<{ keychainPath: string; identity: string; isTemp: boolean }> {
+  const tmpKeychain = keychainName || `autosigner-${Date.now()}.keychain-db`
+  const keychainPath = path.join(process.env.HOME || '/tmp', 'Library', 'Keychains', tmpKeychain)
+  const keychainPassword = randomUUID()
+
+  try {
+    // Create temporary keychain
+    await execa('security', ['create-keychain', '-p', keychainPassword, keychainPath])
+    
+    // Set keychain settings (no auto-lock)
+    await execa('security', ['set-keychain-settings', keychainPath])
+    
+    // Unlock keychain
+    await execa('security', ['unlock-keychain', '-p', keychainPassword, keychainPath])
+    
+    // Add to search list (prepend our keychain so it's searched first)
+    const { stdout: existingKeychains } = await execa('security', ['list-keychains', '-d', 'user'])
+    const keychainList = existingKeychains
+      .split('\n')
+      .map(k => k.trim().replace(/^"|"$/g, ''))
+      .filter(Boolean)
+    
+    // Ensure login and System keychains are included for Apple certificate chain trust
+    // System keychain contains Apple WWDR intermediate certificates
+    const loginKeychain = path.join(process.env.HOME || '/tmp', 'Library', 'Keychains', 'login.keychain-db')
+    const systemKeychain = '/Library/Keychains/System.keychain'
+    const allKeychains = [keychainPath, ...keychainList]
+    if (!allKeychains.includes(loginKeychain)) {
+      allKeychains.push(loginKeychain)
+    }
+    if (!allKeychains.includes(systemKeychain)) {
+      allKeychains.push(systemKeychain)
+    }
+    
+    await execa('security', ['list-keychains', '-d', 'user', '-s', ...allKeychains])
+    
+    // Import Apple WWDR intermediate certificates for chain validation
+    const appleCertsDir = path.join(process.cwd(), '.apple-certs')
+    const appleCerts = await ensureAppleCerts(appleCertsDir)
+    for (const certPath of appleCerts) {
+      try {
+        await execa('security', ['import', certPath, '-k', keychainPath, '-T', '/usr/bin/codesign'])
+      } catch (e) {
+        // May already exist or not be needed, continue
+      }
+    }
+    
+    // Import P12 into keychain
+    const importArgs = [
+      'import', p12Path,
+      '-k', keychainPath,
+      '-P', p12Password || '',
+      '-T', '/usr/bin/codesign',
+      '-T', '/usr/bin/security',
+      '-A' // Allow all apps to access
+    ]
+    await execa('security', importArgs)
+    
+    // Set key partition list for codesign access
+    await execa('security', [
+      'set-key-partition-list',
+      '-S', 'apple-tool:,apple:,codesign:',
+      '-s', '-k', keychainPassword,
+      keychainPath
+    ])
+    
+    // Find the signing identity
+    const { stdout: identities } = await execa('security', [
+      'find-identity', '-v', '-p', 'codesigning', keychainPath
+    ])
+    
+    // Parse identity from output (format: "1) HASH "Name" ...")
+    const match = identities.match(/\d+\)\s+([A-F0-9]{40})\s+"([^"]+)"/)
+    if (!match) {
+      throw new Error('No valid signing identity found in P12')
+    }
+    
+    const identity = match[2] // Use the name, not the hash
+    
+    return { keychainPath, identity, isTemp: true }
+  } catch (e) {
+    // Cleanup on failure
+    await execa('security', ['delete-keychain', keychainPath]).catch(() => {})
+    throw e
+  }
+}
+
+/**
+ * Remove temporary keychain
+ */
+async function cleanupKeychain(keychainPath: string): Promise<void> {
+  try {
+    await execa('security', ['delete-keychain', keychainPath])
+  } catch (e) {
+    console.warn('Failed to cleanup keychain:', keychainPath, e)
+  }
+}
+
+/**
+ * Create a password-less P12 for ldid (which doesn't properly support passwords)
+ */
+async function createPasswordlessP12(
+  p12Path: string,
+  p12Password: string,
+  outputDir: string
+): Promise<string> {
+  const noPassP12 = path.join(outputDir, '.ldid.p12')
+  const tempKey = path.join(outputDir, '.ldid.key.pem')
+  const tempCert = path.join(outputDir, '.ldid.cert.pem')
+  
+  // Extract private key
+  await execa('openssl', [
+    'pkcs12', '-in', p12Path,
+    '-nocerts', '-nodes',
+    '-out', tempKey,
+    '-passin', `pass:${p12Password}`,
+    '-legacy'
+  ])
+  
+  // Extract certificate
+  await execa('openssl', [
+    'pkcs12', '-in', p12Path,
+    '-clcerts', '-nokeys',
+    '-out', tempCert,
+    '-passin', `pass:${p12Password}`,
+    '-legacy'
+  ])
+  
+  // Re-create P12 without password and without legacy encryption
+  await execa('openssl', [
+    'pkcs12', '-export',
+    '-inkey', tempKey,
+    '-in', tempCert,
+    '-out', noPassP12,
+    '-passout', 'pass:',
+    '-keypbe', 'NONE',
+    '-certpbe', 'NONE',
+    '-nomacver'
+  ])
+  
+  // Cleanup temp files
+  await fse.remove(tempKey)
+  await fse.remove(tempCert)
+  
+  return noPassP12
+}
+
+/**
+ * Sign an .app bundle using ldid with P12 certificate
+ */
+async function ldidSignApp(
+  appPath: string,
+  p12Path: string,
+  entitlementsPath: string
+): Promise<void> {
+  // First, sign all frameworks and plugins
+  const frameworksDir = path.join(appPath, 'Frameworks')
+  const pluginsDir = path.join(appPath, 'PlugIns')
+  
+  for (const dir of [frameworksDir, pluginsDir]) {
+    if (await fse.pathExists(dir)) {
+      const items = await fse.readdir(dir)
+      for (const item of items) {
+        const itemPath = path.join(dir, item)
+        try {
+          await execa('ldid', [`-K${p12Path}`, `-S${entitlementsPath}`, itemPath])
+        } catch (e) {
+          console.warn(`Warning: Failed to sign ${itemPath}:`, e)
+        }
+      }
+    }
+  }
+  
+  // Sign the main app bundle
+  await execa('ldid', [`-K${p12Path}`, `-S${entitlementsPath}`, appPath])
+}
+
+/**
+ * Sign an .app bundle using macOS codesign (fallback)
+ */
+async function codesignApp(
+  appPath: string,
+  identity: string,
+  entitlementsPath: string,
+  _keychainPath?: string
+): Promise<void> {
+  const codesignArgs = [
+    '--force',
+    '--sign', identity,
+    '--entitlements', entitlementsPath,
+  ]
+  
+  // First, sign all frameworks and plugins
+  const frameworksDir = path.join(appPath, 'Frameworks')
+  const pluginsDir = path.join(appPath, 'PlugIns')
+  
+  for (const dir of [frameworksDir, pluginsDir]) {
+    if (await fse.pathExists(dir)) {
+      const items = await fse.readdir(dir)
+      for (const item of items) {
+        const itemPath = path.join(dir, item)
+        try {
+          await execa('codesign', [...codesignArgs, itemPath])
+        } catch (e) {
+          console.warn(`Warning: Failed to sign ${itemPath}:`, e)
+        }
+      }
+    }
+  }
+  
+  // Sign the main app bundle
+  codesignArgs.push(appPath)
+  await execa('codesign', codesignArgs)
+  
+  // Verify the signature
+  await execa('codesign', ['--verify', '--deep', '--strict', appPath])
+}
 
 export async function signApp(appId: string): Promise<void> {
+  await signAppLocally(appId)
+}
+
+async function signAppLocally(appId: string): Promise<void> {
   const app = await prisma.app.findUnique({ where: { id: appId } })
   if (!app) throw new Error('App not found')
   const platform = (app.platform?.toUpperCase() as 'IOS' | 'TVOS') || 'IOS'
@@ -106,36 +373,21 @@ export async function signApp(appId: string): Promise<void> {
   const outputDir = path.join(uploadDir, app.id)
   await fse.ensureDir(outputDir)
 
-  // Choose input IPA: prefer signed IPA if present on disk; otherwise original
-  const pickIpaPath = (): string => {
-    const candidates: (string | null | undefined)[] = [app.signedIpaPath, app.originalIpaPath]
-    for (const p of candidates) {
-      if (!p) continue
-      const abs = getAbsolutePublicPath(p)
-      if (fse.existsSync(abs)) return abs
-    }
-    return ''
-  }
-  const originalIpaAbsPath = pickIpaPath()
+  const originalIpaAbsPath = pickAvailableIpa(app)
   if (!originalIpaAbsPath) {
     throw new Error('Source IPA not found on server storage. Re-upload the app to sign.')
   }
 
-  const { certPemPath, keyPemPath, profilePath, p12Path, p12Password } = await ensureManagerAssetsOnDisk(app.ownerId, platform, outputDir)
+  const { p12Path, p12Password, profilePath } = await ensureManagerAssetsOnDisk(app.ownerId, platform, outputDir)
 
-  // Basic preflight checks to avoid silent fallbacks
-  // Prefer ldid on Linux; applesign requires macOS keychain identities
-  // Linux-only: require ldid
-  try {
-    await execa('bash', ['-lc', 'command -v ldid'])
-  } catch {
-    throw new Error('ldid is not installed')
+  if (!p12Path) {
+    throw new Error('Missing signing certificate. Upload and activate one in Profile first.')
   }
-  if (!certPemPath || !keyPemPath || !profilePath) {
-    throw new Error('Missing signing assets (certificate/key/profile). Upload and activate them in Profile first.')
+  if (!profilePath) {
+    throw new Error('Missing provisioning profile. Upload and activate one in Profile first.')
   }
 
-  // Inspect provisioning profile for device support (optional diagnostics)
+  // Log signing operation
   try {
     const { stdout } = await execa('openssl', ['smime', '-inform', 'der', '-verify', '-noverify', '-in', profilePath, '-out', '-'])
     const obj: any = plist.parse(stdout)
@@ -154,115 +406,135 @@ export async function signApp(appId: string): Promise<void> {
     console.warn('Failed to inspect provisioning profile before signing', e)
   }
 
-  let signedIpaPublic: string | undefined
-  const signedPath = path.join(outputDir, `${app.id}-signed.ipa`)
-  // ldid flow only:
-  // 1) Unzip IPA
-  // 2) Extract entitlements from provisioning profile
-  // 3) Re-sign main binary and frameworks with ldid -S<entitlements> -K key.pem -M cert.pem
-  // 4) Repack IPA
-  const workDir = `${originalIpaAbsPath}.${Date.now().toString(36)}`
-  await fse.ensureDir(workDir)
-  await execa('unzip', ['-o', originalIpaAbsPath, '-d', workDir])
-  const payloadDir = path.join(workDir, 'Payload')
-  const appDirs = (await fse.readdir(payloadDir) as string[]).filter((n: string) => n.endsWith('.app'))
-  if (appDirs.length === 0) throw new Error('No .app found in IPA')
-  const appDir = path.join(payloadDir, appDirs[0])
+  try {
+    // Create password-less P12 for ldid (it doesn't properly support passwords)
+    const noPassP12 = await createPasswordlessP12(p12Path, p12Password || '', outputDir)
+    console.log('Created password-less P12 for ldid signing')
 
-  // Extract entitlements plist from mobileprovision (handle XML or binary plist)
-  const provExec: any = await execa('openssl', ['smime', '-inform', 'der', '-verify', '-noverify', '-in', profilePath, '-out', '-'], { encoding: 'buffer' } as any)
-  const provBuf: Buffer = provExec.stdout as unknown as Buffer
-  const provObj: any = parsePlistBuffer(provBuf) || {}
-  const entitlementsObj = provObj?.Entitlements || {}
-  const entitlementsPlist = plist.build(entitlementsObj as any)
-  const entPath = path.join(workDir, 'entitlements.plist')
-  await fse.writeFile(entPath, entitlementsPlist)
+    // 1) Unzip IPA
+    const workDir = `${originalIpaAbsPath}.${Date.now().toString(36)}`
+    await fse.ensureDir(workDir)
+    await execa('unzip', ['-o', originalIpaAbsPath, '-d', workDir])
+    
+    const payloadDir = path.join(workDir, 'Payload')
+    const appDirs = (await fse.readdir(payloadDir) as string[]).filter((n: string) => n.endsWith('.app'))
+    if (appDirs.length === 0) throw new Error('No .app found in IPA')
+    const appDir = path.join(payloadDir, appDirs[0])
 
-  // Sign main executable (handle XML or binary Info.plist)
-  const infoPlistPath = path.join(appDir, 'Info.plist')
-  const infoBuf = await fse.readFile(infoPlistPath)
-  const info = parsePlistBuffer(infoBuf) as any
-  const execName = info.CFBundleExecutable as string
-  const execPath = path.join(appDir, execName)
-  if (p12Path) {
-    const args = ['-S', entPath, '-K', p12Path]
-    if (p12Password && p12Password.length > 0) args.push('-U', p12Password)
-    args.push(execPath)
-    await execa('ldid', args)
-  } else {
-    await execa('ldid', ['-S', entPath, '-K', keyPemPath!, '-M', certPemPath!, execPath])
-  }
+    // 2) Extract entitlements from provisioning profile
+    const provExec: any = await execa('openssl', ['smime', '-inform', 'der', '-verify', '-noverify', '-in', profilePath, '-out', '-'], { encoding: 'buffer' } as any)
+    const provBuf: Buffer = provExec.stdout as unknown as Buffer
+    const provObj: any = parsePlistBuffer(provBuf) || {}
+    const entitlementsObj = provObj?.Entitlements || {}
+    const entitlementsPlist = plist.build(entitlementsObj as any)
+    const entPath = path.join(workDir, 'entitlements.plist')
+    await fse.writeFile(entPath, entitlementsPlist)
 
-  // Sign embedded frameworks and plugins (best-effort)
-  const signDirIfExists = async (dir: string) => {
-    if (await fse.pathExists(dir)) {
-      const items = await fse.readdir(dir)
-      for (const item of items) {
-        const p = path.join(dir, item)
-        try {
-          if (p12Path) {
-            const fwArgs = ['-S', entPath, '-K', p12Path]
-            if (p12Password && p12Password.length > 0) fwArgs.push('-U', p12Password)
-            fwArgs.push(p)
-            await execa('ldid', fwArgs)
-          } else {
-            await execa('ldid', ['-S', entPath, '-K', keyPemPath!, '-M', certPemPath!, p])
-          }
-        } catch {}
+    // 3) Embed the new provisioning profile
+    await fse.copyFile(profilePath, path.join(appDir, 'embedded.mobileprovision'))
+
+    // 4) Update bundle ID if specified
+    if (app.bundleId) {
+      const infoPlistPath = path.join(appDir, 'Info.plist')
+      try {
+        // Convert binary plist to XML if needed
+        await execa('plutil', ['-convert', 'xml1', infoPlistPath])
+        const infoBuf = await fse.readFile(infoPlistPath)
+        const info = plist.parse(infoBuf.toString('utf8')) as any
+        info.CFBundleIdentifier = app.bundleId
+        await fse.writeFile(infoPlistPath, plist.build(info))
+      } catch (e) {
+        console.warn('Failed to update bundle ID:', e)
       }
     }
+
+    // 5) Remove old code signature
+    const codeSignatureDir = path.join(appDir, '_CodeSignature')
+    await fse.remove(codeSignatureDir).catch(() => {})
+
+    // 6) Sign the app using ldid
+    await ldidSignApp(appDir, noPassP12, entPath)
+
+    // 7) Repack IPA
+    const signedPath = path.join(outputDir, `${app.id}-signed.ipa`)
+    
+    // Use ditto or zip to repack
+    await execa('bash', ['-c', `cd "${workDir}" && zip -qry "${signedPath}" Payload`])
+    
+    // Cleanup work directory
+    await fse.remove(workDir)
+
+    // Finalize
+    await finalizeSignedArtifact(app, signedPath)
+    
+  } catch (e) {
+    console.error('Signing failed:', e)
+    throw e
   }
-  await signDirIfExists(path.join(appDir, 'Frameworks'))
-  await signDirIfExists(path.join(appDir, 'PlugIns'))
+}
 
-  // Embed provisioning profile
-  await fse.copyFile(profilePath, path.join(appDir, 'embedded.mobileprovision'))
+function pickAvailableIpa(app: AppModel): string {
+  const candidates: (string | null | undefined)[] = [app.signedIpaPath, app.originalIpaPath]
+  for (const p of candidates) {
+    if (!p) continue
+    const abs = getAbsolutePublicPath(p)
+    if (fse.existsSync(abs)) return abs
+  }
+  return ''
+}
 
-  // Repack IPA
-  const cwd = path.dirname(workDir)
-  const base = path.basename(workDir)
-  await execa('bash', ['-lc', `cd '${cwd}' && zip -qry '${signedPath}' '${base}/Payload'`])
-  await fse.remove(workDir)
-  signedIpaPublic = `/uploads/${app.ownerId}/${app.id}/${path.basename(signedPath)}`
-
+async function finalizeSignedArtifact(app: AppModel, signedFilePath: string): Promise<void> {
+  const uploadDir = path.join(process.cwd(), 'public', 'uploads', app.ownerId, app.id)
+  await fse.ensureDir(uploadDir)
+  const finalPath = path.join(uploadDir, `${app.id}-signed.ipa`)
+  const resolvedFinal = path.resolve(finalPath)
+  const resolvedSource = path.resolve(signedFilePath)
+  if (resolvedFinal !== resolvedSource) {
+    await fse.move(signedFilePath, finalPath, { overwrite: true })
+  }
+  const signedPublic = `/uploads/${app.ownerId}/${app.id}/${path.basename(finalPath)}`
   let manifestPublic: string | undefined
-  if (platform === 'IOS') {
-    const baseUrl = (useRuntimeConfig().public.baseUrl || '').toString().replace(/\/$/, '')
-    const platformIdentifier = platform === 'TVOS' ? 'com.apple.platform.appletvos' : 'com.apple.platform.iphoneos'
-    const iconRel = (app.iconPath || '').replace(/^\//, '')
-    const iconUrl = iconRel ? `${baseUrl}/${iconRel}` : undefined
-    const assets: any[] = [
-      { kind: 'software-package', url: `${baseUrl}/api/download/${(signedIpaPublic || '').replace(/^\//, '')}` }
-    ]
-    if (iconUrl) {
-      assets.push({ kind: 'display-image', url: iconUrl })
-    }
-    // Add full-size-image pointing to IPA URL to mimic working example
-    assets.push({ kind: 'full-size-image', url: `${baseUrl}/api/download/${(signedIpaPublic || '').replace(/^\//, '')}` })
-
-    const manifest = {
-      items: [
-        {
-          assets,
-          metadata: {
-            'bundle-identifier': app.bundleId,
-            'bundle-version': app.version || '0.0.0',
-            kind: 'software',
-            'platform-identifier': platformIdentifier,
-            title: app.name
-          }
-        }
-      ]
-    }
-    const plistXml = plist.build(manifest as any)
-    const manifestPath = path.join(outputDir, 'manifest.plist')
-    await fse.writeFile(manifestPath, plistXml)
-    manifestPublic = `/uploads/${app.ownerId}/${app.id}/manifest.plist`
+  const platform = (app.platform?.toUpperCase() as 'IOS' | 'TVOS') || 'IOS'
+  
+  // Generate manifest for OTA installation
+  const baseUrl = getPublicBaseUrl()
+  const platformIdentifier = platform === 'TVOS' ? 'com.apple.platform.appletvos' : 'com.apple.platform.iphoneos'
+  const iconRel = (app.iconPath || '').replace(/^\//, '')
+  const iconUrl = iconRel ? `${baseUrl}/${iconRel}` : undefined
+  const downloadPath = `${baseUrl}/api/download/${signedPublic.replace(/^\//, '')}`
+  const assets: any[] = [{ kind: 'software-package', url: downloadPath }]
+  if (iconUrl) {
+    assets.push({ kind: 'display-image', url: iconUrl })
   }
+  assets.push({ kind: 'full-size-image', url: downloadPath })
+
+  const manifest = {
+    items: [
+      {
+        assets,
+        metadata: {
+          'bundle-identifier': app.bundleId,
+          'bundle-version': app.version || '0.0.0',
+          kind: 'software',
+          'platform-identifier': platformIdentifier,
+          title: app.name
+        }
+      }
+    ]
+  }
+  const plistXml = plist.build(manifest as any)
+  const manifestPath = path.join(uploadDir, 'manifest.plist')
+  await fse.writeFile(manifestPath, plistXml)
+  manifestPublic = `/uploads/${app.ownerId}/${app.id}/manifest.plist`
 
   await prisma.app.update({
     where: { id: app.id },
-    data: { status: 'SIGNED', signedAt: new Date(), signedIpaPath: signedIpaPublic, manifestPath: manifestPublic }
+    data: {
+      status: 'SIGNED',
+      signedAt: new Date(),
+      signedIpaPath: signedPublic,
+      manifestPath: manifestPublic
+    }
   })
 }
 
@@ -279,5 +551,3 @@ export async function triggerResignForUser(userId: string, platform?: 'IOS' | 'T
     }
   }
 }
-
-

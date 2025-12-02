@@ -94,6 +94,7 @@ export default defineNuxtConfig({
       ensure('/profile', './pages/profile/index.vue', 'profile-index')
       ensure('/profile/certificates', './pages/profile/certificates.vue', 'profile-certificates')
       ensure('/profile/profiles', './pages/profile/profiles.vue', 'profile-profiles')
+      ensure('/signing', './pages/signing.vue', 'signing')
       ensure('/auth/login', './pages/auth/login.vue', 'auth-login')
       ensure('/auth/register', './pages/auth/register.vue', 'auth-register')
       ensure('/admin/approvals', './pages/admin/approvals.vue', 'admin-approvals')

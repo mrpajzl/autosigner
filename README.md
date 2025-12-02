@@ -1,94 +1,146 @@
 # AutoSigner
 
-AutoSigner is a Nuxt app to manage publishing of custom iOS/tvOS apps. Managers upload `.ipa` files with their provisioning profile and certificate; the server signs them automatically and generates an OTA manifest.
+AutoSigner is a Nuxt app for signing iOS/tvOS applications on an M4 Mac server. Managers upload `.ipa` files with their provisioning profile and P12 certificate; the server signs them locally using macOS native `codesign` and generates OTA installation manifests.
 
-Roles
-- Superadmin: approves manager accounts
-- Manager: uploads apps, certificates, profiles
+## Features
 
-Environment
-- `DATABASE_URL` (SQLite by default)
-- `CRYPTO_SECRET` (32+ chars)
-- `PUBLIC_BASE_URL` (e.g. `https://your.domain`)
+- **Native macOS Signing**: Uses Apple's `codesign` tool for proper iOS/tvOS code signing
+- **Certificate Management**: Upload P12 certificates, automatically imported into a temporary keychain for signing
+- **Provisioning Profiles**: Manage iOS and tvOS provisioning profiles per user
+- **OTA Installation**: Generates `manifest.plist` for over-the-air installation
+- **Multi-user**: Supports multiple managers with separate signing credentials
 
-Core Endpoints
-- `POST /api/auth/register` – create manager (pending)
-- `POST /api/auth/login` – session cookie
-- `GET /api/admin/approvals` + `POST /api/admin/approvals/:id` – superadmin approval
-- `POST /api/apps/upload` – upload & sign IPA, generate manifest
-- `GET /api/apps` – list apps
+## Requirements
 
-Installation link (open on iOS)
-`itms-services://?action=download-manifest&url=<PUBLIC_BASE_URL>/uploads/<userId>/<appId>/manifest.plist`
+- **macOS** (tested on M4 Mac with Apple Silicon)
+- **Node.js** >= 22.12.0
+- **Xcode Command Line Tools** (for `codesign`, `security`, `plutil`)
+- **Valid Apple Developer Certificate** (.p12 format)
+- **Provisioning Profiles** (.mobileprovision)
 
-## Setup
-
-Make sure to install dependencies:
+## Environment Variables
 
 ```bash
-# npm
-npm install
+# Required
+DATABASE_URL="file:./prisma/dev.db"     # SQLite database path
+CRYPTO_SECRET="your-32-char-secret"      # Encryption key (32+ chars)
+PUBLIC_BASE_URL="https://your.domain"    # Public URL for OTA manifests
 
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
+# Optional
+NODE_ENV="production"                     # Set to production for secure cookies
 ```
 
-## Development Server
+## Roles
 
-Start the development server on `http://localhost:3000`:
+- **Superadmin**: Approves manager accounts, manages all users
+- **Manager**: Uploads apps, certificates, and provisioning profiles
+
+## API Endpoints
+
+### Authentication
+- `POST /api/auth/register` – Create manager account (pending approval)
+- `POST /api/auth/login` – Login and get session cookie
+- `POST /api/auth/signout` – Sign out
+
+### Apps
+- `GET /api/apps` – List user's apps
+- `POST /api/apps/upload` – Upload & sign IPA
+- `POST /api/apps/:id/resign` – Re-sign app with current certificates
+- `DELETE /api/apps/:id` – Delete app
+
+### Profile (Certificates & Profiles)
+- `GET /api/profile/certificates` – List certificates
+- `POST /api/profile/certificates` – Upload P12 certificate
+- `POST /api/profile/certificates/:id/activate` – Activate certificate
+- `DELETE /api/profile/certificates/:id` – Delete certificate
+- `GET /api/profile/profiles` – List provisioning profiles
+- `POST /api/profile/profiles` – Upload provisioning profile
+- `POST /api/profile/profiles/:id/activate` – Activate profile
+- `DELETE /api/profile/profiles/:id` – Delete profile
+
+### Admin
+- `GET /api/admin/approvals` – List pending approvals
+- `POST /api/admin/approvals/:id` – Approve/reject user
+
+## Installation
 
 ```bash
-# npm
-npm run dev
+# Install dependencies
+npm install
 
-# pnpm
-pnpm dev
+# Generate Prisma client
+npx prisma generate
 
-# yarn
-yarn dev
+# Push database schema
+npx prisma db push
 
-# bun
-bun run dev
+# Create .env file
+cat > .env << 'EOF'
+DATABASE_URL="file:./prisma/dev.db"
+CRYPTO_SECRET="your-super-secret-key-at-least-32-chars"
+PUBLIC_BASE_URL="https://your-domain.com"
+EOF
+```
+
+## Development
+
+```bash
+# Start development server
+npm run dev:local
 ```
 
 ## Production
 
-Build the application for production:
-
 ```bash
-# npm
+# Build for production
 npm run build
 
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
+# Start production server
+npm run start
 ```
 
-Locally preview production build:
+## How Signing Works
 
-```bash
-# npm
-npm run preview
+1. **Certificate Upload**: User uploads a P12 certificate with password
+2. **Profile Upload**: User uploads a `.mobileprovision` file for iOS or tvOS
+3. **App Upload**: User uploads an IPA file
+4. **Signing Process**:
+   - Server imports P12 into a temporary macOS keychain
+   - Extracts entitlements from provisioning profile
+   - Unpacks the IPA and removes old signatures
+   - Signs all frameworks, plugins, and the main app bundle using `codesign`
+   - Repacks the signed IPA
+   - Generates OTA manifest for installation
+   - Cleans up temporary keychain
 
-# pnpm
-pnpm preview
+## OTA Installation
 
-# yarn
-yarn preview
+Once an app is signed, users can install it via Safari on iOS/tvOS using:
 
-# bun
-bun run preview
+```
+itms-services://?action=download-manifest&url=<PUBLIC_BASE_URL>/api/download/uploads/<userId>/<appId>/manifest.plist
 ```
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+## Security Notes
+
+- P12 passwords are encrypted at rest using AES-256-GCM
+- Certificates are imported into temporary keychains that are deleted after signing
+- Session cookies are HTTP-only and secure in production
+- Each user can only access their own apps and credentials
+
+## Troubleshooting
+
+### "No valid signing identity found"
+Ensure your P12 contains a valid Apple Distribution or Development certificate.
+
+### "Missing provisioning profile"
+Upload and activate a provisioning profile that matches your certificate's team ID.
+
+### "codesign failed"
+- Check that Xcode Command Line Tools are installed: `xcode-select --install`
+- Verify the certificate hasn't expired
+- Ensure the provisioning profile includes the device UDIDs (for Ad Hoc distribution)
+
+## License
+
+MIT

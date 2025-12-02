@@ -9,13 +9,18 @@ DATABASE_URL = "file:/app/prisma/dev.db"
 
 [phases.setup]
 # Use modern Node/npm compatible with Nuxt 4 & deps
-nixPkgs = ["nodejs_22", "openssl", "unzip", "zip", "ldid"]
+nixPkgs = ["nodejs_22", "openssl", "unzip", "zip", "python311", "curl"]
 nixLibs = ["gcc-unwrapped"]
 
 [phases.install]
 dependsOn = ["setup"]
-cmds = ["npm ci"]
-cacheDirectories = ["/root/.npm"]
+cmds = [
+  "npm ci",
+  "curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py",
+  "python3 /tmp/get-pip.py",
+  "python3 -m pip install --no-cache-dir isign==2.3.0"
+]
+cacheDirectories = ["/root/.npm", "/root/.cache/pip"]
 paths = ["/app/node_modules/.bin"]
 
 [phases.build]

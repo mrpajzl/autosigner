@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.autosigner</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/ondrejzraly/Projects/autosigner/scripts/start-server.sh</string>
+    </array>
+    
+    <key>WorkingDirectory</key>
+    <string>/Users/ondrejzraly/Projects/autosigner</string>
+    
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>NODE_ENV</key>
+        <string>production</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    
+    <key>StandardOutPath</key>
+    <string>/Users/ondrejzraly/Projects/autosigner/logs/stdout.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/Users/ondrejzraly/Projects/autosigner/logs/stderr.log</string>
+</dict>
+</plist>
+

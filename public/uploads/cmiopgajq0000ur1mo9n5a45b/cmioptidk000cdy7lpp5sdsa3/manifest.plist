@@ -11,13 +11,13 @@
             <key>kind</key>
             <string>software-package</string>
             <key>url</key>
-            <string>/api/download/uploads/cme4hggij0000xzipktw11i8w/Falle_mrpajzl_ios.ipa</string>
+            <string>https://localhost/api/download/uploads/cmiopgajq0000ur1mo9n5a45b/cmioptidk000cdy7lpp5sdsa3/cmioptidk000cdy7lpp5sdsa3-signed.ipa</string>
           </dict>
           <dict>
             <key>kind</key>
             <string>full-size-image</string>
             <key>url</key>
-            <string>/api/download/uploads/cme4hggij0000xzipktw11i8w/Falle_mrpajzl_ios.ipa</string>
+            <string>https://localhost/api/download/uploads/cmiopgajq0000ur1mo9n5a45b/cmioptidk000cdy7lpp5sdsa3/cmioptidk000cdy7lpp5sdsa3-signed.ipa</string>
           </dict>
         </array>
         <key>metadata</key>
@@ -25,13 +25,13 @@
           <key>bundle-identifier</key>
           <string>com.zdenci.falle</string>
           <key>bundle-version</key>
-          <string>23</string>
+          <string>1.0</string>
           <key>kind</key>
           <string>software</string>
           <key>platform-identifier</key>
           <string>com.apple.platform.iphoneos</string>
           <key>title</key>
-          <string>Nexee light</string>
+          <string>nexee ios</string>
         </dict>
       </dict>
     </array>

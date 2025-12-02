@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -109,3 +109,4 @@ model ProvisioningProfile {
   user User @relation(fields: [userId], references: [id])
   @@index([userId, platform, active])
 }
+
