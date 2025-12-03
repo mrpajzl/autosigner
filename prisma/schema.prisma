@@ -109,6 +109,7 @@ model Certificate {
   p12Data        Bytes
   // Encrypted JSON from encrypt() containing iv+data
   p12PasswordEnc String?
+  expiresAt      DateTime?
   createdAt      DateTime @default(now())
   active         Boolean  @default(false)
 

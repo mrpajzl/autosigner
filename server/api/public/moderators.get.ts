@@ -18,6 +18,7 @@ type PublicModerator = {
   tvosApps: PublicApp[]
   profileUpdatedAt: string | null
   profileAvailable: boolean
+  certificateExpiresAt: string | null
 }
 
 export default defineEventHandler(async () => {
@@ -101,7 +102,8 @@ export default defineEventHandler(async () => {
           profileAvailable: Boolean(
             u.managerProfile?.certificatePem &&
             (u.managerProfile?.mobileprovisionIos || u.managerProfile?.mobileprovisionTvos)
-          )
+          ),
+          certificateExpiresAt: u.certificates[0]?.expiresAt?.toISOString() || null
         }
       } else {
         // Fallback to old system - apps uploaded by this moderator
@@ -141,7 +143,8 @@ export default defineEventHandler(async () => {
           profileAvailable: Boolean(
             u.managerProfile?.certificatePem &&
             (u.managerProfile?.mobileprovisionIos || u.managerProfile?.mobileprovisionTvos)
-          )
+          ),
+          certificateExpiresAt: u.certificates[0]?.expiresAt?.toISOString() || null
         }
       }
     })

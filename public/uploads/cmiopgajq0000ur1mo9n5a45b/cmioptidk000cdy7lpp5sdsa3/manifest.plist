@@ -11,19 +11,19 @@
             <key>kind</key>
             <string>software-package</string>
             <key>url</key>
-            <string>https://localhost/api/download/uploads/cmiopgajq0000ur1mo9n5a45b/cmioptidk000cdy7lpp5sdsa3/cmioptidk000cdy7lpp5sdsa3-signed.ipa</string>
+            <string>http://10.0.0.40:3000/api/download/uploads/cmiopgajq0000ur1mo9n5a45b/cmioptidk000cdy7lpp5sdsa3/cmioptidk000cdy7lpp5sdsa3-signed.ipa</string>
           </dict>
           <dict>
             <key>kind</key>
             <string>full-size-image</string>
             <key>url</key>
-            <string>https://localhost/api/download/uploads/cmiopgajq0000ur1mo9n5a45b/cmioptidk000cdy7lpp5sdsa3/cmioptidk000cdy7lpp5sdsa3-signed.ipa</string>
+            <string>http://10.0.0.40:3000/api/download/uploads/cmiopgajq0000ur1mo9n5a45b/cmioptidk000cdy7lpp5sdsa3/cmioptidk000cdy7lpp5sdsa3-signed.ipa</string>
           </dict>
         </array>
         <key>metadata</key>
         <dict>
           <key>bundle-identifier</key>
-          <string>com.zdenci.falle</string>
+          <string>site.iscc.nexee</string>
           <key>bundle-version</key>
           <string>1.0</string>
           <key>kind</key>
@@ -31,7 +31,7 @@
           <key>platform-identifier</key>
           <string>com.apple.platform.iphoneos</string>
           <key>title</key>
-          <string>nexee ios</string>
+          <string>Nexee v2</string>
         </dict>
       </dict>
     </array>

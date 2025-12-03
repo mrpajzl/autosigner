@@ -1,15 +1,25 @@
 <template>
-  <div class="space-y-10">
-    <div class="text-center">
-      <h1 class="text-3xl font-semibold tracking-wide">App Dashboard</h1>
-      <p class="text-white/70">Sections below list apps published by each moderator.</p>
+  <div class="mt-10 px-5 max-w-7xl mx-auto space-y-10">
+    <!-- Quick scroll buttons -->
+    <div v-if="moderators.length > 0" class="flex flex-wrap justify-center gap-2">
+      <UButton
+        v-for="mod in moderators"
+        :key="mod.id"
+        color="neutral"
+        variant="soft"
+        size="sm"
+        @click="scrollToModerator(mod.id)"
+      >
+        <UIcon name="i-heroicons-user-circle" class="text-red-500 mr-1" />
+        {{ mod.name }}
+      </UButton>
     </div>
 
     <div v-if="moderators.length === 0" class="text-center text-white/70">
       No moderators or apps available yet.
     </div>
 
-    <div v-for="mod in moderators" :key="mod.id" class="grid gap-6 md:grid-cols-3">
+    <div v-for="mod in moderators" :key="mod.id" :id="`moderator-${mod.id}`" class="grid gap-6 md:grid-cols-3 scroll-mt-24">
       <div class="md:col-span-3">
         <div class="flex items-center gap-3">
           <UIcon name="i-heroicons-user-circle" class="text-red-500" />
@@ -66,8 +76,12 @@
 
         <div class="space-y-4">
           <div class="flex items-center justify-between">
-            <UButton color="red" variant="solid" :disabled="!mod.profileAvailable">Certifikát</UButton>
-            <span class="text-xs text-white/60">{{ formatDate(mod.profileUpdatedAt) }}</span>
+            <div class="flex items-center gap-2">
+              <UButton color="red" variant="solid" :disabled="!mod.profileAvailable">Certifikát</UButton>
+              <span v-if="mod.certificateExpiresAt" class="text-xs" :class="isCertExpiringSoon(mod.certificateExpiresAt) ? 'text-orange-400' : 'text-white/60'">
+                Platnost do {{ formatDateShort(mod.certificateExpiresAt) }}
+              </span>
+            </div>
           </div>
           <div class="flex items-center justify-between">
             <UButton color="red" variant="solid" :disabled="!mod.profileAvailable">Profil</UButton>
@@ -93,6 +107,7 @@ type PublicModerator = {
   tvosApps: PublicApp[]
   profileUpdatedAt: string | null
   profileAvailable: boolean
+  certificateExpiresAt: string | null
 }
 
 const moderators = ref<PublicModerator[]>([])
@@ -121,6 +136,28 @@ function formatDate(iso: string | null) {
   const d = new Date(iso)
   const pad = (n: number) => `${n}`.padStart(2, '0')
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+function formatDateShort(iso: string | null) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const pad = (n: number) => `${n}`.padStart(2, '0')
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`
+}
+
+function isCertExpiringSoon(iso: string | null) {
+  if (!iso) return false
+  const d = new Date(iso)
+  const now = new Date()
+  const daysUntilExpiry = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+  return daysUntilExpiry <= 30 // Warn if expiring within 30 days
+}
+
+function scrollToModerator(id: string) {
+  const el = document.getElementById(`moderator-${id}`)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 }
 
 onMounted(async () => {
