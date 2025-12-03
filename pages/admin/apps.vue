@@ -1,5 +1,60 @@
 <template>
   <div class="space-y-6">
+    <!-- Upload New App -->
+    <UCard class="glass">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-heroicons-arrow-up-tray" />
+            <span class="font-semibold">Upload New App</span>
+          </div>
+          <UButton
+            to="/profile"
+            color="white"
+            variant="soft"
+            icon="i-heroicons-identification"
+            size="sm"
+          >
+            Manage Certificates & Profiles
+          </UButton>
+        </div>
+      </template>
+
+      <form class="space-y-4" @submit.prevent="uploadIpa">
+        <div class="grid md:grid-cols-3 gap-4">
+          <UFormGroup label="App Name" required>
+            <UInput v-model="uploadForm.name" placeholder="My App" />
+          </UFormGroup>
+          <UFormGroup label="Platform" required>
+            <USelect v-model="uploadForm.platform" :options="platformOptions" />
+          </UFormGroup>
+          <UFormGroup label="IPA File" required>
+            <input
+              ref="ipaInput"
+              type="file"
+              accept=".ipa"
+              class="file:mr-4 file:rounded-md file:border-0 file:bg-red-500 file:text-white file:px-3 file:py-2 block w-full text-sm"
+            />
+          </UFormGroup>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-white/60">
+            Bundle ID and version will be extracted automatically from the IPA.
+          </span>
+          <UButton
+            type="submit"
+            color="red"
+            variant="solid"
+            icon="i-heroicons-arrow-up-tray"
+            :loading="uploading"
+          >
+            Upload App
+          </UButton>
+        </div>
+      </form>
+    </UCard>
+
+    <!-- All Apps List -->
     <UCard class="glass">
       <template #header>
         <div class="flex items-center justify-between">
@@ -7,14 +62,26 @@
             <UIcon name="i-heroicons-rectangle-stack" />
             <span class="font-semibold">All Uploaded Apps</span>
           </div>
-          <UBadge color="white" variant="soft">
-            {{ apps?.length || 0 }} apps
-          </UBadge>
+          <div class="flex items-center gap-2">
+            <UButton
+              icon="i-heroicons-arrow-path"
+              color="white"
+              variant="ghost"
+              size="sm"
+              :loading="refreshing"
+              @click="manualRefresh"
+            />
+            <UBadge color="white" variant="soft">
+              {{ apps?.length || 0 }} apps
+            </UBadge>
+          </div>
         </div>
       </template>
 
       <div v-if="!apps || apps.length === 0" class="text-center py-8 text-white/60">
-        No apps have been uploaded yet.
+        <UIcon name="i-heroicons-inbox" class="w-12 h-12 mx-auto mb-3 opacity-50" />
+        <p>No apps have been uploaded yet.</p>
+        <p class="text-sm mt-1">Upload your first IPA using the form above.</p>
       </div>
 
       <div v-else class="space-y-4">
@@ -33,8 +100,8 @@
                 </UBadge>
               </div>
               <div class="text-sm text-white/60 mt-1 space-x-4">
-                <span>{{ app.bundleId }}</span>
-                <span>v{{ app.version }}</span>
+                <span>{{ app.bundleId || 'Unknown bundle' }}</span>
+                <span>v{{ app.version || '?' }}</span>
               </div>
               <div class="text-xs text-white/40 mt-1">
                 Uploaded by <span class="text-white/60 font-medium">{{ app.owner.nickname }}</span>
@@ -154,14 +221,29 @@ type AppRow = {
   signedVersions: SignedVersion[]
 }
 
-const { data: me } = await useFetch<{ id: string; role: string } | null>('/api/auth/me')
+const platformOptions = [
+  { label: 'iOS', value: 'IOS' },
+  { label: 'tvOS', value: 'TVOS' }
+]
+
+const { user: me } = useAuth()
 if (!me.value || (me.value.role !== 'MANAGER' && me.value.role !== 'SUPERADMIN')) {
   navigateTo('/')
 }
 
 const { data: apps, refresh } = await useFetch<AppRow[]>('/api/admin/apps')
 
+// Upload form state
+const uploadForm = reactive({
+  name: '',
+  platform: 'IOS' as 'IOS' | 'TVOS'
+})
+const ipaInput = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
+
+// Signing state
 const signingAppId = ref<string | null>(null)
+const refreshing = ref(false)
 
 // Auto-refresh every 5 seconds to update signing status
 let refreshInterval: ReturnType<typeof setInterval> | null = null
@@ -179,6 +261,55 @@ onMounted(() => {
 onUnmounted(() => {
   if (refreshInterval) clearInterval(refreshInterval)
 })
+
+async function manualRefresh() {
+  refreshing.value = true
+  await refresh()
+  refreshing.value = false
+}
+
+async function uploadIpa() {
+  const file = ipaInput.value?.files?.[0]
+  if (!file) {
+    toast.add({ title: 'Select an IPA file first', color: 'red' })
+    return
+  }
+  if (!uploadForm.name.trim()) {
+    toast.add({ title: 'App name is required', color: 'red' })
+    return
+  }
+
+  uploading.value = true
+  try {
+    const body = new FormData()
+    body.set('name', uploadForm.name.trim())
+    body.set('platform', uploadForm.platform)
+    body.set('ipa', file)
+    
+    await $fetch('/api/apps/upload', { method: 'POST', body })
+    
+    toast.add({ 
+      title: 'App uploaded successfully', 
+      description: 'The app is now available for all moderators to sign.',
+      color: 'green' 
+    })
+    
+    // Reset form
+    uploadForm.name = ''
+    uploadForm.platform = 'IOS'
+    if (ipaInput.value) ipaInput.value.value = ''
+    
+    await refresh()
+  } catch (e: any) {
+    toast.add({ 
+      title: 'Upload failed', 
+      description: e?.data?.message || e?.message || 'Unknown error',
+      color: 'red' 
+    })
+  } finally {
+    uploading.value = false
+  }
+}
 
 // Check if current user has already signed this app
 function mySignedVersion(app: AppRow): SignedVersion | undefined {
@@ -256,4 +387,3 @@ function downloadLink(sv: SignedVersion) {
   return `${origin}/api/download${sv.signedIpaPath}`
 }
 </script>
-

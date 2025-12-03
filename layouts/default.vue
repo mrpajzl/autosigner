@@ -50,23 +50,20 @@
 <script setup lang="ts">
 const colorMode = useColorMode()
 const route = useRoute()
+const { user: me, logout } = useAuth()
 
 const links = [
-  { label: 'Dashboard', icon: 'i-heroicons-home', to: '/' },
-  { label: 'My Apps', icon: 'i-heroicons-rectangle-stack', to: '/apps' },
-  { label: 'Upload', icon: 'i-heroicons-arrow-up-tray', to: '/upload' },
-  { label: 'All Apps', icon: 'i-heroicons-squares-2x2', to: '/admin/apps' },
+  { label: 'Manage Apps', icon: 'i-heroicons-rectangle-stack', to: '/admin/apps' },
   { label: 'Users', icon: 'i-heroicons-users', to: '/admin/approvals' }
 ]
 
-const userMenu = [[
-  { label: 'Profile', icon: 'i-heroicons-user' },
-  { label: 'Sign out', icon: 'i-heroicons-arrow-left-on-rectangle', click: async () => { await $fetch('/api/auth/signout', { method: 'POST' }); navigateTo('/') } }
-]]
+const userMenu = computed(() => [[
+  { label: 'Profile', icon: 'i-heroicons-user', to: '/profile' },
+  { label: 'Sign out', icon: 'i-heroicons-arrow-left-on-rectangle', click: async () => { await logout(); navigateTo('/') } }
+]])
 
 const pageTitle = computed(() => route.meta?.title ?? 'AutoSigner')
 const mobileOpen = ref(false)
-const { data: me } = useFetch<{ id: string; email: string; nickname?: string | null } | null>('/api/auth/me')
 
 function toggleTheme() {
   colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'

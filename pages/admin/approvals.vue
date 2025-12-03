@@ -53,7 +53,7 @@
 
 <script setup lang="ts">
 definePageMeta({ title: 'Users', layout: 'default' })
-const { data: me } = await useFetch<{ id: string; role: string } | null>('/api/auth/me')
+const { user: me } = useAuth()
 if (!me.value || me.value.role !== 'SUPERADMIN') {
   navigateTo('/')
 }

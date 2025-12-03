@@ -23,9 +23,24 @@ type PublicModerator = {
 export default defineEventHandler(async () => {
   try {
     const managers = await prisma.user.findMany({
-      where: { role: { in: ['MANAGER', 'SUPERADMIN'] } },
+      where: {
+        role: { in: ['MANAGER', 'SUPERADMIN'] },
+        // Must have a certificate (either in managerProfile or active Certificate)
+        OR: [
+          { managerProfile: { certificatePem: { not: null } } },
+          { certificates: { some: { active: true } } }
+        ],
+        // Must have at least one successfully signed app
+        AND: {
+          OR: [
+            { signedVersions: { some: { status: 'SIGNED' } } },
+            { apps: { some: { status: 'SIGNED' } } }
+          ]
+        }
+      },
       include: {
         managerProfile: true,
+        certificates: { where: { active: true }, take: 1 },
         // Get apps the moderator has signed (SignedVersion)
         signedVersions: {
           where: { status: 'SIGNED' },

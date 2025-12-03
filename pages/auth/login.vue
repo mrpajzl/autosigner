@@ -21,13 +21,14 @@
 </template>
 
 <script setup lang="ts">
+const { login } = useAuth()
 const state = reactive({ nickname: '', password: '' })
 const loading = ref(false)
 
 async function onSubmit() {
   loading.value = true
   try {
-    await $fetch('/api/auth/login', { method: 'POST', body: { nickname: state.nickname, password: state.password } })
+    await login(state.nickname, state.password)
     navigateTo('/')
   } catch (e: any) {
     useToast().add({ title: 'Sign in failed', description: e?.data?.message || e?.message, color: 'red' })

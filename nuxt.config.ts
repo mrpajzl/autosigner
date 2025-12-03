@@ -27,6 +27,7 @@ export default defineNuxtConfig({
     // and across async boundaries (required for some modules with Unhead v2)
     asyncContext: true
   },
+  
 
   modules: [
     '@nuxt/eslint',
@@ -97,6 +98,7 @@ export default defineNuxtConfig({
       ensure('/signing', './pages/signing.vue', 'signing')
       ensure('/auth/login', './pages/auth/login.vue', 'auth-login')
       ensure('/admin/approvals', './pages/admin/approvals.vue', 'admin-approvals')
+      ensure('/admin/apps', './pages/admin/apps.vue', 'admin-apps')
     }
   }
 })
