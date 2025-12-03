@@ -31,6 +31,8 @@ export default defineEventHandler(async (event) => {
     name: app.name,
     bundleId: app.bundleId,
     version: app.version,
+    buildNumber: app.buildNumber,
+    showBuildNumber: app.showBuildNumber,
     platform: app.platform,
     ipaFileName: app.ipaFileName,
     originalIpaPath: app.originalIpaPath,

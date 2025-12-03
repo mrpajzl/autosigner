@@ -66,7 +66,13 @@ export default defineNuxtConfig({
       }
     })(),
     server: {
-      https: (process.env.DEV_HTTPS ? (httpsOptions || true) : undefined) as any
+      https: (process.env.DEV_HTTPS ? (httpsOptions || true) : undefined) as any,
+      watch: {
+        // Use polling instead of native file watchers to avoid EMFILE errors on macOS
+        usePolling: true,
+        interval: 1000,
+        ignored: ['**/node_modules/**', '**/.git/**', '**/.nuxt/**', '**/.output/**', '**/dist/**', '**/.storage-tmp/**']
+      }
     }
   },
 

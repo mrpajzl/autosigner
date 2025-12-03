@@ -5,12 +5,12 @@
       <UButton
         v-for="mod in moderators"
         :key="mod.id"
-        color="gray"
+        color="red"
         variant="soft"
         size="sm"
         @click="scrollToModerator(mod.id)"
       >
-        <UIcon name="i-heroicons-user-circle" class="text-red-500 mr-1" />
+        <UIcon name="i-heroicons-user-circle" class="mr-1" />
         {{ mod.name }}
       </UButton>
     </div>
@@ -37,20 +37,19 @@
         </template>
 
         <div class="space-y-4">
-          <div v-for="app in mod.tvosApps" :key="app.id" class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
+          <div v-for="app in mod.tvosApps" :key="app.id" class="flex items-center gap-3">
+            <UTooltip :text="`Uploaded: ${formatDate(app.uploadedAt)}`">
               <img
                 v-if="app.iconPath"
                 :src="`/api/download${app.iconPath}`"
                 :alt="app.name"
-                class="w-10 h-10 rounded-xl shadow-sm object-cover"
+                class="w-10 h-10 rounded-xl shadow-sm object-cover cursor-help"
               />
-              <div v-else class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-white/10 flex items-center justify-center">
+              <div v-else class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-white/10 flex items-center justify-center cursor-help">
                 <UIcon name="i-heroicons-tv" class="w-5 h-5 text-slate-400 dark:text-white/40" />
               </div>
-              <UButton :to="tvosLink(app)" target="_blank" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ displayVersion(app) }}</UButton>
-            </div>
-            <span class="text-xs text-slate-500 dark:text-white/60">{{ formatDate(app.uploadedAt) }}</span>
+            </UTooltip>
+            <UButton :to="tvosLink(app)" target="_blank" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ displayVersion(app) }}</UButton>
           </div>
           <p v-if="mod.tvosApps.length === 0" class="text-sm text-slate-500 dark:text-white/60">No tvOS apps.</p>
         </div>
@@ -67,20 +66,19 @@
         </template>
 
         <div class="space-y-4">
-          <div v-for="app in mod.iosApps" :key="app.id" class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
+          <div v-for="app in mod.iosApps" :key="app.id" class="flex items-center gap-3">
+            <UTooltip :text="`Uploaded: ${formatDate(app.uploadedAt)}`">
               <img
                 v-if="app.iconPath"
                 :src="`/api/download${app.iconPath}`"
                 :alt="app.name"
-                class="w-10 h-10 rounded-xl shadow-sm object-cover"
+                class="w-10 h-10 rounded-xl shadow-sm object-cover cursor-help"
               />
-              <div v-else class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-white/10 flex items-center justify-center">
+              <div v-else class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-white/10 flex items-center justify-center cursor-help">
                 <UIcon name="i-heroicons-device-phone-mobile" class="w-5 h-5 text-slate-400 dark:text-white/40" />
               </div>
-              <UButton :to="installLink(app)" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ displayVersion(app) }}</UButton>
-            </div>
-            <span class="text-xs text-slate-500 dark:text-white/60">{{ formatDate(app.uploadedAt) }}</span>
+            </UTooltip>
+            <UButton :to="installLink(app)" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ displayVersion(app) }}</UButton>
           </div>
           <p v-if="mod.iosApps.length === 0" class="text-sm text-slate-500 dark:text-white/60">No iOS apps.</p>
         </div>
@@ -151,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-type PublicApp = { id: string; name: string; version: string; buildNumber?: string | null; platform: 'IOS' | 'TVOS'; uploadedAt: string; manifestPath?: string | null; downloadPath?: string | null; status: string; iconPath?: string | null }
+type PublicApp = { id: string; name: string; version: string; buildNumber?: string | null; showBuildNumber: boolean; platform: 'IOS' | 'TVOS'; uploadedAt: string; manifestPath?: string | null; downloadPath?: string | null; status: string; iconPath?: string | null }
 type DeviceCounts = {
   iOS: number      // iPhone + iPad
   APPLE_TV: number
@@ -222,12 +220,10 @@ function scrollToModerator(id: string) {
 function displayVersion(app: PublicApp) {
   const hasVersion = typeof app.version === 'string' && app.version.length > 0
   const hasBuild = typeof app.buildNumber === 'string' && app.buildNumber.length > 0
-  if (hasVersion && hasBuild && app.version !== app.buildNumber) {
-    return `${app.version} (${app.buildNumber})`
+  
+  if (hasVersion && hasBuild && app.showBuildNumber && app.version !== app.buildNumber) {
+    return `v${app.version} (${app.buildNumber})`
   }
-  if (hasBuild) return app.buildNumber
-  if (hasVersion) return app.version
-  return '—'
+  return hasVersion ? `v${app.version}` : (hasBuild ? `v${app.buildNumber}` : '')
 }
-
 </script>

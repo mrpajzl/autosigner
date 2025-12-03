@@ -67,15 +67,15 @@
 
         <!-- Form (shown when not connected or updating) -->
         <form v-if="!isConnected || showUpdateForm" class="space-y-4" @submit.prevent="handleSubmit">
-          <UFormGroup label="Key ID" required>
+          <UFormField label="Key ID" required>
             <UInput v-model="form.keyId" placeholder="XXXXXXXXXX" />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="Issuer ID" required>
+          <UFormField label="Issuer ID" required>
             <UInput v-model="form.issuerId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="Private Key (.p8 file)" required>
+          <UFormField label="Private Key (.p8 file)" required>
             <div class="space-y-2">
               <input
                 ref="fileInput"
@@ -94,11 +94,11 @@
                 class="font-mono text-xs"
               />
             </div>
-          </UFormGroup>
+          </UFormField>
 
-          <UFormGroup label="Team Name (optional)">
+          <UFormField label="Team Name (optional)">
             <UInput v-model="form.teamName" placeholder="My Company Inc." />
-          </UFormGroup>
+          </UFormField>
 
           <div class="flex items-center gap-3 pt-2">
             <UButton type="submit" color="green" :loading="loading" icon="i-heroicons-check">

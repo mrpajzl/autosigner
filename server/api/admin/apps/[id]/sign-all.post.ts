@@ -1,11 +1,12 @@
 import { prisma } from '../../../../utils/db'
 import { requireAnyRole } from '../../../../utils/auth'
-import { signAppForUser } from '../../../../utils/signer'
+import { signingQueue } from '../../../../utils/signing-queue'
 
 /**
  * POST /api/admin/apps/:id/sign-all
  * Signs an app for all moderators who have active certificates and provisioning profiles.
  * Creates SignedVersion records for each eligible moderator.
+ * Uses a queue to prevent system overload from parallel signing operations.
  */
 export default defineEventHandler(async (event) => {
   await requireAnyRole(event, ['MANAGER', 'SUPERADMIN'])
@@ -44,7 +45,7 @@ export default defineEventHandler(async (event) => {
   const signedVersionIds: string[] = []
   const errors: string[] = []
 
-  // Create or reset SignedVersion for each moderator
+  // Create or reset SignedVersion for each moderator and add to queue
   for (const moderator of moderators) {
     try {
       let signedVersion = await prisma.signedVersion.findUnique({
@@ -80,27 +81,24 @@ export default defineEventHandler(async (event) => {
 
       signedVersionIds.push(signedVersion.id)
 
-      // Fire-and-forget signing in background
-      ;(async () => {
-        try {
-          await signAppForUser(appId, moderator.id, signedVersion.id)
-        } catch (e) {
-          await prisma.signedVersion.update({
-            where: { id: signedVersion.id },
-            data: { status: 'FAILED' }
-          })
-          console.error('Signing failed for moderator', moderator.id, 'app', appId, e)
-        }
-      })()
+      // Add to signing queue instead of fire-and-forget
+      await signingQueue.enqueue(appId, moderator.id, signedVersion.id)
     } catch (e: any) {
       errors.push(`Failed to queue signing for ${moderator.nickname}: ${e.message}`)
     }
   }
 
+  const queueStatus = signingQueue.getStatus()
+
   return { 
     ok: true, 
     queued: signedVersionIds.length,
     moderators: moderators.map(m => m.nickname),
+    queueStatus: {
+      total: queueStatus.queueLength + queueStatus.runningCount,
+      running: queueStatus.runningCount,
+      pending: queueStatus.queueLength
+    },
     errors: errors.length > 0 ? errors : undefined
   }
 })

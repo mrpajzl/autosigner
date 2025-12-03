@@ -799,15 +799,19 @@ async function finalizeSignedArtifact(app: AppModel, signedFilePath: string): Pr
 }
 
 export async function triggerResignForUser(userId: string, platform?: 'IOS' | 'TVOS'): Promise<void> {
+  // Import signing queue lazily to avoid circular dependencies
+  const { signingQueue } = await import('./signing-queue')
+  
   const where: any = { ownerId: userId }
   if (platform) where.platform = platform
   const apps = await prisma.app.findMany({ where, orderBy: { uploadedAt: 'desc' } })
   for (const a of apps) {
     try {
       await prisma.app.update({ where: { id: a.id }, data: { status: 'SIGNING', signedAt: null } })
-      await signApp(a.id)
+      // Use the signing queue instead of direct signing
+      await signingQueue.enqueueOwnerSigning(a.id, userId)
     } catch (e) {
-      await prisma.app.update({ where: { id: a.id }, data: { status: 'FAILED' } })
+      console.error(`Failed to queue re-signing for app ${a.id}:`, e)
     }
   }
 }

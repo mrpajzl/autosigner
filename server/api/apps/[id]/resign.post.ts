@@ -1,6 +1,6 @@
 import { prisma } from '../../../utils/db'
 import { requireAnyRole } from '../../../utils/auth'
-import { signApp } from '../../../utils/signer'
+import { signingQueue } from '../../../utils/signing-queue'
 
 export default defineEventHandler(async (event) => {
   const user = await requireAnyRole(event, ['MANAGER', 'SUPERADMIN'])
@@ -15,14 +15,8 @@ export default defineEventHandler(async (event) => {
 
   await prisma.app.update({ where: { id: app.id }, data: { status: 'SIGNING', signedAt: null } })
 
-  ;(async () => {
-    try {
-      await signApp(app.id)
-    } catch (e) {
-      await prisma.app.update({ where: { id: app.id }, data: { status: 'FAILED' } })
-      console.error('Manual resign failed', e)
-    }
-  })()
+  // Use the signing queue instead of fire-and-forget
+  await signingQueue.enqueueOwnerSigning(app.id, app.ownerId)
 
   return { ok: true }
 })

@@ -64,6 +64,7 @@ model App {
   bundleId        String
   version         String
   buildNumber     String?
+  showBuildNumber Boolean  @default(false) // Show build number on homepage for all users
   ipaFileName     String?
   originalIpaPath String
   signedIpaPath   String?

@@ -53,13 +53,7 @@
 
 <script setup lang="ts">
 definePageMeta({ title: 'Users', layout: 'default' })
-const { user: me, asyncData } = useAuth()
-
-// Wait for auth to load before checking permissions
-await asyncData
-if (!me.value || me.value.role !== 'SUPERADMIN') {
-  await navigateTo('/')
-}
+const { user: me } = useAuth()
 const columns = [
   { key: 'nickname', label: 'Nickname' },
   { key: 'createdAt', label: 'Created' },

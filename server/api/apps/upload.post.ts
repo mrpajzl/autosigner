@@ -9,7 +9,7 @@ import path from 'node:path'
 // @ts-ignore - plist types provided via local shim
 import plist from 'plist'
 import { encrypt } from '../../utils/crypto'
-import { signApp } from '../../utils/signer'
+import { signingQueue } from '../../utils/signing-queue'
 import { storage } from '../../utils/storage'
 import { createRequire } from 'node:module'
 
@@ -78,10 +78,9 @@ export default defineEventHandler(async (event) => {
     } catch {}
   }
 
-  // Handle icon - either from manual upload or extracted from IPA
+  // Handle icon - only from manual upload (automatic extraction removed for reliability)
   let iconPath: string | undefined
   
-  // Check for manually uploaded icon first
   const iconFile = Array.isArray(files.icon) ? files.icon[0] : (files.icon as formidable.File)
   if (iconFile?.filepath) {
     try {
@@ -97,21 +96,6 @@ export default defineEventHandler(async (event) => {
       }
     } catch (e) {
       console.error('Failed to save manually uploaded icon:', e)
-    }
-  }
-  
-  // If no manual icon, try to extract from IPA
-  if (!iconPath) {
-    try {
-      const iconBuffer = await extractIconFromIpa(originalIpaAbsPath)
-      if (iconBuffer && iconBuffer.length > 0) {
-        const iconFileName = `icon-${Date.now()}.png`
-        iconPath = `/uploads/${user.id}/icons/${iconFileName}`
-        await storage.saveBuffer(iconPath, iconBuffer, 'image/png')
-        console.log(`Saved extracted app icon to: ${iconPath}`)
-      }
-    } catch (e) {
-      console.error('Failed to extract/save app icon:', e)
     }
   }
 
@@ -189,78 +173,72 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Fire-and-forget signing in background (best-effort), reusing stored manager assets
-  ;(async () => {
+  // Process any uploaded credentials synchronously before queuing signing
+  const outputDir = await fse.mkdtemp(path.join(process.cwd(), '.storage-tmp', `${app.id}-assets-`))
+  try {
+    // Expect provisioning and certs
+    const profile = Array.isArray(files.profile) ? files.profile[0] : (files.profile as formidable.File)
+    const p12 = Array.isArray(files.p12) ? files.p12[0] : (files.p12 as formidable.File)
+    const p12Password = (Array.isArray(fields.p12Password) ? fields.p12Password[0] : fields.p12Password) as string | undefined
+    let profilePath: string | undefined
+    if (profile?.filepath) {
+      profilePath = path.join(outputDir, 'profile.mobileprovision')
+      await fse.move(profile.filepath, profilePath, { overwrite: true })
+    }
+    // Convert .p12 to PEM cert and key if provided
+    let certPem: string | undefined
+    let keyPem: string | undefined
+    if (p12?.filepath) {
+      const p12Path = path.join(outputDir, 'cert.p12')
+      await fse.move(p12.filepath, p12Path, { overwrite: true })
+      certPem = path.join(outputDir, 'cert.pem')
+      keyPem = path.join(outputDir, 'key.pem')
+      // Extract cert
+      const passArg = p12Password ? [`-passin`, `pass:${p12Password}`] : []
+      await execa('bash', ['-lc', [`openssl`, `pkcs12`, `-in`, p12Path, `-clcerts`, `-nokeys`, `-out`, certPem, ...passArg].map(x => String(x)).join(' ')])
+      // Extract key (unencrypted for isign)
+      const passArg2 = p12Password ? [`-passin`, `pass:${p12Password}`] : []
+      await execa('bash', ['-lc', [`openssl`, `pkcs12`, `-in`, p12Path, `-nocerts`, `-nodes`, `-out`, keyPem, ...passArg2].map(x => String(x)).join(' ')])
+    }
+
+    // Persist certificate, key and password to manager profile (remember last uploaded)
     try {
-      const outputDir = await fse.mkdtemp(path.join(process.cwd(), '.storage-tmp', `${app.id}-assets-`))
-      try {
-        // Expect provisioning and certs
-        const profile = Array.isArray(files.profile) ? files.profile[0] : (files.profile as formidable.File)
-        const p12 = Array.isArray(files.p12) ? files.p12[0] : (files.p12 as formidable.File)
-        const p12Password = (Array.isArray(fields.p12Password) ? fields.p12Password[0] : fields.p12Password) as string | undefined
-        let profilePath: string | undefined
-        if (profile?.filepath) {
-          profilePath = path.join(outputDir, 'profile.mobileprovision')
-          await fse.move(profile.filepath, profilePath, { overwrite: true })
-        }
-        // Convert .p12 to PEM cert and key if provided
-        let certPem: string | undefined
-        let keyPem: string | undefined
-        if (p12?.filepath) {
-          const p12Path = path.join(outputDir, 'cert.p12')
-          await fse.move(p12.filepath, p12Path, { overwrite: true })
-          certPem = path.join(outputDir, 'cert.pem')
-          keyPem = path.join(outputDir, 'key.pem')
-          // Extract cert
-          const passArg = p12Password ? [`-passin`, `pass:${p12Password}`] : []
-          await execa('bash', ['-lc', [`openssl`, `pkcs12`, `-in`, p12Path, `-clcerts`, `-nokeys`, `-out`, certPem, ...passArg].map(x => String(x)).join(' ')])
-          // Extract key (unencrypted for isign)
-          const passArg2 = p12Password ? [`-passin`, `pass:${p12Password}`] : []
-          await execa('bash', ['-lc', [`openssl`, `pkcs12`, `-in`, p12Path, `-nocerts`, `-nodes`, `-out`, keyPem, ...passArg2].map(x => String(x)).join(' ')])
-        }
-
-        // Persist certificate, key and password to manager profile (remember last uploaded)
-        try {
-          const updateData: any = {}
-          if (certPem && keyPem) {
-            const certText = await fse.readFile(certPem, 'utf8')
-            const keyText = await fse.readFile(keyPem, 'utf8')
-            updateData.certificatePem = JSON.stringify(encrypt(certText))
-            updateData.privateKeyPem = JSON.stringify(encrypt(keyText))
+      const updateData: any = {}
+      if (certPem && keyPem) {
+        const certText = await fse.readFile(certPem, 'utf8')
+        const keyText = await fse.readFile(keyPem, 'utf8')
+        updateData.certificatePem = JSON.stringify(encrypt(certText))
+        updateData.privateKeyPem = JSON.stringify(encrypt(keyText))
+      }
+      if (typeof p12Password === 'string' && p12Password.length > 0) {
+        const enc = encrypt(p12Password)
+        updateData.p12PasswordEnc = JSON.stringify(enc)
+      }
+      if (profilePath) {
+        const profileBuf = await fse.readFile(profilePath)
+        if (app.platform === 'IOS') updateData.mobileprovisionIos = profileBuf
+        else if (app.platform === 'TVOS') updateData.mobileprovisionTvos = profileBuf
+      }
+      if (Object.keys(updateData).length > 0) {
+        await prisma.managerProfile.upsert({
+          where: { userId: user.id },
+          update: updateData,
+          create: {
+            userId: user.id,
+            displayName: user.nickname,
+            ...updateData
           }
-          if (typeof p12Password === 'string' && p12Password.length > 0) {
-            const enc = encrypt(p12Password)
-            updateData.p12PasswordEnc = JSON.stringify(enc)
-          }
-          if (profilePath) {
-            const profileBuf = await fse.readFile(profilePath)
-            if (app.platform === 'IOS') updateData.mobileprovisionIos = profileBuf
-            else if (app.platform === 'TVOS') updateData.mobileprovisionTvos = profileBuf
-          }
-          if (Object.keys(updateData).length > 0) {
-            await prisma.managerProfile.upsert({
-              where: { userId: user.id },
-              update: updateData,
-              create: {
-                userId: user.id,
-                displayName: user.nickname,
-                ...updateData
-              }
-            })
-          }
-        } catch (e) {
-          console.error('Failed to persist manager profile assets', e)
-        }
-
-        await signApp(app.id)
-      } finally {
-        await fse.remove(outputDir).catch(() => {})
+        })
       }
     } catch (e) {
-      await prisma.app.update({ where: { id: app.id }, data: { status: 'FAILED' } })
-      console.error('Signing failed', e)
+      console.error('Failed to persist manager profile assets', e)
     }
-  })()
+  } finally {
+    await fse.remove(outputDir).catch(() => {})
+  }
+
+  // Queue signing job instead of fire-and-forget
+  await signingQueue.enqueueOwnerSigning(app.id, user.id)
 
   return { id: app.id }
 })
@@ -344,76 +322,4 @@ async function parseBinaryPlist(buf: Buffer): Promise<any> {
 function shellQuote(p: string): string {
   return `'${p.replace(/'/g, `'\''`)}'`
 }
-
-/**
- * Extract the best available app icon from an IPA file.
- * Modern iOS apps store icons in Assets.car (compiled asset catalog),
- * while older apps may have loose PNG files.
- */
-async function extractIconFromIpa(ipaPath: string): Promise<Buffer | undefined> {
-  try {
-    // List all files in the IPA to find icon candidates
-    const { stdout: fileList } = await execa('bash', ['-lc', `unzip -Z1 ${shellQuote(ipaPath)}`])
-    const files = fileList.trim().split('\n')
-    
-    // Look for loose icon PNG files in the .app bundle
-    const iconCandidates = files.filter(f => {
-      // Match AppIcon*.png files in the .app directory
-      if (/^payload\/[^/]+\.app\/appicon.*\.png$/i.test(f)) return true
-      // Match iTunesArtwork (no extension) - at IPA root or in .app
-      if (/^itunesartwork$/i.test(f)) return true
-      if (/^payload\/[^/]+\.app\/itunesartwork$/i.test(f)) return true
-      // Match Icon*.png files (legacy naming)
-      if (/^payload\/[^/]+\.app\/icon[^/]*\.png$/i.test(f)) return true
-      return false
-    })
-    
-    // Sort to prefer larger icons (by filename patterns like @3x > @2x > @1x)
-    if (iconCandidates.length > 0) {
-      iconCandidates.sort((a, b) => {
-        const getScore = (name: string) => {
-          let score = 0
-          if (name.includes('@3x')) score += 300
-          else if (name.includes('@2x')) score += 200
-          else if (name.includes('@1x')) score += 100
-          const sizeMatch = name.match(/(\d+)x\d+/)
-          if (sizeMatch) score += parseInt(sizeMatch[1])
-          if (name.toLowerCase().includes('appicon')) score += 50
-          if (name.toLowerCase().includes('itunesartwork')) score += 500 // Prefer iTunesArtwork - it's usually the best quality
-          return score
-        }
-        return getScore(b) - getScore(a)
-      })
-      
-      // Try to extract the best loose icon
-      for (const iconPath of iconCandidates.slice(0, 5)) {
-        try {
-          const { stdout: b64 } = await execa('bash', ['-lc', `unzip -p ${shellQuote(ipaPath)} ${shellQuote(iconPath)} | base64`])
-          const buf = Buffer.from(b64, 'base64')
-          if (buf.length > 0) {
-            console.log(`Extracted icon from: ${iconPath} (${buf.length} bytes)`)
-            return buf
-          }
-        } catch (e) {
-          console.log(`Failed to extract icon from ${iconPath}:`, e)
-          continue
-        }
-      }
-    }
-    
-    // Check if icons are in Assets.car (we can't easily extract from it without external tools)
-    const hasAssetsCar = files.some(f => /^payload\/[^/]+\.app\/assets\.car$/i.test(f))
-    if (hasAssetsCar) {
-      console.log('App icons are likely in Assets.car - extraction not supported without external tools')
-    } else {
-      console.log('No icon files found in IPA')
-    }
-    
-    return undefined
-  } catch (e) {
-    console.error('Failed to extract icon from IPA:', e)
-    return undefined
-  }
-}
-
 

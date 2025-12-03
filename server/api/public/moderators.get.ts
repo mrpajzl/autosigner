@@ -7,6 +7,7 @@ type PublicApp = {
   name: string
   version: string
   buildNumber?: string | null
+  showBuildNumber: boolean
   platform: 'IOS' | 'TVOS'
   uploadedAt: string
   manifestPath?: string | null
@@ -141,6 +142,7 @@ export default defineEventHandler(async () => {
             name: sv.app.name,
             version: sv.app.version,
             buildNumber: sv.app.buildNumber,
+            showBuildNumber: sv.app.showBuildNumber,
             platform: 'IOS' as const,
             uploadedAt: (sv.signedAt || sv.createdAt).toISOString(),
             manifestPath: sv.manifestPath,
@@ -156,6 +158,7 @@ export default defineEventHandler(async () => {
             name: sv.app.name,
             version: sv.app.version,
             buildNumber: sv.app.buildNumber,
+            showBuildNumber: sv.app.showBuildNumber,
             platform: 'TVOS' as const,
             uploadedAt: (sv.signedAt || sv.createdAt).toISOString(),
             manifestPath: null,
@@ -187,6 +190,7 @@ export default defineEventHandler(async () => {
             name: a.name,
             version: a.version,
             buildNumber: a.buildNumber,
+            showBuildNumber: a.showBuildNumber,
             platform: 'IOS' as const,
             uploadedAt: a.uploadedAt.toISOString(),
             manifestPath: a.manifestPath,
@@ -202,6 +206,7 @@ export default defineEventHandler(async () => {
             name: a.name,
             version: a.version,
             buildNumber: a.buildNumber,
+            showBuildNumber: a.showBuildNumber,
             platform: 'TVOS' as const,
             uploadedAt: a.uploadedAt.toISOString(),
             manifestPath: null,

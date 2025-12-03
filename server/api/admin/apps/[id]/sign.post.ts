@@ -1,6 +1,6 @@
 import { prisma } from '../../../../utils/db'
 import { requireAnyRole } from '../../../../utils/auth'
-import { signAppForUser } from '../../../../utils/signer'
+import { signingQueue } from '../../../../utils/signing-queue'
 
 /**
  * POST /api/admin/apps/:id/sign
@@ -53,20 +53,15 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Fire-and-forget signing in background
-  ;(async () => {
-    try {
-      await signAppForUser(appId, user.id, signedVersion.id)
-    } catch (e) {
-      await prisma.signedVersion.update({
-        where: { id: signedVersion.id },
-        data: { status: 'FAILED' }
-      })
-      console.error('Signing failed for user', user.id, 'app', appId, e)
-    }
-  })()
+  // Add to signing queue instead of fire-and-forget
+  await signingQueue.enqueue(appId, user.id, signedVersion.id)
+  const queuePosition = signingQueue.getQueuePosition(signedVersion.id)
 
-  return { ok: true, signedVersionId: signedVersion.id }
+  return { 
+    ok: true, 
+    signedVersionId: signedVersion.id,
+    queuePosition
+  }
 })
 
 

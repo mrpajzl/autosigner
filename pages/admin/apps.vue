@@ -49,7 +49,7 @@
                   class="file:mr-4 file:rounded-md file:border-0 file:bg-slate-500 file:text-white file:px-3 file:py-2 block w-full text-sm"
                 />
                 <template #hint>
-                  <span class="text-xs">PNG or JPG, will be extracted from IPA if not provided</span>
+                  <span class="text-xs">PNG or JPG for the app icon</span>
                 </template>
               </UFormGroup>
             </div>
@@ -66,6 +66,7 @@
                 variant="solid"
                 icon="i-heroicons-arrow-up-tray"
                 :loading="uploading"
+                :disabled="uploading"
               >
                 Upload App
               </UButton>
@@ -73,10 +74,49 @@
           </form>
         </div>
       </div>
+      
     </UCard>
 
+    <!-- Upload Progress Bar - Separate card for visibility -->
+    <Transition
+      enter-active-class="transition-all duration-300 ease-out"
+      enter-from-class="opacity-0 -translate-y-2"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-active-class="transition-all duration-200 ease-in"
+      leave-from-class="opacity-100 translate-y-0"
+      leave-to-class="opacity-0 -translate-y-2"
+    >
+      <UCard v-if="uploading" class="glass border-2 border-red-500/30">
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center">
+                <UIcon name="i-heroicons-arrow-up-tray" class="w-4 h-4 text-red-500 animate-bounce" />
+              </div>
+              <div>
+                <p class="font-medium text-slate-800 dark:text-white">{{ uploadStatus || 'Uploading IPA...' }}</p>
+                <p class="text-xs text-slate-500 dark:text-white/50">{{ uploadForm.name || 'New App' }}</p>
+              </div>
+            </div>
+            <span class="text-2xl font-mono font-bold text-red-600 dark:text-red-400">{{ uploadProgress }}%</span>
+          </div>
+          <div class="h-4 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+            <div
+              class="h-full bg-gradient-to-r from-red-500 via-red-600 to-red-500 rounded-full transition-all duration-300 ease-out"
+              :class="{ 'animate-pulse': uploadProgress === 100 }"
+              :style="{ width: `${uploadProgress}%` }"
+            />
+          </div>
+          <p v-if="uploadProgress === 100" class="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
+            <UIcon name="i-heroicons-arrow-path" class="w-4 h-4 animate-spin" />
+            {{ uploadStatus || 'Processing...' }}
+          </p>
+        </div>
+      </UCard>
+    </Transition>
+
     <!-- All Apps List -->
-    <UCard class="glass">
+    <UCard class="glass" :ui="{ body: { padding: 'p-4 sm:p-6' }, base: 'overflow-visible' }">
       <template #header>
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -148,12 +188,13 @@
                 </div>
                 <div class="text-sm text-slate-600 dark:text-white/60 mt-1 space-x-4">
                   <span>{{ app.bundleId || 'Unknown bundle' }}</span>
-                  <span>v{{ app.version || '?' }}</span>
+                  <span>v{{ displayVersion(app) }}</span>
                 </div>
-                <div class="text-xs text-slate-500 dark:text-white/40 mt-1">
-                  Uploaded by <span class="text-slate-600 dark:text-white/60 font-medium">{{ app.owner.nickname }}</span>
-                  on {{ formatDate(app.uploadedAt) }}
-                </div>
+                <UTooltip :text="`Uploaded: ${formatDate(app.uploadedAt)}`">
+                  <div class="text-xs text-slate-500 dark:text-white/40 mt-1 cursor-help">
+                    Uploaded by <span class="text-slate-600 dark:text-white/60 font-medium">{{ app.owner.nickname }}</span>
+                  </div>
+                </UTooltip>
               </div>
             </div>
             <!-- Action buttons -->
@@ -169,16 +210,52 @@
                 >
                   Release New Version
                 </UButton>
-                <!-- Delete button -->
-                <UButton
-                  v-if="canDelete(app)"
-                  color="red"
-                  variant="ghost"
-                  icon="i-heroicons-trash"
-                  size="sm"
-                  :loading="deletingAppId === app.id"
-                  @click="confirmDeleteApp(app)"
-                />
+                <!-- Three-dots menu -->
+                <div class="relative">
+                  <UButton
+                    color="gray"
+                    variant="ghost"
+                    icon="i-heroicons-ellipsis-vertical"
+                    size="sm"
+                    @click.stop="openMenuId = openMenuId === app.id ? null : app.id"
+                  />
+                  <!-- Backdrop to catch clicks outside -->
+                  <div
+                    v-if="openMenuId === app.id"
+                    class="fixed inset-0 z-40"
+                    @click="openMenuId = null"
+                  />
+                  <!-- Dropdown menu -->
+                  <Transition
+                    enter-active-class="transition ease-out duration-100"
+                    enter-from-class="transform opacity-0 scale-95"
+                    enter-to-class="transform opacity-100 scale-100"
+                    leave-active-class="transition ease-in duration-75"
+                    leave-from-class="transform opacity-100 scale-100"
+                    leave-to-class="transform opacity-0 scale-95"
+                  >
+                    <div
+                      v-if="openMenuId === app.id"
+                      class="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 p-1"
+                    >
+                      <button
+                        class="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-gray-100 dark:hover:bg-white/10 text-left"
+                        @click="toggleBuildNumber(app.id); openMenuId = null"
+                      >
+                        <UIcon :name="app.showBuildNumber ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'" class="w-4 h-4" />
+                        {{ app.showBuildNumber ? 'Hide build number' : 'Show build number' }}
+                      </button>
+                      <button
+                        v-if="canDelete(app)"
+                        class="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-gray-100 dark:hover:bg-white/10 text-left text-red-500"
+                        @click="confirmDeleteApp(app); openMenuId = null"
+                      >
+                        <UIcon name="i-heroicons-trash" class="w-4 h-4" />
+                        Delete
+                      </button>
+                    </div>
+                  </Transition>
+                </div>
               </div>
               <!-- Sign by all button -->
               <UButton
@@ -330,10 +407,36 @@
             </template>
           </UFormGroup>
 
+          <!-- Upload Progress Bar for New Version -->
+          <div
+            v-if="uploadingNewVersion"
+            class="space-y-2"
+          >
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-slate-600 dark:text-white/60">
+                <UIcon name="i-heroicons-arrow-up-tray" class="inline w-4 h-4 mr-1 animate-pulse" />
+                {{ newVersionUploadStatus || 'Uploading new version...' }}
+              </span>
+              <span class="font-mono font-medium text-red-600 dark:text-red-400">{{ newVersionUploadProgress }}%</span>
+            </div>
+            <div class="h-2 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
+              <div
+                class="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-all duration-300 ease-out"
+                :class="{ 'animate-pulse': newVersionUploadProgress === 100 }"
+                :style="{ width: `${newVersionUploadProgress}%` }"
+              />
+            </div>
+            <p v-if="newVersionUploadProgress === 100" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+              <UIcon name="i-heroicons-arrow-path" class="w-3 h-3 animate-spin" />
+              {{ newVersionUploadStatus || 'Processing...' }}
+            </p>
+          </div>
+
           <div class="flex justify-end gap-2 pt-2">
             <UButton
               color="gray"
               variant="outline"
+              :disabled="uploadingNewVersion"
               @click="showNewVersionModal = false"
             >
               Cancel
@@ -344,6 +447,7 @@
               variant="solid"
               icon="i-heroicons-arrow-up-tray"
               :loading="uploadingNewVersion"
+              :disabled="uploadingNewVersion"
             >
               Upload New Version
             </UButton>
@@ -427,6 +531,8 @@ type AppRow = {
   name: string
   bundleId: string
   version: string
+  buildNumber?: string | null
+  showBuildNumber: boolean
   platform: 'IOS' | 'TVOS'
   uploadedAt: string
   iconPath?: string | null
@@ -439,13 +545,7 @@ const platformOptions = [
   { label: 'tvOS', value: 'TVOS' }
 ]
 
-const { user: me, asyncData } = useAuth()
-
-// Wait for auth to load before checking permissions
-await asyncData
-if (!me.value || (me.value.role !== 'MANAGER' && me.value.role !== 'SUPERADMIN')) {
-  await navigateTo('/')
-}
+const { user: me } = useAuth()
 
 const { data: apps, refresh } = await useFetch<AppRow[]>('/api/admin/apps')
 
@@ -461,11 +561,14 @@ const uploadForm = reactive({
 const ipaInput = ref<HTMLInputElement | null>(null)
 const iconInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
+const uploadProgress = ref(0)
+const uploadStatus = ref('')
 
 // Signing state
 const signingAppId = ref<string | null>(null)
 const signingAllAppId = ref<string | null>(null)
 const refreshing = ref(false)
+const openMenuId = ref<string | null>(null)
 
 // New version modal state
 const showNewVersionModal = ref(false)
@@ -476,28 +579,147 @@ const newVersionForm = reactive({
 const newVersionIpaInput = ref<HTMLInputElement | null>(null)
 const newVersionIconInput = ref<HTMLInputElement | null>(null)
 const uploadingNewVersion = ref(false)
+const newVersionUploadProgress = ref(0)
+const newVersionUploadStatus = ref('')
+
+// Upload with progress tracking using XMLHttpRequest
+function uploadWithProgress(
+  url: string,
+  formData: FormData,
+  onProgress: (percent: number) => void
+): Promise<{ id: string }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) {
+        const percent = Math.round((event.loaded / event.total) * 100)
+        onProgress(percent)
+      }
+    })
+    
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const response = JSON.parse(xhr.responseText)
+          resolve(response)
+        } catch {
+          reject(new Error('Invalid JSON response'))
+        }
+      } else {
+        try {
+          const error = JSON.parse(xhr.responseText)
+          reject({ data: error })
+        } catch {
+          reject(new Error(`Upload failed with status ${xhr.status}`))
+        }
+      }
+    })
+    
+    xhr.addEventListener('error', () => {
+      reject(new Error('Network error during upload'))
+    })
+    
+    xhr.addEventListener('abort', () => {
+      reject(new Error('Upload aborted'))
+    })
+    
+    xhr.open('POST', url)
+    xhr.send(formData)
+  })
+}
 
 // Delete modal state
 const showDeleteModal = ref(false)
 const appToDelete = ref<AppRow | null>(null)
 const deletingAppId = ref<string | null>(null)
 
+// Toggle build number visibility for a specific app (persisted to database)
+async function toggleBuildNumber(appId: string) {
+  try {
+    await $fetch(`/api/admin/apps/${appId}/toggle-build`, { method: 'POST' })
+    await refresh()
+  } catch (e: any) {
+    toast.add({
+      title: 'Failed to toggle build number',
+      description: e?.data?.message || e?.message || 'Unknown error',
+      color: 'red'
+    })
+  }
+}
+
+// Get menu items for an app
+function getAppMenuItems(app: AppRow) {
+  const items: any[][] = [[]]
+  
+  // Show build number toggle
+  items[0].push({
+    label: app.showBuildNumber ? 'Hide build number' : 'Show build number',
+    icon: app.showBuildNumber ? 'i-heroicons-eye-slash' : 'i-heroicons-eye',
+    click: () => toggleBuildNumber(app.id)
+  })
+  
+  // Delete option (only for users who can delete)
+  if (canDelete(app)) {
+    items.push([{
+      label: 'Delete',
+      icon: 'i-heroicons-trash',
+      class: 'text-red-500',
+      click: () => confirmDeleteApp(app)
+    }])
+  }
+  
+  return items
+}
+
+// Display version with optional build number
+function displayVersion(app: AppRow) {
+  const hasVersion = typeof app.version === 'string' && app.version.length > 0
+  const hasBuild = typeof app.buildNumber === 'string' && app.buildNumber.length > 0
+  
+  if (hasVersion && hasBuild && app.showBuildNumber && app.version !== app.buildNumber) {
+    return `${app.version} (${app.buildNumber})`
+  }
+  if (hasVersion) return app.version
+  if (hasBuild) return app.buildNumber
+  return '?'
+}
+
 // Auto-refresh every 5 seconds to update signing status
+// Use a flag to prevent concurrent refresh calls
 let refreshInterval: ReturnType<typeof setInterval> | null = null
+let isAutoRefreshing = false
+
 onMounted(() => {
-  refreshInterval = setInterval(() => {
+  refreshInterval = setInterval(async () => {
     // Only auto-refresh if there are apps in signing state
     const hasPending = apps.value?.some(app => 
       app.signedVersions.some(sv => sv.status === 'SIGNING' || sv.status === 'PENDING')
     )
-    if (hasPending) {
-      refresh()
+    if (hasPending && !isAutoRefreshing && !refreshing.value) {
+      isAutoRefreshing = true
+      try {
+        await refresh()
+      } catch {
+        // Silently ignore refresh errors during auto-refresh
+      } finally {
+        isAutoRefreshing = false
+      }
     }
   }, 5000)
 })
 onUnmounted(() => {
   if (refreshInterval) clearInterval(refreshInterval)
 })
+
+// Non-blocking refresh helper - fires refresh without awaiting
+function triggerRefresh() {
+  if (!refreshing.value && !isAutoRefreshing) {
+    refresh().catch(() => {
+      // Silently ignore errors, next auto-refresh will retry
+    })
+  }
+}
 
 async function manualRefresh() {
   refreshing.value = true
@@ -517,6 +739,8 @@ async function uploadIpa() {
   }
 
   uploading.value = true
+  uploadProgress.value = 0
+  uploadStatus.value = 'Uploading IPA file...'
   try {
     const body = new FormData()
     body.set('name', uploadForm.name.trim())
@@ -529,7 +753,18 @@ async function uploadIpa() {
       body.set('icon', iconFile)
     }
     
-    const result = await $fetch<{ id: string }>('/api/apps/upload', { method: 'POST', body })
+    const result = await uploadWithProgress(
+      '/api/apps/upload',
+      body,
+      (percent) => {
+        uploadProgress.value = percent
+        if (percent < 100) {
+          uploadStatus.value = `Uploading IPA file... (${Math.round(file.size * percent / 100 / 1024 / 1024)}MB / ${Math.round(file.size / 1024 / 1024)}MB)`
+        } else {
+          uploadStatus.value = 'Processing IPA on server...'
+        }
+      }
+    )
     
     toast.add({ 
       title: 'App uploaded successfully', 
@@ -571,6 +806,8 @@ async function uploadIpa() {
     })
   } finally {
     uploading.value = false
+    uploadProgress.value = 0
+    uploadStatus.value = ''
   }
 }
 
@@ -582,13 +819,17 @@ function mySignedVersion(app: AppRow): SignedVersion | undefined {
 async function signApp(appId: string) {
   try {
     signingAppId.value = appId
-    await $fetch(`/api/admin/apps/${appId}/sign`, { method: 'POST' })
+    const result = await $fetch<{ ok: boolean; queuePosition?: number }>(`/api/admin/apps/${appId}/sign`, { method: 'POST' })
+    const queueMsg = result.queuePosition && result.queuePosition > 1 
+      ? ` (Position ${result.queuePosition} in queue)` 
+      : ''
     toast.add({ 
-      title: 'Signing started', 
-      description: 'Your signed version will appear shortly.',
+      title: 'Signing queued', 
+      description: `Your signed version will appear shortly.${queueMsg}`,
       color: 'green' 
     })
-    await refresh()
+    // Non-blocking refresh - signing happens in background
+    triggerRefresh()
   } catch (e: any) {
     toast.add({ 
       title: 'Signing failed', 
@@ -603,13 +844,17 @@ async function signApp(appId: string) {
 async function signByAllModerators(appId: string) {
   try {
     signingAllAppId.value = appId
-    const result = await $fetch<{ queued: number; moderators: string[] }>(`/api/admin/apps/${appId}/sign-all`, { method: 'POST' })
+    const result = await $fetch<{ queued: number; moderators: string[]; queueStatus?: { total: number; running: number; pending: number } }>(`/api/admin/apps/${appId}/sign-all`, { method: 'POST' })
+    const queueInfo = result.queueStatus 
+      ? ` (${result.queueStatus.running} running, ${result.queueStatus.pending} pending)`
+      : ''
     toast.add({ 
       title: 'Signing queued for all moderators', 
-      description: `${result.queued} moderators: ${result.moderators.join(', ')}`,
+      description: `${result.queued} moderators: ${result.moderators.join(', ')}${queueInfo}`,
       color: 'green' 
     })
-    await refresh()
+    // Non-blocking refresh - signing happens in background
+    triggerRefresh()
   } catch (e: any) {
     toast.add({ 
       title: 'Sign by all failed', 
@@ -639,6 +884,8 @@ async function uploadNewVersion() {
   }
 
   uploadingNewVersion.value = true
+  newVersionUploadProgress.value = 0
+  newVersionUploadStatus.value = 'Uploading IPA file...'
   try {
     const body = new FormData()
     body.set('appId', selectedApp.value.id)
@@ -652,7 +899,18 @@ async function uploadNewVersion() {
       body.set('icon', iconFile)
     }
     
-    const result = await $fetch<{ id: string }>('/api/apps/upload', { method: 'POST', body })
+    const result = await uploadWithProgress(
+      '/api/apps/upload',
+      body,
+      (percent) => {
+        newVersionUploadProgress.value = percent
+        if (percent < 100) {
+          newVersionUploadStatus.value = `Uploading... (${Math.round(file.size * percent / 100 / 1024 / 1024)}MB / ${Math.round(file.size / 1024 / 1024)}MB)`
+        } else {
+          newVersionUploadStatus.value = 'Processing IPA on server...'
+        }
+      }
+    )
     
     toast.add({ 
       title: 'New version uploaded successfully', 
@@ -693,6 +951,8 @@ async function uploadNewVersion() {
     })
   } finally {
     uploadingNewVersion.value = false
+    newVersionUploadProgress.value = 0
+    newVersionUploadStatus.value = ''
   }
 }
 
