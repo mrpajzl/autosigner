@@ -1,6 +1,5 @@
-import path from 'node:path'
-import fse from 'fs-extra'
 import { requireRole } from '../../utils/auth'
+import { storage } from '../../utils/storage'
 
 interface StorageStats {
   totalSizeBytes: number
@@ -14,32 +13,7 @@ interface StorageStats {
   }
 }
 
-async function getDirectorySize(dirPath: string): Promise<number> {
-  let totalSize = 0
-  
-  try {
-    const entries = await fse.readdir(dirPath, { withFileTypes: true })
-    
-    for (const entry of entries) {
-      const entryPath = path.join(dirPath, entry.name)
-      
-      if (entry.isDirectory()) {
-        totalSize += await getDirectorySize(entryPath)
-      } else if (entry.isFile()) {
-        const stat = await fse.stat(entryPath)
-        totalSize += stat.size
-      }
-    }
-  } catch (e) {
-    // Ignore errors for inaccessible files
-  }
-  
-  return totalSize
-}
-
 async function analyzeUploadsDirectory(): Promise<StorageStats> {
-  const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
-  
   const stats: StorageStats = {
     totalSizeBytes: 0,
     totalSizeMB: 0,
@@ -52,56 +26,59 @@ async function analyzeUploadsDirectory(): Promise<StorageStats> {
     }
   }
   
-  if (!await fse.pathExists(uploadsDir)) {
-    return stats
-  }
-  
   try {
-    const userDirs = await fse.readdir(uploadsDir, { withFileTypes: true })
-    
-    for (const userDir of userDirs) {
-      if (!userDir.isDirectory()) continue
-      
-      stats.userCount++
-      const userPath = path.join(uploadsDir, userDir.name)
-      const entries = await fse.readdir(userPath, { withFileTypes: true })
-      
-      for (const entry of entries) {
-        const entryPath = path.join(userPath, entry.name)
-        
-        if (entry.isFile() && entry.name.endsWith('.ipa')) {
-          // Original IPA file
-          const fileStat = await fse.stat(entryPath)
+    const objects = await storage.listPrefix('/uploads')
+    const userIds = new Set<string>()
+    const signedMap = new Map<string, number>()
+    const workMap = new Map<string, number>()
+
+    const addSize = (current: number | undefined, size?: number) => (current || 0) + (size || 0)
+
+    for (const obj of objects) {
+      const rel = storage.normalizePublicPath(obj.key || '')
+      if (!rel.startsWith('uploads/')) continue
+      const rest = rel.slice('uploads/'.length)
+      const [userId, ...segments] = rest.split('/').filter(Boolean)
+      if (!userId) continue
+      userIds.add(userId)
+      const size = obj.size || 0
+      stats.totalSizeBytes += size
+
+      if (segments.length === 0) {
+        stats.breakdown.other.count++
+        stats.breakdown.other.sizeBytes += size
+        continue
+      }
+
+      if (segments.length === 1) {
+        const fileName = segments[0]
+        if (fileName.endsWith('.ipa')) {
           stats.breakdown.originalIpas.count++
-          stats.breakdown.originalIpas.sizeBytes += fileStat.size
-          stats.totalSizeBytes += fileStat.size
-        } else if (entry.isDirectory()) {
-          const dirSize = await getDirectorySize(entryPath)
-          
-          // Work directory (pattern: {filename}.ipa.{timestamp})
-          if (entry.name.includes('.ipa.')) {
-            stats.breakdown.workDirectories.count++
-            stats.breakdown.workDirectories.sizeBytes += dirSize
-          }
-          // App directory (signed apps)
-          else if (entry.name.startsWith('c')) {
-            // CUIDs start with 'c'
-            stats.breakdown.signedApps.count++
-            stats.breakdown.signedApps.sizeBytes += dirSize
-          } else {
-            stats.breakdown.other.count++
-            stats.breakdown.other.sizeBytes += dirSize
-          }
-          
-          stats.totalSizeBytes += dirSize
+          stats.breakdown.originalIpas.sizeBytes += size
         } else {
-          const fileStat = await fse.stat(entryPath).catch(() => ({ size: 0 }))
           stats.breakdown.other.count++
-          stats.breakdown.other.sizeBytes += fileStat.size
-          stats.totalSizeBytes += fileStat.size
+          stats.breakdown.other.sizeBytes += size
         }
+        continue
+      }
+
+      const dirName = segments[0]
+      const objectKey = `${userId}/${dirName}`
+      if (dirName.includes('.ipa.')) {
+        workMap.set(objectKey, addSize(workMap.get(objectKey), size))
+      } else if (dirName.startsWith('c')) {
+        signedMap.set(objectKey, addSize(signedMap.get(objectKey), size))
+      } else {
+        stats.breakdown.other.count++
+        stats.breakdown.other.sizeBytes += size
       }
     }
+
+    stats.userCount = userIds.size
+    stats.breakdown.signedApps.count = signedMap.size
+    stats.breakdown.signedApps.sizeBytes = Array.from(signedMap.values()).reduce((acc, v) => acc + v, 0)
+    stats.breakdown.workDirectories.count = workMap.size
+    stats.breakdown.workDirectories.sizeBytes = Array.from(workMap.values()).reduce((acc, v) => acc + v, 0)
   } catch (e) {
     console.error('Error analyzing uploads directory:', e)
   }

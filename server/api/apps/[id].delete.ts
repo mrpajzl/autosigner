@@ -1,7 +1,6 @@
 import { requireUser } from '../../utils/auth'
 import { prisma } from '../../utils/db'
-import fse from 'fs-extra'
-import path from 'node:path'
+import { storage } from '../../utils/storage'
 
 export default defineEventHandler(async (event) => {
   const user = await requireUser(event)
@@ -12,9 +11,7 @@ export default defineEventHandler(async (event) => {
   if (!app || app.ownerId !== user.id) throw createError({ statusCode: 404, message: 'Not found' })
 
   // Remove files
-  const userDir = path.join(process.cwd(), 'public', 'uploads', user.id)
-  const appDir = path.join(userDir, app.id)
-  await fse.remove(appDir).catch(() => {})
+  await storage.deletePrefix(`/uploads/${user.id}/${app.id}`).catch(() => {})
 
   // Keep original IPA or remove? We'll remove only artifacts directory above.
 

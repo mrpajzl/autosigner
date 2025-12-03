@@ -10,16 +10,13 @@ import bplist from 'bplist-parser'
 import type { App as AppModel } from '@prisma/client'
 import { prisma } from './db'
 import { decrypt } from './crypto'
+import { storage } from './storage'
 import { useRuntimeConfig } from '#imports'
 
 // Cleanup configuration
 const WORK_DIR_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour - stale work directories older than this will be cleaned
 const CLEANUP_BATCH_SIZE = 50 // Maximum directories to clean in one batch
-
-function getAbsolutePublicPath(publicPath: string): string {
-  const rel = publicPath.startsWith('/') ? publicPath.slice(1) : publicPath
-  return path.join(process.cwd(), 'public', rel)
-}
+const WORK_ROOT = path.join(process.cwd(), '.workdirs')
 
 function getPublicBaseUrl(): string {
   try {
@@ -27,6 +24,12 @@ function getPublicBaseUrl(): string {
   } catch {
     return ''
   }
+}
+
+async function createWorkDir(tag: string): Promise<string> {
+  await fse.ensureDir(WORK_ROOT)
+  const safeTag = tag.replace(/[^a-zA-Z0-9_.-]/g, '')
+  return fse.mkdtemp(path.join(WORK_ROOT, `${safeTag || 'job'}-`))
 }
 
 function parsePlistBuffer(buf: Buffer): any {
@@ -384,82 +387,40 @@ async function codesignApp(
  * Clean up stale work directories for a specific user's upload folder
  * Work directories match pattern: {ipaFileName}.{timestamp}
  */
-async function cleanupUserWorkDirectories(userUploadDir: string): Promise<number> {
-  let cleanedCount = 0
-  
-  if (!await fse.pathExists(userUploadDir)) {
-    return cleanedCount
-  }
-  
-  try {
-    const entries = await fse.readdir(userUploadDir, { withFileTypes: true })
-    
-    for (const entry of entries) {
-      // Skip if not a directory
-      if (!entry.isDirectory()) continue
-      
-      // Match work directory pattern: {filename}.ipa.{timestamp}
-      // The timestamp is a base36 encoded Date.now()
-      const match = entry.name.match(/^(.+\.ipa)\.([a-z0-9]+)$/)
-      if (!match) continue
-      
-      const workDirPath = path.join(userUploadDir, entry.name)
-      
-      try {
-        const stat = await fse.stat(workDirPath)
-        const ageMs = Date.now() - stat.mtimeMs
-        
-        // Only clean up directories older than the threshold
-        if (ageMs > WORK_DIR_MAX_AGE_MS) {
-          await fse.remove(workDirPath)
-          cleanedCount++
-          console.log(`Cleaned up stale work directory: ${workDirPath}`)
-        }
-      } catch (e) {
-        console.warn(`Failed to clean work directory ${workDirPath}:`, e)
-      }
-      
-      // Limit batch size to avoid blocking for too long
-      if (cleanedCount >= CLEANUP_BATCH_SIZE) break
-    }
-  } catch (e) {
-    console.warn(`Failed to cleanup user upload directory ${userUploadDir}:`, e)
-  }
-  
-  return cleanedCount
-}
-
 /**
  * Clean up all stale work directories across all users
  * This can be called periodically or after signing operations
  */
 export async function cleanupAllStaleWorkDirectories(): Promise<{ totalCleaned: number; errors: string[] }> {
-  const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
   let totalCleaned = 0
   const errors: string[] = []
   
-  if (!await fse.pathExists(uploadsDir)) {
+  if (!await fse.pathExists(WORK_ROOT)) {
     return { totalCleaned, errors }
   }
   
   try {
-    const userDirs = await fse.readdir(uploadsDir, { withFileTypes: true })
-    
-    for (const userDir of userDirs) {
-      if (!userDir.isDirectory()) continue
-      
-      const userUploadDir = path.join(uploadsDir, userDir.name)
+    const entries = await fse.readdir(WORK_ROOT, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const dirPath = path.join(WORK_ROOT, entry.name)
       try {
-        const cleaned = await cleanupUserWorkDirectories(userUploadDir)
-        totalCleaned += cleaned
+        const stat = await fse.stat(dirPath)
+        const ageMs = Date.now() - stat.mtimeMs
+        if (ageMs > WORK_DIR_MAX_AGE_MS) {
+          await fse.remove(dirPath)
+          totalCleaned++
+          console.log(`Removed stale work directory ${dirPath}`)
+        }
       } catch (e) {
-        const msg = `Failed to cleanup for user ${userDir.name}: ${e}`
+        const msg = `Failed to cleanup work dir ${dirPath}: ${e}`
         errors.push(msg)
-        console.error(msg)
+        console.warn(msg)
       }
+      if (totalCleaned >= CLEANUP_BATCH_SIZE) break
     }
   } catch (e) {
-    const msg = `Failed to list uploads directory: ${e}`
+    const msg = `Failed to list work directory root: ${e}`
     errors.push(msg)
     console.error(msg)
   }
@@ -475,42 +436,15 @@ export async function cleanupAllStaleWorkDirectories(): Promise<{ totalCleaned: 
  * Clean up work directories for a specific IPA file
  * Call this after successful signing to remove all old work directories for that IPA
  */
-async function cleanupIpaWorkDirectories(ipaPath: string): Promise<number> {
-  const parentDir = path.dirname(ipaPath)
-  const ipaBasename = path.basename(ipaPath)
-  let cleanedCount = 0
-  
-  try {
-    const entries = await fse.readdir(parentDir, { withFileTypes: true })
-    
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue
-      
-      // Match work directories for this specific IPA
-      if (entry.name.startsWith(`${ipaBasename}.`)) {
-        const workDirPath = path.join(parentDir, entry.name)
-        try {
-          await fse.remove(workDirPath)
-          cleanedCount++
-          console.log(`Cleaned up IPA work directory: ${workDirPath}`)
-        } catch (e) {
-          console.warn(`Failed to remove work directory ${workDirPath}:`, e)
-        }
-      }
-    }
-  } catch (e) {
-    console.warn(`Failed to cleanup IPA work directories for ${ipaPath}:`, e)
-  }
-  
-  return cleanedCount
-}
-
 /**
  * Clean up orphaned app directories (directories that exist on disk but not in the database)
  * This handles cases where database deletion succeeded but file cleanup failed
  * Also cleans up orphaned SignedVersion directories
  */
 export async function cleanupOrphanedAppDirectories(): Promise<{ totalCleaned: number; errors: string[] }> {
+  if (storage.driver !== 'local') {
+    return { totalCleaned: 0, errors: ['Orphan cleanup is only applicable to local storage.'] }
+  }
   const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
   let totalCleaned = 0
   const errors: string[] = []
@@ -604,7 +538,7 @@ export async function cleanupOrphanedAppDirectories(): Promise<{ totalCleaned: n
           continue
         }
 
-        // Skip work directories (handled by cleanupUserWorkDirectories)
+        // Skip work directories (handled separately via WORK_ROOT)
         if (entry.name.includes('.ipa.')) continue
 
         // Check if this directory matches an app ID or signed version ID
@@ -669,14 +603,22 @@ async function signAppLocally(appId: string): Promise<void> {
   if (!app) throw new Error('App not found')
   const platform = (app.platform?.toUpperCase() as 'IOS' | 'TVOS') || 'IOS'
 
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads', app.ownerId)
-  const outputDir = path.join(uploadDir, app.id)
-  await fse.ensureDir(outputDir)
-
-  const originalIpaAbsPath = pickAvailableIpa(app)
+  const source = await pickAvailableIpa(app)
+  const originalIpaAbsPath = source.filePath
   if (!originalIpaAbsPath) {
     throw new Error('Source IPA not found on server storage. Re-upload the app to sign.')
   }
+  let cleanupSource = source.cleanup
+
+  let jobRoot: string | undefined
+  let workDir: string | undefined
+  let outputDir: string | undefined
+
+  jobRoot = await createWorkDir(app.id)
+  workDir = path.join(jobRoot, 'unpacked')
+  outputDir = path.join(jobRoot, 'assets')
+  await fse.ensureDir(workDir)
+  await fse.ensureDir(outputDir)
 
   const { p12Path, p12Password, profilePath } = await ensureManagerAssetsOnDisk(app.ownerId, platform, outputDir)
 
@@ -707,7 +649,6 @@ async function signAppLocally(appId: string): Promise<void> {
   }
 
   let keychainPath: string | undefined
-  let workDir: string | undefined
 
   try {
     // Import certificate into temporary keychain for codesign
@@ -717,18 +658,16 @@ async function signAppLocally(appId: string): Promise<void> {
     console.log('Imported certificate, identity:', signingIdentity)
 
     // 1) Unzip IPA
-    workDir = `${originalIpaAbsPath}.${Date.now().toString(36)}`
-    await fse.ensureDir(workDir)
-    await execa('unzip', ['-o', originalIpaAbsPath, '-d', workDir])
+    await execa('unzip', ['-o', originalIpaAbsPath, '-d', workDir!])
     
-    const payloadDir = path.join(workDir, 'Payload')
+    const payloadDir = path.join(workDir!, 'Payload')
     const appDirs = (await fse.readdir(payloadDir) as string[]).filter((n: string) => n.endsWith('.app'))
     if (appDirs.length === 0) throw new Error('No .app found in IPA')
     const appDir = path.join(payloadDir, appDirs[0])
 
     // 2) Extract entitlements from provisioning profile
     // Use a temp file approach for more reliable extraction
-    const provTempPlist = path.join(workDir, 'profile_content.plist')
+    const provTempPlist = path.join(workDir!, 'profile_content.plist')
     await execa('security', ['cms', '-D', '-i', profilePath, '-o', provTempPlist])
     const provContent = await fse.readFile(provTempPlist, 'utf8')
     const provObj: any = plist.parse(provContent)
@@ -741,7 +680,7 @@ async function signAppLocally(appId: string): Promise<void> {
     }
     
     const entitlementsPlist = plist.build(entitlementsObj as any)
-    const entPath = path.join(workDir, 'entitlements.plist')
+    const entPath = path.join(workDir!, 'entitlements.plist')
     await fse.writeFile(entPath, entitlementsPlist)
     console.log('Wrote entitlements to:', entPath)
 
@@ -771,7 +710,7 @@ async function signAppLocally(appId: string): Promise<void> {
     await codesignApp(appDir, signingIdentity, entPath, keychainPath)
 
     // 7) Repack IPA
-    const signedPath = path.join(outputDir, `${app.id}-signed.ipa`)
+    const signedPath = path.join(outputDir!, `${app.id}-signed.ipa`)
     
     // Use ditto or zip to repack
     await execa('bash', ['-c', `cd "${workDir}" && zip -qry "${signedPath}" Payload`])
@@ -781,18 +720,16 @@ async function signAppLocally(appId: string): Promise<void> {
     
     // Clean up ALL old work directories for this IPA after successful signing
     // This ensures we don't leave stale directories from previous signing attempts
-    await cleanupIpaWorkDirectories(originalIpaAbsPath)
-    
   } catch (e) {
     console.error('Signing failed:', e)
     throw e
   } finally {
-    // Always cleanup work directory (if it was created)
-    if (workDir) {
-      await fse.remove(workDir).catch((err) => {
-        console.warn(`Failed to cleanup work directory ${workDir}:`, err)
+    if (jobRoot) {
+      await fse.remove(jobRoot).catch((err) => {
+        console.warn(`Failed to cleanup job directory ${jobRoot}:`, err)
       })
     }
+    await cleanupSource().catch(() => {})
     // Cleanup temporary keychain
     if (keychainPath) {
       await cleanupKeychain(keychainPath)
@@ -800,26 +737,23 @@ async function signAppLocally(appId: string): Promise<void> {
   }
 }
 
-function pickAvailableIpa(app: AppModel): string {
+async function pickAvailableIpa(app: AppModel): Promise<{ filePath: string; cleanup: () => Promise<void> }> {
+  const noop = async () => {}
   const candidates: (string | null | undefined)[] = [app.signedIpaPath, app.originalIpaPath]
-  for (const p of candidates) {
-    if (!p) continue
-    const abs = getAbsolutePublicPath(p)
-    if (fse.existsSync(abs)) return abs
+  for (const publicPath of candidates) {
+    if (!publicPath) continue
+    if (await storage.pathExists(publicPath)) {
+      return storage.downloadToTempFile(publicPath, app.id)
+    }
   }
-  return ''
+  return { filePath: '', cleanup: noop }
 }
 
 async function finalizeSignedArtifact(app: AppModel, signedFilePath: string): Promise<void> {
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads', app.ownerId, app.id)
-  await fse.ensureDir(uploadDir)
-  const finalPath = path.join(uploadDir, `${app.id}-signed.ipa`)
-  const resolvedFinal = path.resolve(finalPath)
-  const resolvedSource = path.resolve(signedFilePath)
-  if (resolvedFinal !== resolvedSource) {
-    await fse.move(signedFilePath, finalPath, { overwrite: true })
-  }
-  const signedPublic = `/uploads/${app.ownerId}/${app.id}/${path.basename(finalPath)}`
+  const fileName = `${app.id}-signed.ipa`
+  const signedPublic = `/uploads/${app.ownerId}/${app.id}/${fileName}`
+  await storage.saveFileFromPath(signedPublic, signedFilePath, 'application/octet-stream')
+
   let manifestPublic: string | undefined
   const platform = (app.platform?.toUpperCase() as 'IOS' | 'TVOS') || 'IOS'
   
@@ -850,9 +784,8 @@ async function finalizeSignedArtifact(app: AppModel, signedFilePath: string): Pr
     ]
   }
   const plistXml = plist.build(manifest as any)
-  const manifestPath = path.join(uploadDir, 'manifest.plist')
-  await fse.writeFile(manifestPath, plistXml)
   manifestPublic = `/uploads/${app.ownerId}/${app.id}/manifest.plist`
+  await storage.saveBuffer(manifestPublic, plistXml, 'application/xml')
 
   await prisma.app.update({
     where: { id: app.id },
@@ -888,67 +821,68 @@ async function signAppLocallyForUser(appId: string, signerId: string, signedVers
   if (!app) throw new Error('App not found')
   const platform = (app.platform?.toUpperCase() as 'IOS' | 'TVOS') || 'IOS'
 
-  // Get the original IPA from the app owner's directory
-  const originalIpaAbsPath = pickAvailableIpa(app)
+  // Get the original IPA from storage
+  const source = await pickAvailableIpa(app)
+  const originalIpaAbsPath = source.filePath
   if (!originalIpaAbsPath) {
     throw new Error('Source IPA not found on server storage.')
   }
+  let cleanupSource = source.cleanup
 
-  // Store signed artifact in signer's directory
-  const signerUploadDir = path.join(process.cwd(), 'public', 'uploads', signerId)
-  const outputDir = path.join(signerUploadDir, signedVersionId)
-  await fse.ensureDir(outputDir)
-
-  const { p12Path, p12Password, profilePath } = await ensureManagerAssetsOnDisk(signerId, platform, outputDir)
-
-  if (!p12Path) {
-    throw new Error('Missing signing certificate. Upload and activate one in Profile first.')
-  }
-  if (!profilePath) {
-    throw new Error('Missing provisioning profile. Upload and activate one in Profile first.')
-  }
-
-  // Log signing operation
-  try {
-    const { stdout } = await execa('security', ['cms', '-D', '-i', profilePath])
-    const obj: any = plist.parse(stdout)
-    const devices: string[] | undefined = obj?.ProvisionedDevices
-    const allDevices: boolean | undefined = obj?.ProvisionsAllDevices
-    const profileName: string | undefined = obj?.Name
-    console.log('Signing for user', signerId, 'with provisioning profile', {
-      appId: app.id,
-      signerId,
-      platform,
-      profileName,
-      devicesCount: Array.isArray(devices) ? devices.length : 0,
-      allDevices: Boolean(allDevices)
-    })
-  } catch (e) {
-    console.warn('Failed to inspect provisioning profile before signing', e)
-  }
-
-  let keychainPath: string | undefined
+  let jobRoot: string | undefined
   let workDir: string | undefined
+  let outputDir: string | undefined
+  let keychainPath: string | undefined
 
   try {
+    jobRoot = await createWorkDir(`${signerId}-${signedVersionId}`)
+    workDir = path.join(jobRoot, 'unpacked')
+    outputDir = path.join(jobRoot, 'assets')
+    await fse.ensureDir(workDir)
+    await fse.ensureDir(outputDir)
+
+    const { p12Path, p12Password, profilePath } = await ensureManagerAssetsOnDisk(signerId, platform, outputDir)
+
+    if (!p12Path) {
+      throw new Error('Missing signing certificate. Upload and activate one in Profile first.')
+    }
+    if (!profilePath) {
+      throw new Error('Missing provisioning profile. Upload and activate one in Profile first.')
+    }
+
+    try {
+      const { stdout } = await execa('security', ['cms', '-D', '-i', profilePath])
+      const obj: any = plist.parse(stdout)
+      const devices: string[] | undefined = obj?.ProvisionedDevices
+      const allDevices: boolean | undefined = obj?.ProvisionsAllDevices
+      const profileName: string | undefined = obj?.Name
+      console.log('Signing for user', signerId, 'with provisioning profile', {
+        appId: app.id,
+        signerId,
+        platform,
+        profileName,
+        devicesCount: Array.isArray(devices) ? devices.length : 0,
+        allDevices: Boolean(allDevices)
+      })
+    } catch (e) {
+      console.warn('Failed to inspect provisioning profile before signing', e)
+    }
+
     // Import certificate into temporary keychain for codesign
     const keychain = await importCertToKeychain(p12Path, p12Password || '')
     keychainPath = keychain.keychainPath
     const signingIdentity = keychain.identity
     console.log('Imported certificate, identity:', signingIdentity)
 
-    // 1) Unzip IPA
-    workDir = `${originalIpaAbsPath}.${signerId}.${Date.now().toString(36)}`
-    await fse.ensureDir(workDir)
-    await execa('unzip', ['-o', originalIpaAbsPath, '-d', workDir])
+    await execa('unzip', ['-o', originalIpaAbsPath, '-d', workDir!])
     
-    const payloadDir = path.join(workDir, 'Payload')
+    const payloadDir = path.join(workDir!, 'Payload')
     const appDirs = (await fse.readdir(payloadDir) as string[]).filter((n: string) => n.endsWith('.app'))
     if (appDirs.length === 0) throw new Error('No .app found in IPA')
     const appDir = path.join(payloadDir, appDirs[0])
 
     // 2) Extract entitlements from provisioning profile
-    const provTempPlist = path.join(workDir, 'profile_content.plist')
+    const provTempPlist = path.join(workDir!, 'profile_content.plist')
     await execa('security', ['cms', '-D', '-i', profilePath, '-o', provTempPlist])
     const provContent = await fse.readFile(provTempPlist, 'utf8')
     const provObj: any = plist.parse(provContent)
@@ -961,7 +895,7 @@ async function signAppLocallyForUser(appId: string, signerId: string, signedVers
     }
     
     const entitlementsPlist = plist.build(entitlementsObj as any)
-    const entPath = path.join(workDir, 'entitlements.plist')
+    const entPath = path.join(workDir!, 'entitlements.plist')
     await fse.writeFile(entPath, entitlementsPlist)
 
     // 3) Embed the new provisioning profile
@@ -989,7 +923,7 @@ async function signAppLocallyForUser(appId: string, signerId: string, signedVers
     await codesignApp(appDir, signingIdentity, entPath, keychainPath)
 
     // 7) Repack IPA
-    const signedPath = path.join(outputDir, `${signedVersionId}-signed.ipa`)
+    const signedPath = path.join(outputDir!, `${signedVersionId}-signed.ipa`)
     await execa('bash', ['-c', `cd "${workDir}" && zip -qry "${signedPath}" Payload`])
 
     // Finalize - update SignedVersion record
@@ -999,13 +933,12 @@ async function signAppLocallyForUser(appId: string, signerId: string, signedVers
     console.error('Signing failed for user', signerId, ':', e)
     throw e
   } finally {
-    // Always cleanup work directory
-    if (workDir) {
-      await fse.remove(workDir).catch((err) => {
-        console.warn(`Failed to cleanup work directory ${workDir}:`, err)
+    if (jobRoot) {
+      await fse.remove(jobRoot).catch((err) => {
+        console.warn(`Failed to cleanup job directory ${jobRoot}:`, err)
       })
     }
-    // Cleanup temporary keychain
+    await cleanupSource().catch(() => {})
     if (keychainPath) {
       await cleanupKeychain(keychainPath)
     }
@@ -1021,15 +954,9 @@ async function finalizeSignedVersionArtifact(
   signedVersionId: string,
   signedFilePath: string
 ): Promise<void> {
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads', signerId, signedVersionId)
-  await fse.ensureDir(uploadDir)
-  const finalPath = path.join(uploadDir, `${signedVersionId}-signed.ipa`)
-  const resolvedFinal = path.resolve(finalPath)
-  const resolvedSource = path.resolve(signedFilePath)
-  if (resolvedFinal !== resolvedSource) {
-    await fse.move(signedFilePath, finalPath, { overwrite: true })
-  }
-  const signedPublic = `/uploads/${signerId}/${signedVersionId}/${path.basename(finalPath)}`
+  const fileName = `${signedVersionId}-signed.ipa`
+  const signedPublic = `/uploads/${signerId}/${signedVersionId}/${fileName}`
+  await storage.saveFileFromPath(signedPublic, signedFilePath, 'application/octet-stream')
   let manifestPublic: string | undefined
   const platform = (app.platform?.toUpperCase() as 'IOS' | 'TVOS') || 'IOS'
   
@@ -1060,9 +987,8 @@ async function finalizeSignedVersionArtifact(
     ]
   }
   const plistXml = plist.build(manifest as any)
-  const manifestPath = path.join(uploadDir, 'manifest.plist')
-  await fse.writeFile(manifestPath, plistXml)
   manifestPublic = `/uploads/${signerId}/${signedVersionId}/manifest.plist`
+  await storage.saveBuffer(manifestPublic, plistXml, 'application/xml')
 
   await prisma.signedVersion.update({
     where: { id: signedVersionId },

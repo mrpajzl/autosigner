@@ -10,6 +10,7 @@ import path from 'node:path'
 import plist from 'plist'
 import { encrypt } from '../../utils/crypto'
 import { signApp } from '../../utils/signer'
+import { storage } from '../../utils/storage'
 import { createRequire } from 'node:module'
 
 export const config = { api: { bodyParser: false } }
@@ -17,7 +18,7 @@ export const config = { api: { bodyParser: false } }
 export default defineEventHandler(async (event) => {
   const user = await requireAnyRole(event, ['MANAGER', 'SUPERADMIN'])
 
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads', user.id)
+  const uploadDir = path.join(process.cwd(), '.storage-tmp', 'incoming', user.id)
   await fse.ensureDir(uploadDir)
 
   const form = formidable({ multiples: true, uploadDir, keepExtensions: true })
@@ -50,6 +51,8 @@ export default defineEventHandler(async (event) => {
   if (ipaFile.filepath !== originalIpaAbsPath) {
     await fse.move(ipaFile.filepath, originalIpaAbsPath, { overwrite: true })
   }
+  const originalPublicPath = `/uploads/${user.id}/${originalIpaFileName}`
+  await storage.saveFileFromPath(originalPublicPath, originalIpaAbsPath)
 
   // If no version provided, try to extract from IPA's Info.plist
   let ipaMetadata: Awaited<ReturnType<typeof extractVersionInfoFromIpa>> | undefined
@@ -83,8 +86,7 @@ export default defineEventHandler(async (event) => {
     if (!existing || existing.ownerId !== user.id) throw createError({ statusCode: 404, message: 'Not found' })
 
     // Clean any previous build artifacts for this app id
-    const existingOutputDir = path.join(uploadDir, existing.id)
-    await fse.remove(existingOutputDir).catch(() => {})
+    await storage.deletePrefix(`/uploads/${user.id}/${existing.id}`).catch(() => {})
 
     // Fill from form or fall back to existing values
     const nextName = nameFromForm || existing.name
@@ -102,7 +104,7 @@ export default defineEventHandler(async (event) => {
         // Keep platform fixed to existing app to avoid accidental mismatch
         platform: existing.platform,
         ipaFileName: originalIpaFileName,
-        originalIpaPath: `/uploads/${user.id}/${originalIpaFileName}`,
+        originalIpaPath: originalPublicPath,
         signedIpaPath: null,
         manifestPath: null,
         signedAt: null,
@@ -114,8 +116,7 @@ export default defineEventHandler(async (event) => {
     app = await prisma.app.findFirst({ where: { ownerId: user.id, platform: platformFromForm, ipaFileName: originalIpaFileName } })
     if (app) {
       // Clean any previous build artifacts for this app id
-      const existingOutputDir = path.join(uploadDir, app.id)
-      await fse.remove(existingOutputDir).catch(() => {})
+      await storage.deletePrefix(`/uploads/${user.id}/${app.id}`).catch(() => {})
       app = await prisma.app.update({
         where: { id: app.id },
         data: {
@@ -123,7 +124,7 @@ export default defineEventHandler(async (event) => {
           bundleId,
           version: version || '0.0.0',
           buildNumber: buildNumber || app.buildNumber || null,
-          originalIpaPath: `/uploads/${user.id}/${originalIpaFileName}`,
+          originalIpaPath: originalPublicPath,
           signedIpaPath: null,
           manifestPath: null,
           signedAt: null,
@@ -140,7 +141,7 @@ export default defineEventHandler(async (event) => {
           version: version || '0.0.0',
           buildNumber: buildNumber || null,
           ipaFileName: originalIpaFileName,
-          originalIpaPath: `/uploads/${user.id}/${originalIpaFileName}`,
+          originalIpaPath: originalPublicPath,
           status: 'SIGNING'
         }
       })
@@ -150,68 +151,70 @@ export default defineEventHandler(async (event) => {
   // Fire-and-forget signing in background (best-effort), reusing stored manager assets
   ;(async () => {
     try {
-      const outputDir = path.join(uploadDir, app.id)
-      await fse.ensureDir(outputDir)
-
-      // Expect provisioning and certs
-      const profile = Array.isArray(files.profile) ? files.profile[0] : (files.profile as formidable.File)
-      const p12 = Array.isArray(files.p12) ? files.p12[0] : (files.p12 as formidable.File)
-      const p12Password = (Array.isArray(fields.p12Password) ? fields.p12Password[0] : fields.p12Password) as string | undefined
-      let profilePath: string | undefined
-      if (profile?.filepath) {
-        profilePath = path.join(outputDir, 'profile.mobileprovision')
-        await fse.move(profile.filepath, profilePath, { overwrite: true })
-      }
-      // Convert .p12 to PEM cert and key if provided
-      let certPem: string | undefined
-      let keyPem: string | undefined
-      if (p12?.filepath) {
-        const p12Path = path.join(outputDir, 'cert.p12')
-        await fse.move(p12.filepath, p12Path, { overwrite: true })
-        certPem = path.join(outputDir, 'cert.pem')
-        keyPem = path.join(outputDir, 'key.pem')
-        // Extract cert
-        const passArg = p12Password ? [`-passin`, `pass:${p12Password}`] : []
-        await execa('bash', ['-lc', [`openssl`, `pkcs12`, `-in`, p12Path, `-clcerts`, `-nokeys`, `-out`, certPem, ...passArg].map(x => String(x)).join(' ')])
-        // Extract key (unencrypted for isign)
-        const passArg2 = p12Password ? [`-passin`, `pass:${p12Password}`] : []
-        await execa('bash', ['-lc', [`openssl`, `pkcs12`, `-in`, p12Path, `-nocerts`, `-nodes`, `-out`, keyPem, ...passArg2].map(x => String(x)).join(' ')])
-      }
-
-      // Persist certificate, key and password to manager profile (remember last uploaded)
+      const outputDir = await fse.mkdtemp(path.join(process.cwd(), '.storage-tmp', `${app.id}-assets-`))
       try {
-        const updateData: any = {}
-        if (certPem && keyPem) {
-          const certText = await fse.readFile(certPem, 'utf8')
-          const keyText = await fse.readFile(keyPem, 'utf8')
-          updateData.certificatePem = JSON.stringify(encrypt(certText))
-          updateData.privateKeyPem = JSON.stringify(encrypt(keyText))
+        // Expect provisioning and certs
+        const profile = Array.isArray(files.profile) ? files.profile[0] : (files.profile as formidable.File)
+        const p12 = Array.isArray(files.p12) ? files.p12[0] : (files.p12 as formidable.File)
+        const p12Password = (Array.isArray(fields.p12Password) ? fields.p12Password[0] : fields.p12Password) as string | undefined
+        let profilePath: string | undefined
+        if (profile?.filepath) {
+          profilePath = path.join(outputDir, 'profile.mobileprovision')
+          await fse.move(profile.filepath, profilePath, { overwrite: true })
         }
-        if (typeof p12Password === 'string' && p12Password.length > 0) {
-          const enc = encrypt(p12Password)
-          updateData.p12PasswordEnc = JSON.stringify(enc)
+        // Convert .p12 to PEM cert and key if provided
+        let certPem: string | undefined
+        let keyPem: string | undefined
+        if (p12?.filepath) {
+          const p12Path = path.join(outputDir, 'cert.p12')
+          await fse.move(p12.filepath, p12Path, { overwrite: true })
+          certPem = path.join(outputDir, 'cert.pem')
+          keyPem = path.join(outputDir, 'key.pem')
+          // Extract cert
+          const passArg = p12Password ? [`-passin`, `pass:${p12Password}`] : []
+          await execa('bash', ['-lc', [`openssl`, `pkcs12`, `-in`, p12Path, `-clcerts`, `-nokeys`, `-out`, certPem, ...passArg].map(x => String(x)).join(' ')])
+          // Extract key (unencrypted for isign)
+          const passArg2 = p12Password ? [`-passin`, `pass:${p12Password}`] : []
+          await execa('bash', ['-lc', [`openssl`, `pkcs12`, `-in`, p12Path, `-nocerts`, `-nodes`, `-out`, keyPem, ...passArg2].map(x => String(x)).join(' ')])
         }
-        if (profilePath) {
-          const profileBuf = await fse.readFile(profilePath)
-          if (app.platform === 'IOS') updateData.mobileprovisionIos = profileBuf
-          else if (app.platform === 'TVOS') updateData.mobileprovisionTvos = profileBuf
-        }
-        if (Object.keys(updateData).length > 0) {
-          await prisma.managerProfile.upsert({
-            where: { userId: user.id },
-            update: updateData,
-            create: {
-              userId: user.id,
-              displayName: user.nickname,
-              ...updateData
-            }
-          })
-        }
-      } catch (e) {
-        console.error('Failed to persist manager profile assets', e)
-      }
 
-      await signApp(app.id)
+        // Persist certificate, key and password to manager profile (remember last uploaded)
+        try {
+          const updateData: any = {}
+          if (certPem && keyPem) {
+            const certText = await fse.readFile(certPem, 'utf8')
+            const keyText = await fse.readFile(keyPem, 'utf8')
+            updateData.certificatePem = JSON.stringify(encrypt(certText))
+            updateData.privateKeyPem = JSON.stringify(encrypt(keyText))
+          }
+          if (typeof p12Password === 'string' && p12Password.length > 0) {
+            const enc = encrypt(p12Password)
+            updateData.p12PasswordEnc = JSON.stringify(enc)
+          }
+          if (profilePath) {
+            const profileBuf = await fse.readFile(profilePath)
+            if (app.platform === 'IOS') updateData.mobileprovisionIos = profileBuf
+            else if (app.platform === 'TVOS') updateData.mobileprovisionTvos = profileBuf
+          }
+          if (Object.keys(updateData).length > 0) {
+            await prisma.managerProfile.upsert({
+              where: { userId: user.id },
+              update: updateData,
+              create: {
+                userId: user.id,
+                displayName: user.nickname,
+                ...updateData
+              }
+            })
+          }
+        } catch (e) {
+          console.error('Failed to persist manager profile assets', e)
+        }
+
+        await signApp(app.id)
+      } finally {
+        await fse.remove(outputDir).catch(() => {})
+      }
     } catch (e) {
       await prisma.app.update({ where: { id: app.id }, data: { status: 'FAILED' } })
       console.error('Signing failed', e)

@@ -25,3 +25,8 @@ logs
 
 # Apple certificates cache
 .apple-certs
+
+# Upload artifacts & temp dirs
+public/uploads
+.storage-tmp
+.workdirs

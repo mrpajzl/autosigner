@@ -82,6 +82,34 @@ PUBLIC_BASE_URL="https://your-domain.com"
 EOF
 ```
 
+### File Storage / MinIO
+
+Uploads are no longer committed into the repository. Set the following env vars to store IPA artifacts inside a MinIO bucket (or any S3-compatible endpoint):
+
+```bash
+MINIO_PUBLIC="http://127.0.0.1"
+MINIO_PORT="9000"
+MINIO_USER="autosigner"
+MINIO_PASSWORD="super-secret-pass"
+# Optional overrides
+MINIO_BUCKET="autosigner"
+MINIO_REGION="us-east-1"
+# MINIO_ENDPOINT can be provided if PUBLIC/PORT should not be combined
+```
+
+When the `MINIO_*` variables are present the server streams uploads directly into the bucket; otherwise it falls back to the local `public/uploads` directory (which is now gitignored). All signing work directories live under `.workdirs/` and are cleaned up automatically.
+
+### Migrating Existing Uploads
+
+Run the migration script **on the production host** after configuring the env vars and before cleaning up the old files:
+
+```bash
+cd /path/to/autosigner
+node scripts/migrate-uploads-to-minio.mjs
+```
+
+The script walks `public/uploads`, copies every file to the configured bucket via the S3 API, and leaves the originals untouched so you can verify the data in MinIO before deleting the local directory.
+
 ## Development
 
 ```bash
