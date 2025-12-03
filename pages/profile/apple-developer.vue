@@ -21,11 +21,13 @@
         >
           <template #description>
             <ol class="list-decimal list-inside space-y-1 text-sm mt-2">
-              <li>Go to <a href="https://appstoreconnect.apple.com/access/api" target="_blank" class="underline">App Store Connect → Users and Access → Keys</a></li>
-              <li>Click the "+" button to generate a new API key</li>
+              <li>Go to <a href="https://appstoreconnect.apple.com/access/integrations/api" target="_blank" class="underline">App Store Connect → Users and Access → Integrations → Team Keys</a></li>
+              <li>Click the "+" button to generate a new Team API key</li>
+              <li>Select the access level as <span class="font-semibold">Admin</span> (required for device/profile management)</li>
+              <li>Click the "Create" button to create the key</li>
               <li>Download the .p8 private key file (you can only download it once!)</li>
               <li>Copy the Key ID and Issuer ID from the page</li>
-              <li>Paste everything here and connect</li>
+              <li>Paste everything here and connect your account</li>
             </ol>
           </template>
         </UAlert>
