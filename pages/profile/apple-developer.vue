@@ -36,19 +36,19 @@
         <div v-if="isConnected && credentials" class="space-y-4">
           <div class="grid md:grid-cols-2 gap-4">
             <div>
-              <p class="text-xs text-white/50 uppercase tracking-wide mb-1">Key ID</p>
+              <p class="text-xs text-slate-500 dark:text-white/60 uppercase tracking-wide mb-1">Key ID</p>
               <p class="font-mono text-sm">{{ credentials.keyId }}</p>
             </div>
             <div>
-              <p class="text-xs text-white/50 uppercase tracking-wide mb-1">Issuer ID</p>
+              <p class="text-xs text-slate-500 dark:text-white/60 uppercase tracking-wide mb-1">Issuer ID</p>
               <p class="font-mono text-sm truncate">{{ credentials.issuerId }}</p>
             </div>
             <div v-if="credentials.teamName">
-              <p class="text-xs text-white/50 uppercase tracking-wide mb-1">Team Name</p>
+              <p class="text-xs text-slate-500 dark:text-white/60 uppercase tracking-wide mb-1">Team Name</p>
               <p class="text-sm">{{ credentials.teamName }}</p>
             </div>
             <div>
-              <p class="text-xs text-white/50 uppercase tracking-wide mb-1">Connected</p>
+              <p class="text-xs text-slate-500 dark:text-white/60 uppercase tracking-wide mb-1">Connected</p>
               <p class="text-sm">{{ new Date(credentials.createdAt).toLocaleDateString() }}</p>
             </div>
           </div>
@@ -56,10 +56,10 @@
           <UDivider />
 
           <div class="flex gap-3">
-            <UButton color="gray" variant="soft" icon="i-heroicons-arrow-path" @click="showUpdateForm = !showUpdateForm">
+            <UButton variant="ghost" class="surface-button" icon="i-heroicons-arrow-path" @click="showUpdateForm = !showUpdateForm">
               {{ showUpdateForm ? 'Cancel Update' : 'Update Credentials' }}
             </UButton>
-            <UButton color="red" variant="soft" icon="i-heroicons-trash" @click="handleDisconnect">
+            <UButton variant="ghost" class="danger-surface-button" icon="i-heroicons-trash" @click="handleDisconnect">
               Disconnect
             </UButton>
           </div>
@@ -81,10 +81,10 @@
                 ref="fileInput"
                 type="file"
                 accept=".p8"
-                class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-white/10 file:text-white hover:file:bg-white/20"
+                class="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-slate-100 file:text-slate-700 dark:file:bg-white/10 dark:file:text-white hover:file:bg-slate-200 dark:hover:file:bg-white/20"
                 @change="handleFileChange"
               />
-              <p class="text-xs text-white/50">Or paste the key content directly:</p>
+              <p class="text-xs text-slate-500 dark:text-white/60">Or paste the key content directly:</p>
               <UTextarea
                 v-model="form.privateKey"
                 rows="6"
@@ -121,14 +121,43 @@
       </template>
 
       <div class="grid md:grid-cols-2 gap-4">
-        <UButton to="/profile/devices" color="gray" variant="soft" icon="i-heroicons-device-phone-mobile" label="Manage Devices" block />
-        <UButton to="/profile/apple-profiles" color="gray" variant="soft" icon="i-heroicons-document-text" label="View Apple Profiles" block />
+        <UButton
+          to="/profile/devices"
+          variant="ghost"
+          class="surface-button"
+          icon="i-heroicons-device-phone-mobile"
+          label="Manage Devices"
+          block
+        />
+        <UButton
+          to="/profile/apple-profiles"
+          variant="ghost"
+          class="surface-button"
+          icon="i-heroicons-document-text"
+          label="View Apple Profiles"
+          block
+        />
       </div>
     </UCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed, reactive, ref } from 'vue'
+import { useFetch } from 'nuxt/app'
+
+type AppleCredentialStatus = {
+  connected: boolean
+  credentials: {
+    keyId: string
+    issuerId: string
+    teamName?: string | null
+    createdAt: string
+  } | null
+}
+
+declare function definePageMeta(meta: { title?: string; layout?: string }): void
+
 definePageMeta({ title: 'Apple Developer', layout: 'default' })
 
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -144,7 +173,7 @@ const form = reactive({
   teamName: ''
 })
 
-const { data: status, refresh } = await useFetch('/api/apple/credentials')
+const { data: status, refresh } = await useFetch<AppleCredentialStatus>('/api/apple/credentials')
 const isConnected = computed(() => status.value?.connected ?? false)
 const credentials = computed(() => status.value?.credentials)
 

@@ -15,7 +15,7 @@
       </UButton>
     </div>
 
-    <div v-if="moderators.length === 0" class="text-center text-white/70">
+    <div v-if="moderators.length === 0" class="text-center text-slate-500 dark:text-white/70">
       No moderators or apps available yet.
     </div>
 
@@ -39,9 +39,9 @@
         <div class="space-y-4">
           <div v-for="app in mod.tvosApps" :key="app.id" class="flex items-center justify-between">
             <UButton :to="tvosLink(app)" target="_blank" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ displayVersion(app) }}</UButton>
-            <span class="text-xs text-white/60">{{ formatDate(app.uploadedAt) }}</span>
+            <span class="text-xs text-slate-500 dark:text-white/60">{{ formatDate(app.uploadedAt) }}</span>
           </div>
-          <p v-if="mod.tvosApps.length === 0" class="text-sm text-white/60">No tvOS apps.</p>
+          <p v-if="mod.tvosApps.length === 0" class="text-sm text-slate-500 dark:text-white/60">No tvOS apps.</p>
         </div>
       </UCard>
 
@@ -58,9 +58,9 @@
         <div class="space-y-4">
           <div v-for="app in mod.iosApps" :key="app.id" class="flex items-center justify-between">
             <UButton :to="installLink(app)" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ displayVersion(app) }}</UButton>
-            <span class="text-xs text-white/60">{{ formatDate(app.uploadedAt) }}</span>
+            <span class="text-xs text-slate-500 dark:text-white/60">{{ formatDate(app.uploadedAt) }}</span>
           </div>
-          <p v-if="mod.iosApps.length === 0" class="text-sm text-white/60">No iOS apps.</p>
+          <p v-if="mod.iosApps.length === 0" class="text-sm text-slate-500 dark:text-white/60">No iOS apps.</p>
         </div>
       </UCard>
 
@@ -78,14 +78,14 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <UButton color="red" variant="solid" :disabled="!mod.profileAvailable">Certifikát</UButton>
-              <span v-if="mod.certificateExpiresAt" class="text-xs" :class="isCertExpiringSoon(mod.certificateExpiresAt) ? 'text-orange-400' : 'text-white/60'">
+              <span v-if="mod.certificateExpiresAt" class="text-xs" :class="isCertExpiringSoon(mod.certificateExpiresAt) ? 'text-orange-400' : 'text-slate-500 dark:text-white/60'">
                 Platnost do {{ formatDateShort(mod.certificateExpiresAt) }}
               </span>
             </div>
           </div>
           <div class="flex items-center justify-between">
             <UButton color="red" variant="solid" :disabled="!mod.profileAvailable">Profil</UButton>
-            <span class="text-xs text-white/60">{{ formatDate(mod.profileUpdatedAt) }}</span>
+            <span class="text-xs text-slate-500 dark:text-white/60">{{ formatDate(mod.profileUpdatedAt) }}</span>
           </div>
         </div>
       </UCard>

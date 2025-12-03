@@ -10,7 +10,7 @@
           </div>
           <UButton
             to="/profile"
-            color="white"
+            color="gray"
             variant="soft"
             icon="i-heroicons-identification"
             size="sm"
@@ -20,7 +20,7 @@
         </div>
       </template>
 
-      <form class="space-y-4" @submit.prevent="uploadIpa">
+      <form class="space-y-4" @submit.prevent="uploadIpa()">
         <div class="grid md:grid-cols-3 gap-4">
           <UFormGroup label="App Name" required>
             <UInput v-model="uploadForm.name" placeholder="My App" />
@@ -37,10 +37,13 @@
             />
           </UFormGroup>
         </div>
-        <div class="flex items-center justify-between">
-          <span class="text-sm text-white/60">
-            Bundle ID and version will be extracted automatically from the IPA.
-          </span>
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-center gap-4">
+            <span class="text-sm text-slate-600 dark:text-white/60">
+              Bundle ID and version will be extracted automatically.
+            </span>
+            <UCheckbox v-model="uploadForm.signByAll" label="Sign by all moderators" />
+          </div>
           <UButton
             type="submit"
             color="red"
@@ -65,20 +68,20 @@
           <div class="flex items-center gap-2">
             <UButton
               icon="i-heroicons-arrow-path"
-              color="white"
+              color="gray"
               variant="ghost"
               size="sm"
               :loading="refreshing"
               @click="manualRefresh"
             />
-            <UBadge color="white" variant="soft">
+            <UBadge color="gray" variant="soft">
               {{ apps?.length || 0 }} apps
             </UBadge>
           </div>
         </div>
       </template>
 
-      <div v-if="!apps || apps.length === 0" class="text-center py-8 text-white/60">
+      <div v-if="!apps || apps.length === 0" class="text-center py-8 text-slate-500 dark:text-white/60">
         <UIcon name="i-heroicons-inbox" class="w-12 h-12 mx-auto mb-3 opacity-50" />
         <p>No apps have been uploaded yet.</p>
         <p class="text-sm mt-1">Upload your first IPA using the form above.</p>
@@ -88,7 +91,7 @@
         <div
           v-for="app in apps"
           :key="app.id"
-          class="p-4 rounded-lg border border-white/10 bg-white/5 space-y-3"
+          class="p-4 rounded-lg border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5 space-y-3"
         >
           <!-- App Header -->
           <div class="flex items-start justify-between gap-4">
@@ -99,22 +102,57 @@
                   {{ app.platform }}
                 </UBadge>
               </div>
-              <div class="text-sm text-white/60 mt-1 space-x-4">
+              <div class="text-sm text-slate-600 dark:text-white/60 mt-1 space-x-4">
                 <span>{{ app.bundleId || 'Unknown bundle' }}</span>
                 <span>v{{ app.version || '?' }}</span>
               </div>
-              <div class="text-xs text-white/40 mt-1">
-                Uploaded by <span class="text-white/60 font-medium">{{ app.owner.nickname }}</span>
+              <div class="text-xs text-slate-500 dark:text-white/40 mt-1">
+                Uploaded by <span class="text-slate-600 dark:text-white/60 font-medium">{{ app.owner.nickname }}</span>
                 on {{ formatDate(app.uploadedAt) }}
               </div>
             </div>
-            <!-- Sign button - different states based on user's signing status -->
-            <div class="flex flex-col items-end gap-1">
+            <!-- Action buttons -->
+            <div class="flex flex-col items-end gap-2">
+              <div class="flex items-center gap-2">
+                <!-- Release new version button -->
+                <UButton
+                  color="gray"
+                  variant="soft"
+                  icon="i-heroicons-arrow-up-on-square"
+                  size="sm"
+                  @click="openNewVersionModal(app)"
+                >
+                  Release New Version
+                </UButton>
+                <!-- Delete button -->
+                <UButton
+                  v-if="canDelete(app)"
+                  color="red"
+                  variant="ghost"
+                  icon="i-heroicons-trash"
+                  size="sm"
+                  :loading="deletingAppId === app.id"
+                  @click="confirmDeleteApp(app)"
+                />
+              </div>
+              <!-- Sign by all button -->
+              <UButton
+                color="orange"
+                variant="soft"
+                icon="i-heroicons-users"
+                size="sm"
+                :loading="signingAllAppId === app.id"
+                @click="signByAllModerators(app.id)"
+              >
+                Sign by All
+              </UButton>
+              <!-- Sign button - different states based on user's signing status -->
               <UButton
                 v-if="!mySignedVersion(app) || mySignedVersion(app)?.status === 'FAILED'"
                 color="red"
                 variant="solid"
                 icon="i-heroicons-pencil-square"
+                size="sm"
                 :loading="signingAppId === app.id"
                 @click="signApp(app.id)"
               >
@@ -125,6 +163,7 @@
                 color="yellow"
                 variant="soft"
                 icon="i-heroicons-arrow-path"
+                size="sm"
                 disabled
               >
                 Signing in progress...
@@ -134,6 +173,7 @@
                 color="green"
                 variant="soft"
                 icon="i-heroicons-check-circle"
+                size="sm"
                 @click="signApp(app.id)"
               >
                 Re-sign with my credentials
@@ -142,8 +182,8 @@
           </div>
 
           <!-- Signed Versions -->
-          <div v-if="app.signedVersions.length > 0" class="mt-3 pt-3 border-t border-white/10">
-            <div class="text-xs text-white/50 mb-2 uppercase tracking-wider">Signed Versions</div>
+          <div v-if="app.signedVersions.length > 0" class="mt-3 pt-3 border-t border-slate-200 dark:border-white/10">
+            <div class="text-xs text-slate-500 dark:text-white/50 mb-2 uppercase tracking-wider">Signed Versions</div>
             <div class="flex flex-wrap gap-2">
               <div
                 v-for="sv in app.signedVersions"
@@ -156,17 +196,17 @@
                   class="w-4 h-4"
                 />
                 <span class="font-medium">{{ sv.signerName }}</span>
-                <span v-if="sv.status === 'SIGNED'" class="text-white/60">
+                <span v-if="sv.status === 'SIGNED'" class="text-slate-600 dark:text-white/60">
                   {{ formatDate(sv.signedAt) }}
                 </span>
-                <span v-else class="text-white/60">{{ sv.status }}</span>
+                <span v-else class="text-slate-600 dark:text-white/60">{{ sv.status }}</span>
                 
                 <!-- Install/Download buttons for signed versions -->
                 <template v-if="sv.status === 'SIGNED'">
                   <UButton
                     v-if="app.platform === 'IOS'"
                     size="xs"
-                    color="white"
+                    color="gray"
                     variant="ghost"
                     icon="i-heroicons-arrow-down-tray"
                     :to="installLink(sv)"
@@ -175,7 +215,7 @@
                   <UButton
                     v-else
                     size="xs"
-                    color="white"
+                    color="gray"
                     variant="ghost"
                     icon="i-heroicons-arrow-down-tray"
                     :to="downloadLink(sv)"
@@ -185,12 +225,127 @@
               </div>
             </div>
           </div>
-          <div v-else class="text-xs text-white/40 mt-2">
+          <div v-else class="text-xs text-slate-500 dark:text-white/40 mt-2">
             No signed versions yet
           </div>
         </div>
       </div>
     </UCard>
+
+    <!-- New Version Modal -->
+    <UModal v-model="showNewVersionModal">
+      <UCard>
+        <template #header>
+          <div class="flex items-center gap-2">
+            <UIcon name="i-heroicons-arrow-up-on-square" class="text-red-500" />
+            <span class="font-semibold">Release New Version</span>
+          </div>
+        </template>
+
+        <form class="space-y-4" @submit.prevent="uploadNewVersion">
+          <div v-if="selectedApp" class="p-3 rounded-lg bg-slate-100 dark:bg-white/5">
+            <div class="flex items-center gap-2">
+              <span class="font-medium">{{ selectedApp.name }}</span>
+              <UBadge :color="selectedApp.platform === 'IOS' ? 'blue' : 'purple'" variant="soft" size="xs">
+                {{ selectedApp.platform }}
+              </UBadge>
+            </div>
+            <div class="text-sm text-slate-600 dark:text-white/60 mt-1">
+              Current: v{{ selectedApp.version }} • {{ selectedApp.bundleId }}
+            </div>
+          </div>
+
+          <UFormGroup label="New IPA File" required>
+            <input
+              ref="newVersionIpaInput"
+              type="file"
+              accept=".ipa"
+              class="file:mr-4 file:rounded-md file:border-0 file:bg-red-500 file:text-white file:px-3 file:py-2 block w-full text-sm"
+            />
+          </UFormGroup>
+
+          <UFormGroup>
+            <UCheckbox v-model="newVersionForm.signByAll" label="Sign by all moderators automatically" />
+            <template #hint>
+              <span class="text-xs text-slate-500 dark:text-white/40">
+                When enabled, the new version will be signed by all moderators who have valid certificates and profiles.
+              </span>
+            </template>
+          </UFormGroup>
+
+          <div class="flex justify-end gap-2 pt-2">
+            <UButton
+              color="gray"
+              variant="ghost"
+              @click="showNewVersionModal = false"
+            >
+              Cancel
+            </UButton>
+            <UButton
+              type="submit"
+              color="red"
+              variant="solid"
+              icon="i-heroicons-arrow-up-tray"
+              :loading="uploadingNewVersion"
+            >
+              Upload New Version
+            </UButton>
+          </div>
+        </form>
+      </UCard>
+    </UModal>
+
+    <!-- Delete Confirmation Modal -->
+    <UModal v-model="showDeleteModal">
+      <UCard>
+        <template #header>
+          <div class="flex items-center gap-2 text-red-500">
+            <UIcon name="i-heroicons-exclamation-triangle" />
+            <span class="font-semibold">Delete App</span>
+          </div>
+        </template>
+
+        <div class="space-y-4">
+          <p class="text-slate-600 dark:text-white/70">
+            Are you sure you want to delete this app? This action cannot be undone.
+          </p>
+          
+          <div v-if="appToDelete" class="p-3 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+            <div class="flex items-center gap-2">
+              <span class="font-medium text-red-700 dark:text-red-300">{{ appToDelete.name }}</span>
+              <UBadge :color="appToDelete.platform === 'IOS' ? 'blue' : 'purple'" variant="soft" size="xs">
+                {{ appToDelete.platform }}
+              </UBadge>
+            </div>
+            <div class="text-sm text-red-600 dark:text-red-400 mt-1">
+              v{{ appToDelete.version }} • {{ appToDelete.bundleId }}
+            </div>
+            <div v-if="appToDelete.signedVersions.length > 0" class="text-xs text-red-500 dark:text-red-400/80 mt-2">
+              ⚠️ This will also delete {{ appToDelete.signedVersions.length }} signed version(s)
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-2">
+            <UButton
+              color="gray"
+              variant="ghost"
+              @click="showDeleteModal = false"
+            >
+              Cancel
+            </UButton>
+            <UButton
+              color="red"
+              variant="solid"
+              icon="i-heroicons-trash"
+              :loading="deletingAppId !== null"
+              @click="deleteApp"
+            >
+              Delete App
+            </UButton>
+          </div>
+        </div>
+      </UCard>
+    </UModal>
   </div>
 </template>
 
@@ -236,14 +391,30 @@ const { data: apps, refresh } = await useFetch<AppRow[]>('/api/admin/apps')
 // Upload form state
 const uploadForm = reactive({
   name: '',
-  platform: 'IOS' as 'IOS' | 'TVOS'
+  platform: 'IOS' as 'IOS' | 'TVOS',
+  signByAll: false
 })
 const ipaInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 
 // Signing state
 const signingAppId = ref<string | null>(null)
+const signingAllAppId = ref<string | null>(null)
 const refreshing = ref(false)
+
+// New version modal state
+const showNewVersionModal = ref(false)
+const selectedApp = ref<AppRow | null>(null)
+const newVersionForm = reactive({
+  signByAll: true
+})
+const newVersionIpaInput = ref<HTMLInputElement | null>(null)
+const uploadingNewVersion = ref(false)
+
+// Delete modal state
+const showDeleteModal = ref(false)
+const appToDelete = ref<AppRow | null>(null)
+const deletingAppId = ref<string | null>(null)
 
 // Auto-refresh every 5 seconds to update signing status
 let refreshInterval: ReturnType<typeof setInterval> | null = null
@@ -286,7 +457,7 @@ async function uploadIpa() {
     body.set('platform', uploadForm.platform)
     body.set('ipa', file)
     
-    await $fetch('/api/apps/upload', { method: 'POST', body })
+    const result = await $fetch<{ id: string }>('/api/apps/upload', { method: 'POST', body })
     
     toast.add({ 
       title: 'App uploaded successfully', 
@@ -294,9 +465,28 @@ async function uploadIpa() {
       color: 'green' 
     })
     
+    // Sign by all if requested
+    if (uploadForm.signByAll) {
+      try {
+        const signResult = await $fetch<{ queued: number; moderators: string[] }>(`/api/admin/apps/${result.id}/sign-all`, { method: 'POST' })
+        toast.add({ 
+          title: 'Signing queued for all moderators', 
+          description: `${signResult.queued} moderators will sign this app`,
+          color: 'green' 
+        })
+      } catch (e: any) {
+        toast.add({ 
+          title: 'Auto-sign failed', 
+          description: e?.data?.message || 'Moderators can still sign manually',
+          color: 'yellow' 
+        })
+      }
+    }
+    
     // Reset form
     uploadForm.name = ''
     uploadForm.platform = 'IOS'
+    uploadForm.signByAll = false
     if (ipaInput.value) ipaInput.value.value = ''
     
     await refresh()
@@ -337,6 +527,132 @@ async function signApp(appId: string) {
   }
 }
 
+async function signByAllModerators(appId: string) {
+  try {
+    signingAllAppId.value = appId
+    const result = await $fetch<{ queued: number; moderators: string[] }>(`/api/admin/apps/${appId}/sign-all`, { method: 'POST' })
+    toast.add({ 
+      title: 'Signing queued for all moderators', 
+      description: `${result.queued} moderators: ${result.moderators.join(', ')}`,
+      color: 'green' 
+    })
+    await refresh()
+  } catch (e: any) {
+    toast.add({ 
+      title: 'Sign by all failed', 
+      description: e?.data?.message || e?.message || 'Unknown error',
+      color: 'red' 
+    })
+  } finally {
+    signingAllAppId.value = null
+  }
+}
+
+function openNewVersionModal(app: AppRow) {
+  selectedApp.value = app
+  newVersionForm.signByAll = true
+  showNewVersionModal.value = true
+}
+
+async function uploadNewVersion() {
+  const file = newVersionIpaInput.value?.files?.[0]
+  if (!file) {
+    toast.add({ title: 'Select an IPA file first', color: 'red' })
+    return
+  }
+  if (!selectedApp.value) {
+    toast.add({ title: 'No app selected', color: 'red' })
+    return
+  }
+
+  uploadingNewVersion.value = true
+  try {
+    const body = new FormData()
+    body.set('appId', selectedApp.value.id)
+    body.set('name', selectedApp.value.name)
+    body.set('platform', selectedApp.value.platform)
+    body.set('ipa', file)
+    
+    const result = await $fetch<{ id: string }>('/api/apps/upload', { method: 'POST', body })
+    
+    toast.add({ 
+      title: 'New version uploaded successfully', 
+      description: 'The app has been updated with the new IPA.',
+      color: 'green' 
+    })
+    
+    // Sign by all if requested
+    if (newVersionForm.signByAll) {
+      try {
+        const signResult = await $fetch<{ queued: number; moderators: string[] }>(`/api/admin/apps/${result.id}/sign-all`, { method: 'POST' })
+        toast.add({ 
+          title: 'Signing queued for all moderators', 
+          description: `${signResult.queued} moderators will sign this version`,
+          color: 'green' 
+        })
+      } catch (e: any) {
+        toast.add({ 
+          title: 'Auto-sign failed', 
+          description: e?.data?.message || 'Moderators can still sign manually',
+          color: 'yellow' 
+        })
+      }
+    }
+    
+    // Reset and close
+    showNewVersionModal.value = false
+    selectedApp.value = null
+    if (newVersionIpaInput.value) newVersionIpaInput.value.value = ''
+    
+    await refresh()
+  } catch (e: any) {
+    toast.add({ 
+      title: 'Upload failed', 
+      description: e?.data?.message || e?.message || 'Unknown error',
+      color: 'red' 
+    })
+  } finally {
+    uploadingNewVersion.value = false
+  }
+}
+
+// Check if user can delete this app (owner or SUPERADMIN)
+function canDelete(app: AppRow): boolean {
+  if (!me.value) return false
+  return app.owner.id === me.value.id || me.value.role === 'SUPERADMIN'
+}
+
+function confirmDeleteApp(app: AppRow) {
+  appToDelete.value = app
+  showDeleteModal.value = true
+}
+
+async function deleteApp() {
+  if (!appToDelete.value) return
+  
+  deletingAppId.value = appToDelete.value.id
+  try {
+    await $fetch(`/api/admin/apps/${appToDelete.value.id}`, { method: 'DELETE' })
+    toast.add({ 
+      title: 'App deleted', 
+      description: `${appToDelete.value.name} has been deleted.`,
+      color: 'green' 
+    })
+    
+    showDeleteModal.value = false
+    appToDelete.value = null
+    await refresh()
+  } catch (e: any) {
+    toast.add({ 
+      title: 'Delete failed', 
+      description: e?.data?.message || e?.message || 'Unknown error',
+      color: 'red' 
+    })
+  } finally {
+    deletingAppId.value = null
+  }
+}
+
 function formatDate(iso: string | null) {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -353,7 +669,7 @@ function statusClass(status: string) {
     case 'FAILED':
       return 'bg-red-500/20 text-red-300'
     default:
-      return 'bg-white/10 text-white/60'
+      return 'bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-white/60'
   }
 }
 

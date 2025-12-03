@@ -1,31 +1,43 @@
 <template>
-  <header class="sticky top-0 z-40 border-b border-white/10 bg-slate-900/60 backdrop-blur-xl">
+  <header class="sticky top-0 z-40 glass border-b border-[color:var(--app-border)]">
     <div class="mx-auto max-w-7xl px-4 h-14 flex items-center justify-between">
       <div class="flex items-center gap-3">
         <!-- Mobile menu button -->
         <UButton 
           icon="i-heroicons-bars-3" 
           variant="ghost" 
-          color="white" 
+          color="gray"
           class="md:hidden" 
           @click="mobileOpen = true" 
         />
         <UIcon name="i-heroicons-sparkles" class="text-primary-400 hidden md:block" size="22" />
         <NuxtLink to="/" class="font-semibold">AutoSigner</NuxtLink>
-        <nav class="hidden md:flex items-center gap-3 text-sm text-white/80">
-          <NuxtLink v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'" to="/admin/apps" class="hover:text-white">Manage Apps</NuxtLink>
-          <NuxtLink v-if="me?.role === 'SUPERADMIN'" to="/admin/approvals" class="hover:text-white">Users</NuxtLink>
+        <nav class="hidden md:flex items-center gap-3 text-sm text-slate-600 dark:text-white/80">
+          <NuxtLink
+            v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"
+            to="/admin/apps"
+            class="hover:text-slate-900 dark:hover:text-white transition-colors"
+          >
+            Manage Apps
+          </NuxtLink>
+          <NuxtLink
+            v-if="me?.role === 'SUPERADMIN'"
+            to="/admin/approvals"
+            class="hover:text-slate-900 dark:hover:text-white transition-colors"
+          >
+            Users
+          </NuxtLink>
         </nav>
       </div>
       <div class="flex items-center gap-2">
-        <UButton icon="i-heroicons-moon" variant="ghost" color="white" @click="toggleTheme" />
+        <UButton icon="i-heroicons-moon" variant="ghost" color="gray" @click="toggleTheme" />
         <template v-if="me">
           <UDropdown :items="userMenu">
-            <UButton color="white" variant="soft" icon="i-heroicons-user-circle" :label="me.nickname" />
+            <UButton color="gray" variant="soft" icon="i-heroicons-user-circle" :label="me.nickname" />
           </UDropdown>
         </template>
         <template v-else>
-          <UButton to="/auth/login" color="white" variant="soft" icon="i-heroicons-arrow-right-end-on-rectangle" label="Sign in" />
+          <UButton to="/auth/login" color="gray" variant="soft" icon="i-heroicons-arrow-right-end-on-rectangle" label="Sign in" />
         </template>
       </div>
     </div>
@@ -37,9 +49,23 @@
           <UIcon name="i-heroicons-sparkles" class="text-primary-400" size="28" />
           <span class="font-semibold tracking-wide">AutoSigner</span>
         </div>
-        <nav class="flex flex-col gap-2">
-          <NuxtLink v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'" to="/admin/apps" class="px-3 py-2 rounded hover:bg-white/10" @click="mobileOpen = false">Manage Apps</NuxtLink>
-          <NuxtLink v-if="me?.role === 'SUPERADMIN'" to="/admin/approvals" class="px-3 py-2 rounded hover:bg-white/10" @click="mobileOpen = false">Users</NuxtLink>
+        <nav class="flex flex-col gap-2 text-slate-600 dark:text-slate-200">
+          <NuxtLink
+            v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"
+            to="/admin/apps"
+            class="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+            @click="mobileOpen = false"
+          >
+            Manage Apps
+          </NuxtLink>
+          <NuxtLink
+            v-if="me?.role === 'SUPERADMIN'"
+            to="/admin/approvals"
+            class="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+            @click="mobileOpen = false"
+          >
+            Users
+          </NuxtLink>
         </nav>
       </div>
     </USlideover>

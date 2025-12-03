@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-dvh bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-900 text-white">
+  <div class="min-h-dvh text-slate-900 dark:text-slate-100 transition-colors">
     <NuxtLoadingIndicator color="#6366f1" :height="3" />
     <AppHeader />
     <NuxtLayout>

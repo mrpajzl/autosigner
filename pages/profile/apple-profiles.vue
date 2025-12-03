@@ -29,7 +29,7 @@
       </template>
 
       <div class="space-y-4">
-        <p class="text-sm text-white/70">
+        <p class="text-sm text-slate-600 dark:text-white/70">
           Quickly recreate a provisioning profile with ALL devices and certificates:
         </p>
 
@@ -109,12 +109,12 @@
               <UIcon name="i-heroicons-arrow-path" class="animate-spin" /> Loading certificates...
             </div>
             <div v-else class="space-y-2 max-h-40 overflow-y-auto">
-              <label v-for="cert in appleCertificates" :key="cert.id" class="flex items-center gap-2 p-2 rounded hover:bg-white/5 cursor-pointer">
+              <label v-for="cert in appleCertificates" :key="cert.id" class="flex items-center gap-2 p-2 rounded hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer">
                 <input type="checkbox" :value="cert.id" v-model="createForm.certificateIds" class="rounded" />
                 <span class="text-sm">{{ cert.displayName || cert.name }}</span>
                 <UBadge color="gray" variant="soft" size="xs">{{ cert.certificateType }}</UBadge>
               </label>
-              <p v-if="appleCertificates.length === 0" class="text-white/50 text-sm">No certificates found</p>
+              <p v-if="appleCertificates.length === 0" class="text-sm text-slate-500 dark:text-white/50">No certificates found</p>
             </div>
           </UFormGroup>
 
@@ -125,20 +125,20 @@
             </div>
             <div v-else>
               <div class="flex items-center justify-between mb-2">
-                <span class="text-sm text-white/60">
+                <span class="text-sm text-slate-600 dark:text-white/60">
                   {{ createForm.deviceIds.length }} selected 
-                  <span class="text-white/40">({{ filteredDevicesForCreate.length }} {{ createForm.profileType.startsWith('TVOS') ? 'tvOS' : 'iOS' }} devices available)</span>
+                  <span class="text-slate-400 dark:text-white/40">({{ filteredDevicesForCreate.length }} {{ createForm.profileType.startsWith('TVOS') ? 'tvOS' : 'iOS' }} devices available)</span>
                 </span>
                 <UButton size="xs" color="gray" variant="ghost" @click="selectAllDevices">Select All</UButton>
               </div>
-              <div class="space-y-1 max-h-48 overflow-y-auto border border-white/10 rounded-lg p-2">
-                <label v-for="device in filteredDevicesForCreate" :key="device.id" class="flex items-center gap-2 p-2 rounded hover:bg-white/5 cursor-pointer">
+              <div class="space-y-1 max-h-48 overflow-y-auto border border-slate-200 dark:border-white/10 rounded-lg p-2">
+                <label v-for="device in filteredDevicesForCreate" :key="device.id" class="flex items-center gap-2 p-2 rounded hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer">
                   <input type="checkbox" :value="device.id" v-model="createForm.deviceIds" class="rounded" />
                   <span class="text-sm truncate">{{ device.name }}</span>
-                  <span class="text-xs text-white/40 font-mono">{{ device.udid.slice(0, 8) }}...</span>
+                  <span class="text-xs text-slate-400 dark:text-white/40 font-mono">{{ device.udid.slice(0, 8) }}...</span>
                   <UBadge color="gray" variant="soft" size="xs">{{ device.deviceClass }}</UBadge>
                 </label>
-                <p v-if="filteredDevicesForCreate.length === 0" class="text-white/50 text-sm p-2">
+                <p v-if="filteredDevicesForCreate.length === 0" class="text-sm text-slate-500 dark:text-white/50 p-2">
                   No {{ createForm.profileType.startsWith('TVOS') ? 'Apple TV' : 'iOS (iPhone/iPad)' }} devices found
                 </p>
               </div>
@@ -181,7 +181,7 @@
         <UButton color="gray" variant="soft" @click="refreshProfiles">Try Again</UButton>
       </div>
 
-      <div v-else-if="filteredProfiles.length === 0" class="text-center py-8 text-white/50">
+      <div v-else-if="filteredProfiles.length === 0" class="text-center py-8 text-slate-500 dark:text-white/50">
         <UIcon name="i-heroicons-document-text" class="text-4xl mb-2" />
         <p>{{ filterType !== 'ALL' ? 'No profiles match the filter' : 'No profiles found' }}</p>
       </div>
@@ -204,7 +204,7 @@
                 </UBadge>
                 <UBadge color="blue" variant="soft" size="xs">{{ profile.platform }}</UBadge>
               </div>
-              <p class="text-xs text-white/40 mt-1">
+              <p class="text-xs text-slate-500 dark:text-white/40 mt-1">
                 UUID: {{ profile.uuid }} • Expires: {{ new Date(profile.expirationDate).toLocaleDateString() }}
               </p>
             </div>
@@ -248,7 +248,7 @@
       <div class="flex items-center justify-between">
         <div>
           <p class="font-medium">Local Provisioning Profiles</p>
-          <p class="text-sm text-white/60">Downloaded profiles are saved locally for signing.</p>
+          <p class="text-sm text-slate-600 dark:text-white/60">Downloaded profiles are saved locally for signing.</p>
         </div>
         <UButton to="/profile/profiles" color="gray" variant="soft" icon="i-heroicons-arrow-right">
           View Local Profiles

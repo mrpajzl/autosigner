@@ -6,6 +6,6 @@ navigateTo('/admin/apps', { replace: true })
 
 <template>
   <div class="min-h-dvh flex items-center justify-center">
-    <p class="text-white/60">Redirecting...</p>
+    <p class="text-slate-500 dark:text-white/60">Redirecting...</p>
   </div>
 </template>

@@ -23,7 +23,7 @@
           </UFormGroup>
           <div class="md:col-span-3 flex items-center gap-3">
             <UButton type="submit" color="red">Upload</UButton>
-            <p v-if="message" class="text-sm text-white/70">{{ message }}</p>
+            <p v-if="message" class="text-sm text-slate-600 dark:text-white/70">{{ message }}</p>
           </div>
         </form>
 

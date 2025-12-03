@@ -32,7 +32,7 @@
       </template>
 
       <div class="space-y-4">
-        <p class="text-sm text-white/60">Upload .mobileprovision files manually, or download them from Apple Developer Portal.</p>
+        <p class="text-sm text-slate-600 dark:text-white/60">Upload .mobileprovision files manually, or download them from Apple Developer Portal.</p>
         
         <form class="grid md:grid-cols-4 gap-4" @submit.prevent="onUpload">
           <UFormGroup label="Platform">
@@ -70,7 +70,7 @@
           </template>
         </UTable>
 
-        <p v-if="!rows?.length" class="text-center text-white/50 py-4">No profiles uploaded yet</p>
+        <p v-if="!rows?.length" class="text-center text-slate-500 dark:text-white/50 py-4">No profiles uploaded yet</p>
       </div>
     </UCard>
   </div>

@@ -75,7 +75,7 @@
       </template>
 
       <div class="space-y-4">
-        <p class="text-sm text-white/70">
+        <p class="text-sm text-slate-600 dark:text-white/70">
           New device registered! Select profiles to regenerate with all current devices and set as your active signing profile:
         </p>
 
@@ -137,7 +137,7 @@
         <UButton color="gray" variant="soft" @click="refreshDevices">Try Again</UButton>
       </div>
 
-      <div v-else-if="filteredDevices.length === 0" class="text-center py-8 text-white/50">
+      <div v-else-if="filteredDevices.length === 0" class="text-center py-8 text-slate-500 dark:text-white/50">
         <UIcon name="i-heroicons-device-phone-mobile" class="text-4xl mb-2" />
         <p>{{ search ? 'No devices match your search' : 'No devices registered yet' }}</p>
       </div>
@@ -155,17 +155,17 @@
               </div>
               <div class="min-w-0">
                 <p class="font-medium truncate">{{ device.name }}</p>
-                <p class="font-mono text-xs text-white/50 truncate">{{ device.udid }}</p>
+                <p class="font-mono text-xs text-slate-500 dark:text-white/50 truncate">{{ device.udid }}</p>
                 <div class="flex items-center gap-2 mt-1">
                   <UBadge :color="device.status === 'ENABLED' ? 'green' : 'gray'" variant="soft" size="xs">
                     {{ device.status }}
                   </UBadge>
                   <UBadge color="blue" variant="soft" size="xs">{{ device.platform }}</UBadge>
-                  <span v-if="device.model" class="text-xs text-white/40">{{ device.model }}</span>
+                  <span v-if="device.model" class="text-xs text-slate-500 dark:text-white/40">{{ device.model }}</span>
                 </div>
               </div>
             </div>
-            <div class="text-xs text-white/40 text-right whitespace-nowrap">
+            <div class="text-xs text-slate-500 dark:text-white/40 text-right whitespace-nowrap">
               {{ device.addedDate ? new Date(device.addedDate).toLocaleDateString() : '' }}
             </div>
           </div>
