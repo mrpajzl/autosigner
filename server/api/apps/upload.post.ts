@@ -37,6 +37,7 @@ export default defineEventHandler(async (event) => {
   const nameFromForm = getField('name') || 'Unnamed App'
   let bundleId = getField('bundleId') || ''
   let version = getField('version')
+  let buildNumber = getField('buildNumber')
   const platformFromForm = (getField('platform') || 'IOS').toUpperCase()
   const ipaFile = Array.isArray(files.ipa) ? files.ipa[0] : (files.ipa as formidable.File)
   if (!ipaFile?.filepath) throw createError({ statusCode: 400, message: 'IPA required' })
@@ -51,12 +52,19 @@ export default defineEventHandler(async (event) => {
   }
 
   // If no version provided, try to extract from IPA's Info.plist
-  if (!version) {
+  let ipaMetadata: Awaited<ReturnType<typeof extractVersionInfoFromIpa>> | undefined
+  if (!version || !buildNumber) {
     try {
-      version = await extractVersionFromIpa(originalIpaAbsPath)
+      ipaMetadata = await extractVersionInfoFromIpa(originalIpaAbsPath)
     } catch {
-      // ignore; will stay undefined and fail later if required downstream
+      ipaMetadata = undefined
     }
+  }
+  if (!version && ipaMetadata?.version) {
+    version = ipaMetadata.version
+  }
+  if (!buildNumber && ipaMetadata?.buildNumber) {
+    buildNumber = ipaMetadata.buildNumber
   }
 
   // If no bundleId provided, try to extract CFBundleIdentifier from IPA
@@ -82,6 +90,7 @@ export default defineEventHandler(async (event) => {
     const nextName = nameFromForm || existing.name
     const nextBundleId = bundleId || existing.bundleId
     const nextVersion = version || existing.version || '0.0.0'
+    const nextBuildNumber = buildNumber || existing.buildNumber || null
 
     app = await prisma.app.update({
       where: { id: existing.id },
@@ -89,6 +98,7 @@ export default defineEventHandler(async (event) => {
         name: nextName,
         bundleId: nextBundleId,
         version: nextVersion,
+        buildNumber: nextBuildNumber,
         // Keep platform fixed to existing app to avoid accidental mismatch
         platform: existing.platform,
         ipaFileName: originalIpaFileName,
@@ -112,6 +122,7 @@ export default defineEventHandler(async (event) => {
           name: nameFromForm,
           bundleId,
           version: version || '0.0.0',
+          buildNumber: buildNumber || app.buildNumber || null,
           originalIpaPath: `/uploads/${user.id}/${originalIpaFileName}`,
           signedIpaPath: null,
           manifestPath: null,
@@ -127,6 +138,7 @@ export default defineEventHandler(async (event) => {
           name: nameFromForm,
           bundleId,
           version: version || '0.0.0',
+          buildNumber: buildNumber || null,
           ipaFileName: originalIpaFileName,
           originalIpaPath: `/uploads/${user.id}/${originalIpaFileName}`,
           status: 'SIGNING'
@@ -210,68 +222,59 @@ export default defineEventHandler(async (event) => {
 })
 
 
-async function extractVersionFromIpa(ipaPath: string): Promise<string | undefined> {
-  // Try to locate Info.plist path inside the IPA
-  const infoPath = await (async () => {
-    try {
-      const { stdout } = await execa('bash', ['-lc', `unzip -Z1 ${shellQuote(ipaPath)} | grep -E '^Payload/[^/]+\\.app/Info\\.plist$' | head -n1`])
-      return stdout.trim() || undefined
-    } catch {
-      try {
-        const { stdout } = await execa('bash', ['-lc', `zipinfo -1 ${shellQuote(ipaPath)} | grep -E '^Payload/[^/]+\\.app/Info\\.plist$' | head -n1`])
-        return stdout.trim() || undefined
-      } catch {
-        return undefined
-      }
-    }
-  })()
-  if (!infoPath) return undefined
-
-  // Extract Info.plist bytes (base64 to preserve binary)
-  const { stdout: b64 } = await execa('bash', ['-lc', `unzip -p ${shellQuote(ipaPath)} ${shellQuote(infoPath)} | base64`])
-  const buf = Buffer.from(b64, 'base64')
-
-  // Parse plist (handle XML or binary)
-  const head = buf.subarray(0, 8).toString('utf8')
-  let parsed: any
-  if (head.startsWith('bplist')) {
-    parsed = await parseBinaryPlist(buf)
-  } else {
-    parsed = plist.parse(buf.toString('utf8'))
-  }
-
-  const v = parsed?.CFBundleShortVersionString || parsed?.CFBundleVersion
-  return typeof v === 'string' ? v : undefined
+async function extractVersionInfoFromIpa(ipaPath: string): Promise<{ version?: string; buildNumber?: string } | undefined> {
+  const plistData = await readInfoPlistFromIpa(ipaPath)
+  if (!plistData || typeof plistData !== 'object') return undefined
+  const version = typeof plistData.CFBundleShortVersionString === 'string'
+    ? plistData.CFBundleShortVersionString
+    : undefined
+  const buildNumber = typeof plistData.CFBundleVersion === 'string'
+    ? plistData.CFBundleVersion
+    : undefined
+  if (!version && !buildNumber) return undefined
+  return { version, buildNumber }
 }
 
 async function extractBundleIdFromIpa(ipaPath: string): Promise<string | undefined> {
-  const infoPath = await (async () => {
-    try {
-      const { stdout } = await execa('bash', ['-lc', `unzip -Z1 ${shellQuote(ipaPath)} | grep -E '^Payload/[^/]+\\.app/Info\\.plist$' | head -n1`])
-      return stdout.trim() || undefined
-    } catch {
-      try {
-        const { stdout } = await execa('bash', ['-lc', `zipinfo -1 ${shellQuote(ipaPath)} | grep -E '^Payload/[^/]+\\.app/Info\\.plist$' | head -n1`])
-        return stdout.trim() || undefined
-      } catch {
-        return undefined
-      }
-    }
-  })()
+  const plistData = await readInfoPlistFromIpa(ipaPath)
+  const id = plistData?.CFBundleIdentifier
+  return typeof id === 'string' && id.length > 0 ? id : undefined
+}
+
+async function readInfoPlistFromIpa(ipaPath: string): Promise<any | undefined> {
+  const infoPath = await findInfoPlistPath(ipaPath)
   if (!infoPath) return undefined
 
   const { stdout: b64 } = await execa('bash', ['-lc', `unzip -p ${shellQuote(ipaPath)} ${shellQuote(infoPath)} | base64`])
   const buf = Buffer.from(b64, 'base64')
 
   const head = buf.subarray(0, 8).toString('utf8')
-  let parsed: any
   if (head.startsWith('bplist')) {
-    parsed = await parseBinaryPlist(buf)
-  } else {
-    parsed = plist.parse(buf.toString('utf8'))
+    return parseBinaryPlist(buf)
   }
-  const id = parsed?.CFBundleIdentifier
-  return typeof id === 'string' && id.length > 0 ? id : undefined
+  try {
+    return plist.parse(buf.toString('utf8'))
+  } catch {
+    return undefined
+  }
+}
+
+async function findInfoPlistPath(ipaPath: string): Promise<string | undefined> {
+  const commands = [
+    `unzip -Z1 ${shellQuote(ipaPath)} | grep -E '^Payload/[^/]+\\.app/Info\\.plist$' | head -n1`,
+    `zipinfo -1 ${shellQuote(ipaPath)} | grep -E '^Payload/[^/]+\\.app/Info\\.plist$' | head -n1`
+  ]
+
+  for (const cmd of commands) {
+    try {
+      const { stdout } = await execa('bash', ['-lc', cmd])
+      const trimmed = stdout.trim()
+      if (trimmed) return trimmed
+    } catch {
+      // continue
+    }
+  }
+  return undefined
 }
 
 async function parseBinaryPlist(buf: Buffer): Promise<any> {

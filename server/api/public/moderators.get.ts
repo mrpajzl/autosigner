@@ -4,6 +4,7 @@ type PublicApp = {
   id: string
   name: string
   version: string
+  buildNumber?: string | null
   platform: 'IOS' | 'TVOS'
   uploadedAt: string
   manifestPath?: string | null
@@ -61,6 +62,13 @@ export default defineEventHandler(async () => {
     })
 
     const data: PublicModerator[] = managers.map((u) => {
+      const certificateExpiresAt = (() => {
+        const expiresAt = (u.certificates[0] as any)?.expiresAt as Date | string | null | undefined
+        if (!expiresAt) return null
+        const date = expiresAt instanceof Date ? expiresAt : new Date(expiresAt)
+        return Number.isNaN(date.valueOf()) ? null : date.toISOString()
+      })()
+
       // Prefer signed versions (new system), fall back to uploaded apps (old system)
       const hasSignedVersions = u.signedVersions.length > 0
       
@@ -73,6 +81,7 @@ export default defineEventHandler(async () => {
             id: sv.id, // Use SignedVersion ID for manifest lookup
             name: sv.app.name,
             version: sv.app.version,
+            buildNumber: sv.app.buildNumber,
             platform: 'IOS' as const,
             uploadedAt: (sv.signedAt || sv.createdAt).toISOString(),
             manifestPath: sv.manifestPath,
@@ -86,6 +95,7 @@ export default defineEventHandler(async () => {
             id: sv.id,
             name: sv.app.name,
             version: sv.app.version,
+            buildNumber: sv.app.buildNumber,
             platform: 'TVOS' as const,
             uploadedAt: (sv.signedAt || sv.createdAt).toISOString(),
             manifestPath: null,
@@ -103,7 +113,7 @@ export default defineEventHandler(async () => {
             u.managerProfile?.certificatePem &&
             (u.managerProfile?.mobileprovisionIos || u.managerProfile?.mobileprovisionTvos)
           ),
-          certificateExpiresAt: u.certificates[0]?.expiresAt?.toISOString() || null
+          certificateExpiresAt
         }
       } else {
         // Fallback to old system - apps uploaded by this moderator
@@ -114,6 +124,7 @@ export default defineEventHandler(async () => {
             id: a.id,
             name: a.name,
             version: a.version,
+            buildNumber: a.buildNumber,
             platform: 'IOS' as const,
             uploadedAt: a.uploadedAt.toISOString(),
             manifestPath: a.manifestPath,
@@ -127,6 +138,7 @@ export default defineEventHandler(async () => {
             id: a.id,
             name: a.name,
             version: a.version,
+            buildNumber: a.buildNumber,
             platform: 'TVOS' as const,
             uploadedAt: a.uploadedAt.toISOString(),
             manifestPath: null,
@@ -144,7 +156,7 @@ export default defineEventHandler(async () => {
             u.managerProfile?.certificatePem &&
             (u.managerProfile?.mobileprovisionIos || u.managerProfile?.mobileprovisionTvos)
           ),
-          certificateExpiresAt: u.certificates[0]?.expiresAt?.toISOString() || null
+          certificateExpiresAt
         }
       }
     })

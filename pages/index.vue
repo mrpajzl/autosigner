@@ -38,7 +38,7 @@
 
         <div class="space-y-4">
           <div v-for="app in mod.tvosApps" :key="app.id" class="flex items-center justify-between">
-            <UButton :to="tvosLink(app)" target="_blank" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ app.version }}</UButton>
+            <UButton :to="tvosLink(app)" target="_blank" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ displayVersion(app) }}</UButton>
             <span class="text-xs text-white/60">{{ formatDate(app.uploadedAt) }}</span>
           </div>
           <p v-if="mod.tvosApps.length === 0" class="text-sm text-white/60">No tvOS apps.</p>
@@ -57,7 +57,7 @@
 
         <div class="space-y-4">
           <div v-for="app in mod.iosApps" :key="app.id" class="flex items-center justify-between">
-            <UButton :to="installLink(app)" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ app.version }}</UButton>
+            <UButton :to="installLink(app)" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ displayVersion(app) }}</UButton>
             <span class="text-xs text-white/60">{{ formatDate(app.uploadedAt) }}</span>
           </div>
           <p v-if="mod.iosApps.length === 0" class="text-sm text-white/60">No iOS apps.</p>
@@ -99,7 +99,7 @@ import { ref, onMounted } from 'vue'
 // eslint-disable-next-line no-undef
 declare const useRuntimeConfig: any
 
-type PublicApp = { id: string; name: string; version: string; platform: 'IOS' | 'TVOS'; uploadedAt: string; manifestPath?: string | null; downloadPath?: string | null; status: string }
+type PublicApp = { id: string; name: string; version: string; buildNumber?: string | null; platform: 'IOS' | 'TVOS'; uploadedAt: string; manifestPath?: string | null; downloadPath?: string | null; status: string }
 type PublicModerator = {
   id: string
   name: string
@@ -158,6 +158,17 @@ function scrollToModerator(id: string) {
   if (el) {
     el.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+}
+
+function displayVersion(app: PublicApp) {
+  const hasVersion = typeof app.version === 'string' && app.version.length > 0
+  const hasBuild = typeof app.buildNumber === 'string' && app.buildNumber.length > 0
+  if (hasVersion && hasBuild && app.version !== app.buildNumber) {
+    return `${app.version} (${app.buildNumber})`
+  }
+  if (hasBuild) return app.buildNumber
+  if (hasVersion) return app.version
+  return '—'
 }
 
 onMounted(async () => {
