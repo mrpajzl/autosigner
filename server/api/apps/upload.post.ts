@@ -78,6 +78,43 @@ export default defineEventHandler(async (event) => {
     } catch {}
   }
 
+  // Handle icon - either from manual upload or extracted from IPA
+  let iconPath: string | undefined
+  
+  // Check for manually uploaded icon first
+  const iconFile = Array.isArray(files.icon) ? files.icon[0] : (files.icon as formidable.File)
+  if (iconFile?.filepath) {
+    try {
+      const iconBuffer = await fse.readFile(iconFile.filepath)
+      if (iconBuffer && iconBuffer.length > 0) {
+        // Determine file extension from original filename or default to png
+        const ext = iconFile.originalFilename?.split('.').pop()?.toLowerCase() || 'png'
+        const iconFileName = `icon-${Date.now()}.${ext}`
+        iconPath = `/uploads/${user.id}/icons/${iconFileName}`
+        const contentType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'image/png'
+        await storage.saveBuffer(iconPath, iconBuffer, contentType)
+        console.log(`Saved manually uploaded icon to: ${iconPath}`)
+      }
+    } catch (e) {
+      console.error('Failed to save manually uploaded icon:', e)
+    }
+  }
+  
+  // If no manual icon, try to extract from IPA
+  if (!iconPath) {
+    try {
+      const iconBuffer = await extractIconFromIpa(originalIpaAbsPath)
+      if (iconBuffer && iconBuffer.length > 0) {
+        const iconFileName = `icon-${Date.now()}.png`
+        iconPath = `/uploads/${user.id}/icons/${iconFileName}`
+        await storage.saveBuffer(iconPath, iconBuffer, 'image/png')
+        console.log(`Saved extracted app icon to: ${iconPath}`)
+      }
+    } catch (e) {
+      console.error('Failed to extract/save app icon:', e)
+    }
+  }
+
   let app
 
   if (appId) {
@@ -108,7 +145,9 @@ export default defineEventHandler(async (event) => {
         signedIpaPath: null,
         manifestPath: null,
         signedAt: null,
-        status: 'SIGNING'
+        status: 'SIGNING',
+        // Update icon if a new one was extracted
+        ...(iconPath ? { iconPath } : {})
       }
     })
   } else {
@@ -128,7 +167,8 @@ export default defineEventHandler(async (event) => {
           signedIpaPath: null,
           manifestPath: null,
           signedAt: null,
-          status: 'SIGNING'
+          status: 'SIGNING',
+          ...(iconPath ? { iconPath } : {})
         }
       })
     } else {
@@ -142,7 +182,8 @@ export default defineEventHandler(async (event) => {
           buildNumber: buildNumber || null,
           ipaFileName: originalIpaFileName,
           originalIpaPath: originalPublicPath,
-          status: 'SIGNING'
+          status: 'SIGNING',
+          iconPath: iconPath || null
         }
       })
     }
@@ -302,6 +343,77 @@ async function parseBinaryPlist(buf: Buffer): Promise<any> {
 
 function shellQuote(p: string): string {
   return `'${p.replace(/'/g, `'\''`)}'`
+}
+
+/**
+ * Extract the best available app icon from an IPA file.
+ * Modern iOS apps store icons in Assets.car (compiled asset catalog),
+ * while older apps may have loose PNG files.
+ */
+async function extractIconFromIpa(ipaPath: string): Promise<Buffer | undefined> {
+  try {
+    // List all files in the IPA to find icon candidates
+    const { stdout: fileList } = await execa('bash', ['-lc', `unzip -Z1 ${shellQuote(ipaPath)}`])
+    const files = fileList.trim().split('\n')
+    
+    // Look for loose icon PNG files in the .app bundle
+    const iconCandidates = files.filter(f => {
+      // Match AppIcon*.png files in the .app directory
+      if (/^payload\/[^/]+\.app\/appicon.*\.png$/i.test(f)) return true
+      // Match iTunesArtwork (no extension) - at IPA root or in .app
+      if (/^itunesartwork$/i.test(f)) return true
+      if (/^payload\/[^/]+\.app\/itunesartwork$/i.test(f)) return true
+      // Match Icon*.png files (legacy naming)
+      if (/^payload\/[^/]+\.app\/icon[^/]*\.png$/i.test(f)) return true
+      return false
+    })
+    
+    // Sort to prefer larger icons (by filename patterns like @3x > @2x > @1x)
+    if (iconCandidates.length > 0) {
+      iconCandidates.sort((a, b) => {
+        const getScore = (name: string) => {
+          let score = 0
+          if (name.includes('@3x')) score += 300
+          else if (name.includes('@2x')) score += 200
+          else if (name.includes('@1x')) score += 100
+          const sizeMatch = name.match(/(\d+)x\d+/)
+          if (sizeMatch) score += parseInt(sizeMatch[1])
+          if (name.toLowerCase().includes('appicon')) score += 50
+          if (name.toLowerCase().includes('itunesartwork')) score += 500 // Prefer iTunesArtwork - it's usually the best quality
+          return score
+        }
+        return getScore(b) - getScore(a)
+      })
+      
+      // Try to extract the best loose icon
+      for (const iconPath of iconCandidates.slice(0, 5)) {
+        try {
+          const { stdout: b64 } = await execa('bash', ['-lc', `unzip -p ${shellQuote(ipaPath)} ${shellQuote(iconPath)} | base64`])
+          const buf = Buffer.from(b64, 'base64')
+          if (buf.length > 0) {
+            console.log(`Extracted icon from: ${iconPath} (${buf.length} bytes)`)
+            return buf
+          }
+        } catch (e) {
+          console.log(`Failed to extract icon from ${iconPath}:`, e)
+          continue
+        }
+      }
+    }
+    
+    // Check if icons are in Assets.car (we can't easily extract from it without external tools)
+    const hasAssetsCar = files.some(f => /^payload\/[^/]+\.app\/assets\.car$/i.test(f))
+    if (hasAssetsCar) {
+      console.log('App icons are likely in Assets.car - extraction not supported without external tools')
+    } else {
+      console.log('No icon files found in IPA')
+    }
+    
+    return undefined
+  } catch (e) {
+    console.error('Failed to extract icon from IPA:', e)
+    return undefined
+  }
 }
 
 

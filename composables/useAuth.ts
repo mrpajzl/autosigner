@@ -5,45 +5,63 @@ export interface AuthUser {
   role: string
 }
 
-export const useAuth = () => {
-  const user = useState<AuthUser | null>('auth-user', () => null)
-  const pending = useState<boolean>('auth-pending', () => true)
-  const initialized = useState<boolean>('auth-initialized', () => false)
+// Store refresh function globally for use after login/logout
+let refreshFn: (() => Promise<void>) | null = null
 
-  const fetchUser = async () => {
-    pending.value = true
-    try {
-      const data = await $fetch<AuthUser | null>('/api/auth/me')
-      user.value = data
-    } catch {
-      user.value = null
-    } finally {
-      pending.value = false
-      initialized.value = true
+export const useAuth = () => {
+  // Get request headers for SSR - this passes cookies from browser to internal API calls
+  const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
+  
+  // Use useAsyncData for SSR-compatible data fetching
+  // The key ensures deduplication across all components
+  const asyncData = useAsyncData<AuthUser | null>(
+    'auth-user',
+    () => $fetch<AuthUser | null>('/api/auth/me', { headers }).catch(() => null),
+    {
+      // Use cached data from SSR payload if available
+      getCachedData: (key, nuxtApp) => {
+        return nuxtApp.payload.data[key] ?? nuxtApp.static.data[key]
+      }
     }
-  }
+  )
+
+  const { data: user, pending, refresh, status } = asyncData
+
+  // Store refresh function for global access
+  refreshFn = refresh
+
+  const initialized = computed(() => status.value !== 'pending')
 
   const login = async (nickname: string, password: string) => {
     const result = await $fetch('/api/auth/login', {
       method: 'POST',
       body: { nickname, password }
     })
-    await fetchUser()
+    // Refresh user data after login
+    await refresh()
     return result
   }
 
   const logout = async () => {
     await $fetch('/api/auth/signout', { method: 'POST' })
-    user.value = null
+    // Clear user data and refresh
+    await refresh()
   }
 
   return {
     user,
     pending,
     initialized,
-    fetchUser,
+    refresh,
     login,
-    logout
+    logout,
+    // Export the async data for components that need to await
+    asyncData
   }
+}
+
+// Helper to refresh auth from outside composable context
+export const refreshAuth = async () => {
+  if (refreshFn) await refreshFn()
 }
 

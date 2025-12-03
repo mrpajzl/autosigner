@@ -34,6 +34,7 @@ export default defineEventHandler(async (event) => {
     platform: app.platform,
     ipaFileName: app.ipaFileName,
     originalIpaPath: app.originalIpaPath,
+    iconPath: app.iconPath,
     uploadedAt: app.uploadedAt,
     owner: app.owner,
     signedVersions: app.signedVersions.map(sv => ({

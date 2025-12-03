@@ -1,4 +1,6 @@
 import { prisma } from '../../utils/db'
+import { decrypt } from '../../utils/crypto'
+import { AppleDeveloperAPI } from '../../utils/apple-api'
 
 type PublicApp = {
   id: string
@@ -10,6 +12,14 @@ type PublicApp = {
   manifestPath?: string | null
   downloadPath?: string | null
   status: string
+  iconPath?: string | null
+}
+
+type DeviceCounts = {
+  iOS: number      // iPhone + iPad
+  APPLE_TV: number
+  MAC: number
+  total: number
 }
 
 type PublicModerator = {
@@ -20,6 +30,43 @@ type PublicModerator = {
   profileUpdatedAt: string | null
   profileAvailable: boolean
   certificateExpiresAt: string | null
+  deviceCounts: DeviceCounts | null
+}
+
+// Helper function to fetch device counts for a user with Apple credentials
+async function fetchDeviceCounts(credentials: { keyId: string; issuerId: string; privateKeyEnc: string }): Promise<DeviceCounts | null> {
+  try {
+    const privateKey = decrypt(JSON.parse(credentials.privateKeyEnc)).toString()
+    const api = new AppleDeveloperAPI({
+      keyId: credentials.keyId,
+      issuerId: credentials.issuerId,
+      privateKey
+    })
+    
+    const devices = await api.listDevices()
+    
+    // Count by device class (simplified categories)
+    const counts: DeviceCounts = {
+      iOS: 0,        // iPhone + iPad
+      APPLE_TV: 0,
+      MAC: 0,
+      total: devices.length
+    }
+    
+    for (const device of devices) {
+      const deviceClass = device.attributes.deviceClass
+      const platform = device.attributes.platform
+      if (deviceClass === 'IPHONE' || deviceClass === 'IPAD') counts.iOS++
+      else if (deviceClass === 'APPLE_TV') counts.APPLE_TV++
+      else if (deviceClass === 'MAC' || platform === 'MAC_OS') counts.MAC++
+      // Other device types (like APPLE_WATCH) are not counted separately
+    }
+    
+    return counts
+  } catch (e) {
+    console.error('Failed to fetch devices for moderator:', e)
+    return null
+  }
 }
 
 export default defineEventHandler(async () => {
@@ -43,6 +90,7 @@ export default defineEventHandler(async () => {
       include: {
         managerProfile: true,
         certificates: { where: { active: true }, take: 1 },
+        appleDeveloperCredentials: true,
         // Get apps the moderator has signed (SignedVersion)
         signedVersions: {
           where: { status: 'SIGNED' },
@@ -61,13 +109,24 @@ export default defineEventHandler(async () => {
       orderBy: { createdAt: 'asc' }
     })
 
-    const data: PublicModerator[] = managers.map((u) => {
+    // Fetch device counts for all managers in parallel
+    const deviceCountsPromises = managers.map(async (u) => {
+      if (u.appleDeveloperCredentials) {
+        return fetchDeviceCounts(u.appleDeveloperCredentials)
+      }
+      return null
+    })
+    const allDeviceCounts = await Promise.all(deviceCountsPromises)
+
+    const data: PublicModerator[] = managers.map((u, index) => {
       const certificateExpiresAt = (() => {
         const expiresAt = (u.certificates[0] as any)?.expiresAt as Date | string | null | undefined
         if (!expiresAt) return null
         const date = expiresAt instanceof Date ? expiresAt : new Date(expiresAt)
         return Number.isNaN(date.valueOf()) ? null : date.toISOString()
       })()
+
+      const deviceCounts = allDeviceCounts[index]
 
       // Prefer signed versions (new system), fall back to uploaded apps (old system)
       const hasSignedVersions = u.signedVersions.length > 0
@@ -86,7 +145,8 @@ export default defineEventHandler(async () => {
             uploadedAt: (sv.signedAt || sv.createdAt).toISOString(),
             manifestPath: sv.manifestPath,
             downloadPath: null,
-            status: sv.status
+            status: sv.status,
+            iconPath: sv.app.iconPath
           }))
 
         const tvosApps = u.signedVersions
@@ -100,7 +160,8 @@ export default defineEventHandler(async () => {
             uploadedAt: (sv.signedAt || sv.createdAt).toISOString(),
             manifestPath: null,
             downloadPath: sv.signedIpaPath,
-            status: sv.status
+            status: sv.status,
+            iconPath: sv.app.iconPath
           }))
 
         return {
@@ -113,7 +174,8 @@ export default defineEventHandler(async () => {
             u.managerProfile?.certificatePem &&
             (u.managerProfile?.mobileprovisionIos || u.managerProfile?.mobileprovisionTvos)
           ),
-          certificateExpiresAt
+          certificateExpiresAt,
+          deviceCounts
         }
       } else {
         // Fallback to old system - apps uploaded by this moderator
@@ -129,7 +191,8 @@ export default defineEventHandler(async () => {
             uploadedAt: a.uploadedAt.toISOString(),
             manifestPath: a.manifestPath,
             downloadPath: null,
-            status: a.status
+            status: a.status,
+            iconPath: a.iconPath
           }))
         
         const tvosApps = u.apps
@@ -143,7 +206,8 @@ export default defineEventHandler(async () => {
             uploadedAt: a.uploadedAt.toISOString(),
             manifestPath: null,
             downloadPath: a.signedIpaPath ?? a.originalIpaPath,
-            status: a.status
+            status: a.status,
+            iconPath: a.iconPath
           }))
 
         return {
@@ -156,7 +220,8 @@ export default defineEventHandler(async () => {
             u.managerProfile?.certificatePem &&
             (u.managerProfile?.mobileprovisionIos || u.managerProfile?.mobileprovisionTvos)
           ),
-          certificateExpiresAt
+          certificateExpiresAt,
+          deviceCounts
         }
       }
     })

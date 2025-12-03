@@ -13,32 +13,39 @@
         <UIcon name="i-heroicons-sparkles" class="text-primary-400 hidden md:block" size="22" />
         <NuxtLink to="/" class="font-semibold">AutoSigner</NuxtLink>
         <nav class="hidden md:flex items-center gap-3 text-sm text-slate-600 dark:text-white/80">
-          <NuxtLink
-            v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"
-            to="/admin/apps"
-            class="hover:text-slate-900 dark:hover:text-white transition-colors"
-          >
-            Manage Apps
-          </NuxtLink>
-          <NuxtLink
-            v-if="me?.role === 'SUPERADMIN'"
-            to="/admin/approvals"
-            class="hover:text-slate-900 dark:hover:text-white transition-colors"
-          >
-            Users
-          </NuxtLink>
+          <ClientOnly>
+            <NuxtLink
+              v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"
+              to="/admin/apps"
+              class="hover:text-slate-900 dark:hover:text-white transition-colors"
+            >
+              Manage Apps
+            </NuxtLink>
+            <NuxtLink
+              v-if="me?.role === 'SUPERADMIN'"
+              to="/admin/approvals"
+              class="hover:text-slate-900 dark:hover:text-white transition-colors"
+            >
+              Users
+            </NuxtLink>
+          </ClientOnly>
         </nav>
       </div>
       <div class="flex items-center gap-2">
         <UButton icon="i-heroicons-moon" variant="ghost" color="gray" @click="toggleTheme" />
-        <template v-if="me">
-          <UDropdown :items="userMenu">
-            <UButton color="gray" variant="soft" icon="i-heroicons-user-circle" :label="me.nickname" />
-          </UDropdown>
-        </template>
-        <template v-else>
-          <UButton to="/auth/login" color="gray" variant="soft" icon="i-heroicons-arrow-right-end-on-rectangle" label="Sign in" />
-        </template>
+        <ClientOnly>
+          <template v-if="me">
+            <UDropdown :items="userMenu">
+              <UButton color="gray" variant="outline" icon="i-heroicons-user-circle" :label="me.nickname" />
+            </UDropdown>
+          </template>
+          <template v-else>
+            <UButton to="/auth/login" color="gray" variant="outline" icon="i-heroicons-arrow-right-end-on-rectangle" label="Sign in" />
+          </template>
+          <template #fallback>
+            <UButton color="gray" variant="outline" icon="i-heroicons-user-circle" loading />
+          </template>
+        </ClientOnly>
       </div>
     </div>
     
@@ -50,22 +57,24 @@
           <span class="font-semibold tracking-wide">AutoSigner</span>
         </div>
         <nav class="flex flex-col gap-2 text-slate-600 dark:text-slate-200">
-          <NuxtLink
-            v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"
-            to="/admin/apps"
-            class="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-            @click="mobileOpen = false"
-          >
-            Manage Apps
-          </NuxtLink>
-          <NuxtLink
-            v-if="me?.role === 'SUPERADMIN'"
-            to="/admin/approvals"
-            class="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-            @click="mobileOpen = false"
-          >
-            Users
-          </NuxtLink>
+          <ClientOnly>
+            <NuxtLink
+              v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"
+              to="/admin/apps"
+              class="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+              @click="mobileOpen = false"
+            >
+              Manage Apps
+            </NuxtLink>
+            <NuxtLink
+              v-if="me?.role === 'SUPERADMIN'"
+              to="/admin/approvals"
+              class="px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+              @click="mobileOpen = false"
+            >
+              Users
+            </NuxtLink>
+          </ClientOnly>
         </nav>
       </div>
     </USlideover>

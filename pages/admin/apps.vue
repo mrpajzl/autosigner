@@ -1,60 +1,78 @@
 <template>
-  <div class="space-y-6">
-    <!-- Upload New App -->
-    <UCard class="glass">
+  <div class="space-y-6 max-w-7xl mx-auto px-4 pt-6">
+    <!-- Upload New App - Collapsible -->
+    <UCard class="glass overflow-hidden" :ui="{ body: { padding: '' } }">
       <template #header>
-        <div class="flex items-center justify-between">
+        <button
+          type="button"
+          class="flex items-center justify-between w-full text-left"
+          @click="uploadSectionOpen = !uploadSectionOpen"
+        >
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-arrow-up-tray" />
             <span class="font-semibold">Upload New App</span>
           </div>
-          <UButton
-            to="/profile"
-            color="gray"
-            variant="soft"
-            icon="i-heroicons-identification"
-            size="sm"
-          >
-            Manage Certificates & Profiles
-          </UButton>
-        </div>
+          <UIcon
+            name="i-heroicons-chevron-down"
+            class="w-5 h-5 transition-transform duration-200"
+            :class="{ 'rotate-180': uploadSectionOpen }"
+          />
+        </button>
       </template>
 
-      <form class="space-y-4" @submit.prevent="uploadIpa()">
-        <div class="grid md:grid-cols-3 gap-4">
-          <UFormGroup label="App Name" required>
-            <UInput v-model="uploadForm.name" placeholder="My App" />
-          </UFormGroup>
-          <UFormGroup label="Platform" required>
-            <USelect v-model="uploadForm.platform" :options="platformOptions" />
-          </UFormGroup>
-          <UFormGroup label="IPA File" required>
-            <input
-              ref="ipaInput"
-              type="file"
-              accept=".ipa"
-              class="file:mr-4 file:rounded-md file:border-0 file:bg-red-500 file:text-white file:px-3 file:py-2 block w-full text-sm"
-            />
-          </UFormGroup>
+      <div
+        class="grid transition-all duration-200 ease-out overflow-hidden"
+        :class="uploadSectionOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'"
+      >
+        <div class="overflow-hidden">
+          <form class="space-y-4 p-4 sm:p-6" @submit.prevent="uploadIpa()">
+            <div class="grid md:grid-cols-4 gap-4">
+              <UFormGroup label="App Name" required>
+                <UInput v-model="uploadForm.name" placeholder="My App" />
+              </UFormGroup>
+              <UFormGroup label="Platform" required>
+                <USelect v-model="uploadForm.platform" :options="platformOptions" />
+              </UFormGroup>
+              <UFormGroup label="IPA File" required>
+                <input
+                  ref="ipaInput"
+                  type="file"
+                  accept=".ipa"
+                  class="file:mr-4 file:rounded-md file:border-0 file:bg-red-500 file:text-white file:px-3 file:py-2 block w-full text-sm"
+                />
+              </UFormGroup>
+              <UFormGroup label="App Icon (optional)">
+                <input
+                  ref="iconInput"
+                  type="file"
+                  accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                  class="file:mr-4 file:rounded-md file:border-0 file:bg-slate-500 file:text-white file:px-3 file:py-2 block w-full text-sm"
+                />
+                <template #hint>
+                  <span class="text-xs">PNG or JPG, will be extracted from IPA if not provided</span>
+                </template>
+              </UFormGroup>
+            </div>
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex items-center gap-4">
+                <span class="text-sm text-slate-600 dark:text-white/60">
+                  Bundle ID and version will be extracted automatically.
+                </span>
+                <UCheckbox v-model="uploadForm.signByAll" label="Sign by all moderators" />
+              </div>
+              <UButton
+                type="submit"
+                color="red"
+                variant="solid"
+                icon="i-heroicons-arrow-up-tray"
+                :loading="uploading"
+              >
+                Upload App
+              </UButton>
+            </div>
+          </form>
         </div>
-        <div class="flex items-center justify-between gap-4">
-          <div class="flex items-center gap-4">
-            <span class="text-sm text-slate-600 dark:text-white/60">
-              Bundle ID and version will be extracted automatically.
-            </span>
-            <UCheckbox v-model="uploadForm.signByAll" label="Sign by all moderators" />
-          </div>
-          <UButton
-            type="submit"
-            color="red"
-            variant="solid"
-            icon="i-heroicons-arrow-up-tray"
-            :loading="uploading"
-          >
-            Upload App
-          </UButton>
-        </div>
-      </form>
+      </div>
     </UCard>
 
     <!-- All Apps List -->
@@ -95,20 +113,47 @@
         >
           <!-- App Header -->
           <div class="flex items-start justify-between gap-4">
-            <div class="flex-1">
-              <div class="flex items-center gap-3">
-                <h3 class="font-semibold text-lg">{{ app.name }}</h3>
-                <UBadge :color="app.platform === 'IOS' ? 'blue' : 'purple'" variant="soft">
-                  {{ app.platform }}
-                </UBadge>
+            <div class="flex items-start gap-4 flex-1">
+              <!-- App Icon with upload overlay -->
+              <div class="relative group flex-shrink-0">
+                <img
+                  v-if="app.iconPath"
+                  :src="`/api/download${app.iconPath}`"
+                  :alt="app.name"
+                  class="w-14 h-14 rounded-2xl shadow-md object-cover"
+                />
+                <div v-else class="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-md">
+                  <UIcon :name="app.platform === 'IOS' ? 'i-heroicons-device-phone-mobile' : 'i-heroicons-tv'" class="w-7 h-7 text-slate-400 dark:text-white/40" />
+                </div>
+                <!-- Upload overlay -->
+                <label
+                  class="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                  :title="app.iconPath ? 'Change icon' : 'Add icon'"
+                >
+                  <UIcon name="i-heroicons-camera" class="w-6 h-6 text-white" />
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                    class="hidden"
+                    @change="uploadIconForApp(app.id, $event)"
+                  />
+                </label>
               </div>
-              <div class="text-sm text-slate-600 dark:text-white/60 mt-1 space-x-4">
-                <span>{{ app.bundleId || 'Unknown bundle' }}</span>
-                <span>v{{ app.version || '?' }}</span>
-              </div>
-              <div class="text-xs text-slate-500 dark:text-white/40 mt-1">
-                Uploaded by <span class="text-slate-600 dark:text-white/60 font-medium">{{ app.owner.nickname }}</span>
-                on {{ formatDate(app.uploadedAt) }}
+              <div class="flex-1">
+                <div class="flex items-center gap-3">
+                  <h3 class="font-semibold text-lg">{{ app.name }}</h3>
+                  <UBadge :color="app.platform === 'IOS' ? 'blue' : 'purple'" variant="soft">
+                    {{ app.platform }}
+                  </UBadge>
+                </div>
+                <div class="text-sm text-slate-600 dark:text-white/60 mt-1 space-x-4">
+                  <span>{{ app.bundleId || 'Unknown bundle' }}</span>
+                  <span>v{{ app.version || '?' }}</span>
+                </div>
+                <div class="text-xs text-slate-500 dark:text-white/40 mt-1">
+                  Uploaded by <span class="text-slate-600 dark:text-white/60 font-medium">{{ app.owner.nickname }}</span>
+                  on {{ formatDate(app.uploadedAt) }}
+                </div>
               </div>
             </div>
             <!-- Action buttons -->
@@ -117,7 +162,7 @@
                 <!-- Release new version button -->
                 <UButton
                   color="gray"
-                  variant="soft"
+                  variant="outline"
                   icon="i-heroicons-arrow-up-on-square"
                   size="sm"
                   @click="openNewVersionModal(app)"
@@ -137,8 +182,8 @@
               </div>
               <!-- Sign by all button -->
               <UButton
-                color="orange"
-                variant="soft"
+                color="amber"
+                variant="solid"
                 icon="i-heroicons-users"
                 size="sm"
                 :loading="signingAllAppId === app.id"
@@ -160,8 +205,8 @@
               </UButton>
               <UButton
                 v-else-if="mySignedVersion(app)?.status === 'SIGNING'"
-                color="yellow"
-                variant="soft"
+                color="amber"
+                variant="outline"
                 icon="i-heroicons-arrow-path"
                 size="sm"
                 disabled
@@ -170,8 +215,8 @@
               </UButton>
               <UButton
                 v-else-if="mySignedVersion(app)?.status === 'SIGNED'"
-                color="green"
-                variant="soft"
+                color="emerald"
+                variant="solid"
                 icon="i-heroicons-check-circle"
                 size="sm"
                 @click="signApp(app.id)"
@@ -264,6 +309,18 @@
             />
           </UFormGroup>
 
+          <UFormGroup label="App Icon (optional)">
+            <input
+              ref="newVersionIconInput"
+              type="file"
+              accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+              class="file:mr-4 file:rounded-md file:border-0 file:bg-slate-500 file:text-white file:px-3 file:py-2 block w-full text-sm"
+            />
+            <template #hint>
+              <span class="text-xs">PNG or JPG to update the app icon</span>
+            </template>
+          </UFormGroup>
+
           <UFormGroup>
             <UCheckbox v-model="newVersionForm.signByAll" label="Sign by all moderators automatically" />
             <template #hint>
@@ -276,7 +333,7 @@
           <div class="flex justify-end gap-2 pt-2">
             <UButton
               color="gray"
-              variant="ghost"
+              variant="outline"
               @click="showNewVersionModal = false"
             >
               Cancel
@@ -328,7 +385,7 @@
           <div class="flex justify-end gap-2 pt-2">
             <UButton
               color="gray"
-              variant="ghost"
+              variant="outline"
               @click="showDeleteModal = false"
             >
               Cancel
@@ -372,6 +429,7 @@ type AppRow = {
   version: string
   platform: 'IOS' | 'TVOS'
   uploadedAt: string
+  iconPath?: string | null
   owner: { id: string; nickname: string }
   signedVersions: SignedVersion[]
 }
@@ -381,12 +439,18 @@ const platformOptions = [
   { label: 'tvOS', value: 'TVOS' }
 ]
 
-const { user: me } = useAuth()
+const { user: me, asyncData } = useAuth()
+
+// Wait for auth to load before checking permissions
+await asyncData
 if (!me.value || (me.value.role !== 'MANAGER' && me.value.role !== 'SUPERADMIN')) {
-  navigateTo('/')
+  await navigateTo('/')
 }
 
 const { data: apps, refresh } = await useFetch<AppRow[]>('/api/admin/apps')
+
+// Upload section collapsed state
+const uploadSectionOpen = ref(false)
 
 // Upload form state
 const uploadForm = reactive({
@@ -395,6 +459,7 @@ const uploadForm = reactive({
   signByAll: false
 })
 const ipaInput = ref<HTMLInputElement | null>(null)
+const iconInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 
 // Signing state
@@ -409,6 +474,7 @@ const newVersionForm = reactive({
   signByAll: true
 })
 const newVersionIpaInput = ref<HTMLInputElement | null>(null)
+const newVersionIconInput = ref<HTMLInputElement | null>(null)
 const uploadingNewVersion = ref(false)
 
 // Delete modal state
@@ -457,6 +523,12 @@ async function uploadIpa() {
     body.set('platform', uploadForm.platform)
     body.set('ipa', file)
     
+    // Add optional icon if provided
+    const iconFile = iconInput.value?.files?.[0]
+    if (iconFile) {
+      body.set('icon', iconFile)
+    }
+    
     const result = await $fetch<{ id: string }>('/api/apps/upload', { method: 'POST', body })
     
     toast.add({ 
@@ -488,6 +560,7 @@ async function uploadIpa() {
     uploadForm.platform = 'IOS'
     uploadForm.signByAll = false
     if (ipaInput.value) ipaInput.value.value = ''
+    if (iconInput.value) iconInput.value.value = ''
     
     await refresh()
   } catch (e: any) {
@@ -573,6 +646,12 @@ async function uploadNewVersion() {
     body.set('platform', selectedApp.value.platform)
     body.set('ipa', file)
     
+    // Add optional icon if provided
+    const iconFile = newVersionIconInput.value?.files?.[0]
+    if (iconFile) {
+      body.set('icon', iconFile)
+    }
+    
     const result = await $fetch<{ id: string }>('/api/apps/upload', { method: 'POST', body })
     
     toast.add({ 
@@ -603,6 +682,7 @@ async function uploadNewVersion() {
     showNewVersionModal.value = false
     selectedApp.value = null
     if (newVersionIpaInput.value) newVersionIpaInput.value.value = ''
+    if (newVersionIconInput.value) newVersionIconInput.value.value = ''
     
     await refresh()
   } catch (e: any) {
@@ -625,6 +705,36 @@ function canDelete(app: AppRow): boolean {
 function confirmDeleteApp(app: AppRow) {
   appToDelete.value = app
   showDeleteModal.value = true
+}
+
+async function uploadIconForApp(appId: string, event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  
+  try {
+    const body = new FormData()
+    body.set('icon', file)
+    
+    await $fetch(`/api/apps/${appId}/icon`, { method: 'POST', body })
+    
+    toast.add({ 
+      title: 'Icon updated', 
+      description: 'The app icon has been updated successfully.',
+      color: 'green' 
+    })
+    
+    await refresh()
+  } catch (e: any) {
+    toast.add({ 
+      title: 'Failed to update icon', 
+      description: e?.data?.message || e?.message || 'Unknown error',
+      color: 'red' 
+    })
+  } finally {
+    // Reset the input so the same file can be selected again
+    input.value = ''
+  }
 }
 
 async function deleteApp() {
@@ -663,11 +773,11 @@ function formatDate(iso: string | null) {
 function statusClass(status: string) {
   switch (status) {
     case 'SIGNED':
-      return 'bg-green-500/20 text-green-300'
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
     case 'SIGNING':
-      return 'bg-yellow-500/20 text-yellow-300'
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
     case 'FAILED':
-      return 'bg-red-500/20 text-red-300'
+      return 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300'
     default:
       return 'bg-slate-200 text-slate-600 dark:bg-white/10 dark:text-white/60'
   }

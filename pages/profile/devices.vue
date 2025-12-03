@@ -112,6 +112,41 @@
       </div>
     </UCard>
 
+    <!-- Device Statistics -->
+    <UCard v-if="appleConnected && deviceStats.total > 0" class="glass">
+      <template #header>
+        <div class="flex items-center gap-2">
+          <UIcon name="i-heroicons-chart-bar" />
+          <span class="font-semibold">Device Statistics</span>
+          <UBadge color="primary" variant="soft">{{ deviceStats.total }} total</UBadge>
+        </div>
+      </template>
+
+      <div class="grid grid-cols-3 gap-4">
+        <div v-if="deviceStats.iOS > 0" class="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+          <div class="flex items-center gap-2 mb-2">
+            <UIcon name="i-heroicons-device-phone-mobile" class="text-blue-400 text-xl" />
+            <span class="text-2xl font-bold text-blue-400">{{ deviceStats.iOS }}</span>
+          </div>
+          <p class="text-sm text-slate-500 dark:text-white/60">iOS</p>
+        </div>
+        <div v-if="deviceStats.APPLE_TV > 0" class="p-4 rounded-lg bg-gray-500/10 border border-gray-500/20">
+          <div class="flex items-center gap-2 mb-2">
+            <UIcon name="i-heroicons-tv" class="text-gray-400 text-xl" />
+            <span class="text-2xl font-bold text-gray-400">{{ deviceStats.APPLE_TV }}</span>
+          </div>
+          <p class="text-sm text-slate-500 dark:text-white/60">Apple TV</p>
+        </div>
+        <div v-if="deviceStats.MAC > 0" class="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+          <div class="flex items-center gap-2 mb-2">
+            <UIcon name="i-heroicons-computer-desktop" class="text-green-400 text-xl" />
+            <span class="text-2xl font-bold text-green-400">{{ deviceStats.MAC }}</span>
+          </div>
+          <p class="text-sm text-slate-500 dark:text-white/60">Mac</p>
+        </div>
+      </div>
+    </UCard>
+
     <!-- Devices List -->
     <UCard v-if="appleConnected" class="glass">
       <template #header>
@@ -132,7 +167,7 @@
         <UIcon name="i-heroicons-arrow-path" class="animate-spin text-2xl" />
       </div>
 
-      <div v-else-if="error" class="text-center py-8">
+      <div v-else-if="fetchError" class="text-center py-8">
         <p class="text-red-400 mb-2">{{ error }}</p>
         <UButton color="gray" variant="soft" @click="refreshDevices">Try Again</UButton>
       </div>
@@ -198,10 +233,7 @@ interface AppleProfile {
 }
 
 const search = ref('')
-const loading = ref(true)
 const refreshing = ref(false)
-const error = ref('')
-const devices = ref<Device[]>([])
 
 const registering = ref(false)
 const registerError = ref('')
@@ -227,14 +259,44 @@ const platformOptions = [
 const { data: appleStatus } = await useFetch('/api/apple/credentials')
 const appleConnected = computed(() => appleStatus.value?.connected ?? false)
 
+// Fetch devices - only if Apple is connected (server will check auth)
+const { data: devices, pending: loading, error: fetchError, refresh: refreshDevicesData } = await useFetch<Device[]>('/api/apple/devices', {
+  immediate: true,
+  default: () => []
+})
+const error = computed(() => fetchError.value?.data?.message || (fetchError.value ? 'Failed to load devices' : ''))
+
 const filteredDevices = computed(() => {
-  if (!search.value) return devices.value
+  const deviceList = devices.value || []
+  if (!search.value) return deviceList
   const s = search.value.toLowerCase()
-  return devices.value.filter(d =>
+  return deviceList.filter(d =>
     d.name.toLowerCase().includes(s) ||
     d.udid.toLowerCase().includes(s) ||
     d.model?.toLowerCase().includes(s)
   )
+})
+
+// Compute device statistics by device class (simplified categories)
+const deviceStats = computed(() => {
+  const deviceList = devices.value || []
+  const stats = {
+    iOS: 0,        // iPhone + iPad
+    APPLE_TV: 0,
+    MAC: 0,
+    total: deviceList.length
+  }
+  
+  for (const device of deviceList) {
+    const deviceClass = device.deviceClass
+    const platform = device.platform
+    if (deviceClass === 'IPHONE' || deviceClass === 'IPAD') stats.iOS++
+    else if (deviceClass === 'APPLE_TV') stats.APPLE_TV++
+    else if (deviceClass === 'MAC' || platform === 'MAC_OS') stats.MAC++
+    // Other device types (like APPLE_WATCH) are not counted separately
+  }
+  
+  return stats
 })
 
 function getDeviceIcon(deviceClass: string) {
@@ -258,20 +320,6 @@ function formatProfileType(type: string) {
   return type.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())
 }
 
-async function fetchDevices() {
-  if (!appleConnected.value) return
-  
-  loading.value = true
-  error.value = ''
-  try {
-    const data = await $fetch<Device[]>('/api/apple/devices')
-    devices.value = data
-  } catch (e: any) {
-    error.value = e?.data?.message || 'Failed to load devices'
-  } finally {
-    loading.value = false
-  }
-}
 
 async function fetchAppleProfiles() {
   try {
@@ -287,7 +335,7 @@ async function fetchAppleProfiles() {
 
 async function refreshDevices() {
   refreshing.value = true
-  await fetchDevices()
+  await refreshDevicesData()
   refreshing.value = false
 }
 
@@ -355,13 +403,5 @@ async function handleRegenerateProfile(profileId: string, profileName: string) {
   }
 }
 
-// Fetch on mount
-onMounted(() => {
-  if (appleConnected.value) {
-    fetchDevices()
-  } else {
-    loading.value = false
-  }
-})
 </script>
 

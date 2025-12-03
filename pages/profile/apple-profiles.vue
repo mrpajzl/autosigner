@@ -176,7 +176,7 @@
         <UIcon name="i-heroicons-arrow-path" class="animate-spin text-2xl" />
       </div>
 
-      <div v-else-if="error" class="text-center py-8">
+      <div v-else-if="fetchError" class="text-center py-8">
         <p class="text-red-400 mb-2">{{ error }}</p>
         <UButton color="gray" variant="soft" @click="refreshProfiles">Try Again</UButton>
       </div>
@@ -294,10 +294,7 @@ interface BundleId {
   platform: string
 }
 
-const loading = ref(true)
 const refreshing = ref(false)
-const error = ref('')
-const profiles = ref<AppleProfile[]>([])
 const filterType = ref('ALL')
 const downloading = ref<string | null>(null)
 const regenerating = ref<string | null>(null)
@@ -383,9 +380,17 @@ const filteredDevicesForCreate = computed(() => {
 const { data: appleStatus } = await useFetch('/api/apple/credentials')
 const appleConnected = computed(() => appleStatus.value?.connected ?? false)
 
+// Fetch profiles - SSR compatible
+const { data: profiles, pending: loading, error: fetchError, refresh: refreshProfilesData } = await useFetch<AppleProfile[]>('/api/apple/profiles', {
+  immediate: true,
+  default: () => []
+})
+const error = computed(() => fetchError.value?.data?.message || (fetchError.value ? 'Failed to load profiles' : ''))
+
 const filteredProfiles = computed(() => {
-  if (filterType.value === 'ALL') return profiles.value
-  return profiles.value.filter(p => {
+  const profileList = profiles.value || []
+  if (filterType.value === 'ALL') return profileList
+  return profileList.filter(p => {
     if (filterType.value === 'DEVELOPMENT') return p.profileType.includes('DEVELOPMENT')
     if (filterType.value === 'ADHOC') return p.profileType.includes('ADHOC')
     if (filterType.value === 'STORE') return p.profileType.includes('STORE')
@@ -474,24 +479,9 @@ async function handleRecover() {
   }
 }
 
-async function fetchProfiles() {
-  if (!appleConnected.value) return
-  
-  loading.value = true
-  error.value = ''
-  try {
-    const data = await $fetch<AppleProfile[]>('/api/apple/profiles')
-    profiles.value = data
-  } catch (e: any) {
-    error.value = e?.data?.message || 'Failed to load profiles'
-  } finally {
-    loading.value = false
-  }
-}
-
 async function refreshProfiles() {
   refreshing.value = true
-  await fetchProfiles()
+  await refreshProfilesData()
   refreshing.value = false
 }
 
@@ -577,16 +567,6 @@ async function handleCreate() {
     creating.value = false
   }
 }
-
-// Fetch on mount
-onMounted(() => {
-  if (appleConnected.value) {
-    fetchProfiles()
-    loadCreateFormData()
-  } else {
-    loading.value = false
-  }
-})
 
 // Load create form data when form is opened
 watch(showCreateForm, (show) => {

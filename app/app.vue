@@ -10,6 +10,12 @@
 
 <script setup lang="ts">
 import AppHeader from '../components/AppHeader.vue'
+
+// Initialize auth during SSR - this ensures user state is available immediately
+// Await the asyncData to block SSR until auth is resolved
+const { asyncData } = useAuth()
+await asyncData
+
 useHead({
   titleTemplate: (title) => (title ? `${title} · AutoSigner` : 'AutoSigner'),
   meta: [

@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 max-w-7xl mx-auto px-4 pt-6">
     <!-- Create User Form -->
     <UCard class="glass">
       <template #header>
@@ -53,9 +53,12 @@
 
 <script setup lang="ts">
 definePageMeta({ title: 'Users', layout: 'default' })
-const { user: me } = useAuth()
+const { user: me, asyncData } = useAuth()
+
+// Wait for auth to load before checking permissions
+await asyncData
 if (!me.value || me.value.role !== 'SUPERADMIN') {
-  navigateTo('/')
+  await navigateTo('/')
 }
 const columns = [
   { key: 'nickname', label: 'Nickname' },
