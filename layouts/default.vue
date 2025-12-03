@@ -55,7 +55,8 @@ const links = [
   { label: 'Dashboard', icon: 'i-heroicons-home', to: '/' },
   { label: 'My Apps', icon: 'i-heroicons-rectangle-stack', to: '/apps' },
   { label: 'Upload', icon: 'i-heroicons-arrow-up-tray', to: '/upload' },
-  { label: 'Approvals', icon: 'i-heroicons-check-badge', to: '/admin/approvals' }
+  { label: 'All Apps', icon: 'i-heroicons-squares-2x2', to: '/admin/apps' },
+  { label: 'Users', icon: 'i-heroicons-users', to: '/admin/approvals' }
 ]
 
 const userMenu = [[

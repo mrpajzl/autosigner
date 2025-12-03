@@ -24,6 +24,7 @@ model User {
   sessions       Session[]
   certificates   Certificate[]
   provisioningProfiles ProvisioningProfile[]
+  signedVersions SignedVersion[]
 }
 
 model ManagerProfile {
@@ -73,9 +74,30 @@ model App {
   status          String   @default("PENDING") // PENDING | SIGNING | SIGNED | FAILED
 
   owner User @relation(fields: [ownerId], references: [id])
+  signedVersions SignedVersion[]
 
   @@index([ownerId])
   @@index([bundleId])
+}
+
+// Represents a signed version of an app by a specific moderator
+// Each moderator can sign any uploaded app with their own credentials
+model SignedVersion {
+  id            String    @id @default(cuid())
+  appId         String
+  signerId      String
+  signedIpaPath String?
+  manifestPath  String?
+  status        String    @default("PENDING") // PENDING | SIGNING | SIGNED | FAILED
+  signedAt      DateTime?
+  createdAt     DateTime  @default(now())
+
+  app    App  @relation(fields: [appId], references: [id], onDelete: Cascade)
+  signer User @relation(fields: [signerId], references: [id])
+
+  @@unique([appId, signerId])
+  @@index([appId])
+  @@index([signerId])
 }
 
 // Note: SQLite connector doesn't support enums; using string fields.

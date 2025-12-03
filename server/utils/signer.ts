@@ -508,6 +508,7 @@ async function cleanupIpaWorkDirectories(ipaPath: string): Promise<number> {
 /**
  * Clean up orphaned app directories (directories that exist on disk but not in the database)
  * This handles cases where database deletion succeeded but file cleanup failed
+ * Also cleans up orphaned SignedVersion directories
  */
 export async function cleanupOrphanedAppDirectories(): Promise<{ totalCleaned: number; errors: string[] }> {
   const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
@@ -519,11 +520,41 @@ export async function cleanupOrphanedAppDirectories(): Promise<{ totalCleaned: n
   }
 
   try {
-    // Get all users who have uploaded apps
+    // Get all users who have uploaded apps or signed versions
     const users = await prisma.user.findMany({
       select: { id: true }
     })
     const userIds = new Set(users.map(u => u.id))
+
+    // Get all valid app IDs and signed version IDs
+    const allApps = await prisma.app.findMany({
+      select: { id: true, ownerId: true, ipaFileName: true }
+    })
+    const allSignedVersions = await prisma.signedVersion.findMany({
+      select: { id: true, signerId: true }
+    })
+
+    // Build lookup maps
+    const appIdsByOwner = new Map<string, Set<string>>()
+    const ipaFileNamesByOwner = new Map<string, Set<string>>()
+    for (const app of allApps) {
+      if (!appIdsByOwner.has(app.ownerId)) {
+        appIdsByOwner.set(app.ownerId, new Set())
+        ipaFileNamesByOwner.set(app.ownerId, new Set())
+      }
+      appIdsByOwner.get(app.ownerId)!.add(app.id)
+      if (app.ipaFileName) {
+        ipaFileNamesByOwner.get(app.ownerId)!.add(app.ipaFileName)
+      }
+    }
+
+    const signedVersionIdsBySigner = new Map<string, Set<string>>()
+    for (const sv of allSignedVersions) {
+      if (!signedVersionIdsBySigner.has(sv.signerId)) {
+        signedVersionIdsBySigner.set(sv.signerId, new Set())
+      }
+      signedVersionIdsBySigner.get(sv.signerId)!.add(sv.id)
+    }
 
     const userDirs = await fse.readdir(uploadsDir, { withFileTypes: true })
 
@@ -548,14 +579,9 @@ export async function cleanupOrphanedAppDirectories(): Promise<{ totalCleaned: n
       }
 
       const userUploadDir = path.join(uploadsDir, userId)
-      
-      // Get all app IDs for this user from the database
-      const apps = await prisma.app.findMany({
-        where: { ownerId: userId },
-        select: { id: true, ipaFileName: true }
-      })
-      const appIds = new Set(apps.map(a => a.id))
-      const ipaFileNames = new Set(apps.map(a => a.ipaFileName).filter(Boolean))
+      const appIds = appIdsByOwner.get(userId) || new Set()
+      const ipaFileNames = ipaFileNamesByOwner.get(userId) || new Set()
+      const signedVersionIds = signedVersionIdsBySigner.get(userId) || new Set()
 
       const entries = await fse.readdir(userUploadDir, { withFileTypes: true })
 
@@ -581,17 +607,22 @@ export async function cleanupOrphanedAppDirectories(): Promise<{ totalCleaned: n
         // Skip work directories (handled by cleanupUserWorkDirectories)
         if (entry.name.includes('.ipa.')) continue
 
-        // Check if this directory matches an app ID
-        if (entry.isDirectory() && !appIds.has(entry.name)) {
-          // Orphaned app directory
-          const appDir = path.join(userUploadDir, entry.name)
-          try {
-            await fse.remove(appDir)
-            totalCleaned++
-            console.log(`Cleaned up orphaned app directory: ${appDir}`)
-          } catch (e) {
-            const msg = `Failed to remove orphaned app directory ${appDir}: ${e}`
-            errors.push(msg)
+        // Check if this directory matches an app ID or signed version ID
+        if (entry.isDirectory()) {
+          const isValidAppDir = appIds.has(entry.name)
+          const isValidSignedVersionDir = signedVersionIds.has(entry.name)
+          
+          if (!isValidAppDir && !isValidSignedVersionDir) {
+            // Orphaned directory (neither app nor signed version)
+            const orphanDir = path.join(userUploadDir, entry.name)
+            try {
+              await fse.remove(orphanDir)
+              totalCleaned++
+              console.log(`Cleaned up orphaned directory: ${orphanDir}`)
+            } catch (e) {
+              const msg = `Failed to remove orphaned directory ${orphanDir}: ${e}`
+              errors.push(msg)
+            }
           }
         }
       }
@@ -623,6 +654,14 @@ export async function runFullCleanup(): Promise<{
 
 export async function signApp(appId: string): Promise<void> {
   await signAppLocally(appId)
+}
+
+/**
+ * Sign an app using a specific user's credentials
+ * This creates a signed version stored under the signer's directory
+ */
+export async function signAppForUser(appId: string, signerId: string, signedVersionId: string): Promise<void> {
+  await signAppLocallyForUser(appId, signerId, signedVersionId)
 }
 
 async function signAppLocally(appId: string): Promise<void> {
@@ -838,4 +877,200 @@ export async function triggerResignForUser(userId: string, platform?: 'IOS' | 'T
       await prisma.app.update({ where: { id: a.id }, data: { status: 'FAILED' } })
     }
   }
+}
+
+/**
+ * Sign an app locally using a specific user's credentials
+ * Creates a signed version stored in the signer's uploads directory
+ */
+async function signAppLocallyForUser(appId: string, signerId: string, signedVersionId: string): Promise<void> {
+  const app = await prisma.app.findUnique({ where: { id: appId } })
+  if (!app) throw new Error('App not found')
+  const platform = (app.platform?.toUpperCase() as 'IOS' | 'TVOS') || 'IOS'
+
+  // Get the original IPA from the app owner's directory
+  const originalIpaAbsPath = pickAvailableIpa(app)
+  if (!originalIpaAbsPath) {
+    throw new Error('Source IPA not found on server storage.')
+  }
+
+  // Store signed artifact in signer's directory
+  const signerUploadDir = path.join(process.cwd(), 'public', 'uploads', signerId)
+  const outputDir = path.join(signerUploadDir, signedVersionId)
+  await fse.ensureDir(outputDir)
+
+  const { p12Path, p12Password, profilePath } = await ensureManagerAssetsOnDisk(signerId, platform, outputDir)
+
+  if (!p12Path) {
+    throw new Error('Missing signing certificate. Upload and activate one in Profile first.')
+  }
+  if (!profilePath) {
+    throw new Error('Missing provisioning profile. Upload and activate one in Profile first.')
+  }
+
+  // Log signing operation
+  try {
+    const { stdout } = await execa('security', ['cms', '-D', '-i', profilePath])
+    const obj: any = plist.parse(stdout)
+    const devices: string[] | undefined = obj?.ProvisionedDevices
+    const allDevices: boolean | undefined = obj?.ProvisionsAllDevices
+    const profileName: string | undefined = obj?.Name
+    console.log('Signing for user', signerId, 'with provisioning profile', {
+      appId: app.id,
+      signerId,
+      platform,
+      profileName,
+      devicesCount: Array.isArray(devices) ? devices.length : 0,
+      allDevices: Boolean(allDevices)
+    })
+  } catch (e) {
+    console.warn('Failed to inspect provisioning profile before signing', e)
+  }
+
+  let keychainPath: string | undefined
+  let workDir: string | undefined
+
+  try {
+    // Import certificate into temporary keychain for codesign
+    const keychain = await importCertToKeychain(p12Path, p12Password || '')
+    keychainPath = keychain.keychainPath
+    const signingIdentity = keychain.identity
+    console.log('Imported certificate, identity:', signingIdentity)
+
+    // 1) Unzip IPA
+    workDir = `${originalIpaAbsPath}.${signerId}.${Date.now().toString(36)}`
+    await fse.ensureDir(workDir)
+    await execa('unzip', ['-o', originalIpaAbsPath, '-d', workDir])
+    
+    const payloadDir = path.join(workDir, 'Payload')
+    const appDirs = (await fse.readdir(payloadDir) as string[]).filter((n: string) => n.endsWith('.app'))
+    if (appDirs.length === 0) throw new Error('No .app found in IPA')
+    const appDir = path.join(payloadDir, appDirs[0])
+
+    // 2) Extract entitlements from provisioning profile
+    const provTempPlist = path.join(workDir, 'profile_content.plist')
+    await execa('security', ['cms', '-D', '-i', profilePath, '-o', provTempPlist])
+    const provContent = await fse.readFile(provTempPlist, 'utf8')
+    const provObj: any = plist.parse(provContent)
+    
+    const entitlementsObj = provObj?.Entitlements || {}
+    console.log('Extracted entitlements:', JSON.stringify(entitlementsObj, null, 2))
+    
+    if (!entitlementsObj || Object.keys(entitlementsObj).length === 0) {
+      throw new Error('Failed to extract entitlements from provisioning profile')
+    }
+    
+    const entitlementsPlist = plist.build(entitlementsObj as any)
+    const entPath = path.join(workDir, 'entitlements.plist')
+    await fse.writeFile(entPath, entitlementsPlist)
+
+    // 3) Embed the new provisioning profile
+    await fse.copyFile(profilePath, path.join(appDir, 'embedded.mobileprovision'))
+
+    // 4) Update bundle ID if specified
+    if (app.bundleId) {
+      const infoPlistPath = path.join(appDir, 'Info.plist')
+      try {
+        await execa('plutil', ['-convert', 'xml1', infoPlistPath])
+        const infoBuf = await fse.readFile(infoPlistPath)
+        const info = plist.parse(infoBuf.toString('utf8')) as any
+        info.CFBundleIdentifier = app.bundleId
+        await fse.writeFile(infoPlistPath, plist.build(info))
+      } catch (e) {
+        console.warn('Failed to update bundle ID:', e)
+      }
+    }
+
+    // 5) Remove old code signature
+    const codeSignatureDir = path.join(appDir, '_CodeSignature')
+    await fse.remove(codeSignatureDir).catch(() => {})
+
+    // 6) Sign the app using codesign
+    await codesignApp(appDir, signingIdentity, entPath, keychainPath)
+
+    // 7) Repack IPA
+    const signedPath = path.join(outputDir, `${signedVersionId}-signed.ipa`)
+    await execa('bash', ['-c', `cd "${workDir}" && zip -qry "${signedPath}" Payload`])
+
+    // Finalize - update SignedVersion record
+    await finalizeSignedVersionArtifact(app, signerId, signedVersionId, signedPath)
+    
+  } catch (e) {
+    console.error('Signing failed for user', signerId, ':', e)
+    throw e
+  } finally {
+    // Always cleanup work directory
+    if (workDir) {
+      await fse.remove(workDir).catch((err) => {
+        console.warn(`Failed to cleanup work directory ${workDir}:`, err)
+      })
+    }
+    // Cleanup temporary keychain
+    if (keychainPath) {
+      await cleanupKeychain(keychainPath)
+    }
+  }
+}
+
+/**
+ * Finalize a signed version artifact - update manifest and database
+ */
+async function finalizeSignedVersionArtifact(
+  app: AppModel,
+  signerId: string,
+  signedVersionId: string,
+  signedFilePath: string
+): Promise<void> {
+  const uploadDir = path.join(process.cwd(), 'public', 'uploads', signerId, signedVersionId)
+  await fse.ensureDir(uploadDir)
+  const finalPath = path.join(uploadDir, `${signedVersionId}-signed.ipa`)
+  const resolvedFinal = path.resolve(finalPath)
+  const resolvedSource = path.resolve(signedFilePath)
+  if (resolvedFinal !== resolvedSource) {
+    await fse.move(signedFilePath, finalPath, { overwrite: true })
+  }
+  const signedPublic = `/uploads/${signerId}/${signedVersionId}/${path.basename(finalPath)}`
+  let manifestPublic: string | undefined
+  const platform = (app.platform?.toUpperCase() as 'IOS' | 'TVOS') || 'IOS'
+  
+  // Generate manifest for OTA installation
+  const baseUrl = getPublicBaseUrl()
+  const platformIdentifier = platform === 'TVOS' ? 'com.apple.platform.appletvos' : 'com.apple.platform.iphoneos'
+  const iconRel = (app.iconPath || '').replace(/^\//, '')
+  const iconUrl = iconRel ? `${baseUrl}/${iconRel}` : undefined
+  const downloadPath = `${baseUrl}/api/download/${signedPublic.replace(/^\//, '')}`
+  const assets: any[] = [{ kind: 'software-package', url: downloadPath }]
+  if (iconUrl) {
+    assets.push({ kind: 'display-image', url: iconUrl })
+  }
+  assets.push({ kind: 'full-size-image', url: downloadPath })
+
+  const manifest = {
+    items: [
+      {
+        assets,
+        metadata: {
+          'bundle-identifier': app.bundleId,
+          'bundle-version': app.version || '0.0.0',
+          kind: 'software',
+          'platform-identifier': platformIdentifier,
+          title: app.name
+        }
+      }
+    ]
+  }
+  const plistXml = plist.build(manifest as any)
+  const manifestPath = path.join(uploadDir, 'manifest.plist')
+  await fse.writeFile(manifestPath, plistXml)
+  manifestPublic = `/uploads/${signerId}/${signedVersionId}/manifest.plist`
+
+  await prisma.signedVersion.update({
+    where: { id: signedVersionId },
+    data: {
+      status: 'SIGNED',
+      signedAt: new Date(),
+      signedIpaPath: signedPublic,
+      manifestPath: manifestPublic
+    }
+  })
 }

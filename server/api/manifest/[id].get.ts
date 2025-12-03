@@ -8,7 +8,28 @@ import fs from 'node:fs'
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) throw createError({ statusCode: 400 })
-  const app = await prisma.app.findUnique({ where: { id } })
+  
+  // Try to find by App ID first, then by SignedVersion ID
+  let app = await prisma.app.findUnique({ where: { id } })
+  let signedVersion = null
+  let ipaPath: string | null = null
+  
+  if (app) {
+    // Found as App - use app's signed path
+    ipaPath = app.signedIpaPath || app.originalIpaPath
+  } else {
+    // Try as SignedVersion ID
+    signedVersion = await prisma.signedVersion.findUnique({ 
+      where: { id },
+      include: { app: true }
+    })
+    if (!signedVersion) {
+      throw createError({ statusCode: 404 })
+    }
+    app = signedVersion.app
+    ipaPath = signedVersion.signedIpaPath
+  }
+
   if (!app) throw createError({ statusCode: 404 })
 
   // Prefer configured public base URL (e.g., https://your-domain) to avoid
@@ -18,7 +39,6 @@ export default defineEventHandler(async (event) => {
   const baseUrl = (configured && configured.length > 0)
     ? configured.replace(/\/$/, '')
     : getRequestURL(event).origin
-  const ipaPath = app.signedIpaPath || app.originalIpaPath
   const rel = (ipaPath || '').replace(/^\//, '')
   const assetUrl = `${baseUrl}/api/download/${rel}`
 
