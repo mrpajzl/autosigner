@@ -81,12 +81,12 @@ export default defineEventHandler(async (event) => {
   let app
 
   if (appId) {
-    // Update existing app (must belong to user)
+    // Update existing app (any moderator can update)
     const existing = await prisma.app.findUnique({ where: { id: appId } })
-    if (!existing || existing.ownerId !== user.id) throw createError({ statusCode: 404, message: 'Not found' })
+    if (!existing) throw createError({ statusCode: 404, message: 'App not found' })
 
-    // Clean any previous build artifacts for this app id
-    await storage.deletePrefix(`/uploads/${user.id}/${existing.id}`).catch(() => {})
+    // Clean any previous build artifacts for this app id (under the original owner's directory)
+    await storage.deletePrefix(`/uploads/${existing.ownerId}/${existing.id}`).catch(() => {})
 
     // Fill from form or fall back to existing values
     const nextName = nameFromForm || existing.name
