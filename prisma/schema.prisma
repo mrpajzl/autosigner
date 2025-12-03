@@ -25,6 +25,7 @@ model User {
   certificates   Certificate[]
   provisioningProfiles ProvisioningProfile[]
   signedVersions SignedVersion[]
+  appleDeveloperCredentials AppleDeveloperCredentials?
 }
 
 model ManagerProfile {
@@ -131,5 +132,21 @@ model ProvisioningProfile {
 
   user User @relation(fields: [userId], references: [id])
   @@index([userId, platform, active])
+}
+
+// Apple Developer API credentials for each moderator (optional)
+// Allows direct integration with App Store Connect API for managing
+// devices (UDIDs) and provisioning profiles
+model AppleDeveloperCredentials {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  keyId         String   // API Key ID from App Store Connect
+  issuerId      String   // Issuer ID from App Store Connect
+  privateKeyEnc String   // Encrypted .p8 private key content
+  teamName      String?  // Optional display name for the team
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
 }
 
