@@ -98,17 +98,15 @@
 
         <div class="space-y-4">
           <div v-for="app in mod.tvosApps" :key="app.id" class="flex items-center gap-3">
-            <UTooltip :text="`Uploaded: ${formatDate(app.uploadedAt)}`">
-              <img
-                v-if="app.iconPath"
-                :src="`/api/download${app.iconPath}`"
-                :alt="app.name"
-                class="w-10 h-10 rounded-xl shadow-sm object-cover cursor-help"
-              />
-              <div v-else class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-white/10 flex items-center justify-center cursor-help">
-                <UIcon name="i-heroicons-tv" class="w-5 h-5 text-slate-400 dark:text-white/40" />
-              </div>
-            </UTooltip>
+            <img
+              v-if="app.iconPath"
+              :src="`/api/download${app.iconPath}`"
+              :alt="app.name"
+              class="w-10 h-10 rounded-xl shadow-sm object-cover"
+            />
+            <div v-else class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-white/10 flex items-center justify-center">
+              <UIcon name="i-heroicons-tv" class="w-5 h-5 text-slate-400 dark:text-white/40" />
+            </div>
             <UButton :to="tvosLink(app)" target="_blank" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ displayVersion(app) }}</UButton>
           </div>
           <p v-if="mod.tvosApps.length === 0" class="text-sm text-slate-500 dark:text-white/60">No tvOS apps.</p>
@@ -127,17 +125,15 @@
 
         <div class="space-y-4">
           <div v-for="app in mod.iosApps" :key="app.id" class="flex items-center gap-3">
-            <UTooltip :text="`Uploaded: ${formatDate(app.uploadedAt)}`">
-              <img
-                v-if="app.iconPath"
-                :src="`/api/download${app.iconPath}`"
-                :alt="app.name"
-                class="w-10 h-10 rounded-xl shadow-sm object-cover cursor-help"
-              />
-              <div v-else class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-white/10 flex items-center justify-center cursor-help">
-                <UIcon name="i-heroicons-device-phone-mobile" class="w-5 h-5 text-slate-400 dark:text-white/40" />
-              </div>
-            </UTooltip>
+            <img
+              v-if="app.iconPath"
+              :src="`/api/download${app.iconPath}`"
+              :alt="app.name"
+              class="w-10 h-10 rounded-xl shadow-sm object-cover"
+            />
+            <div v-else class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-white/10 flex items-center justify-center">
+              <UIcon name="i-heroicons-device-phone-mobile" class="w-5 h-5 text-slate-400 dark:text-white/40" />
+            </div>
             <UButton :to="installLink(app)" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ displayVersion(app) }}</UButton>
           </div>
           <p v-if="mod.iosApps.length === 0" class="text-sm text-slate-500 dark:text-white/60">No iOS apps.</p>

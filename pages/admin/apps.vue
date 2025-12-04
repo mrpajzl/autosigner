@@ -181,10 +181,45 @@
               </div>
               <div class="flex-1">
                 <div class="flex items-center gap-3">
-                  <h3 class="font-semibold text-lg">{{ app.name }}</h3>
                   <UBadge :color="app.platform === 'IOS' ? 'blue' : 'purple'" variant="soft">
                     {{ app.platform }}
                   </UBadge>
+                  <!-- Editable app name -->
+                  <div v-if="editingAppId === app.id" class="flex items-center gap-2">
+                    <UInput
+                      v-model="editingAppName"
+                      size="sm"
+                      class="font-semibold"
+                      autofocus
+                      @keyup.enter="saveAppName(app.id)"
+                      @keyup.escape="cancelEditName"
+                    />
+                    <UButton
+                      color="green"
+                      variant="ghost"
+                      icon="i-heroicons-check"
+                      size="xs"
+                      :loading="savingAppName"
+                      @click="saveAppName(app.id)"
+                    />
+                    <UButton
+                      color="gray"
+                      variant="ghost"
+                      icon="i-heroicons-x-mark"
+                      size="xs"
+                      :disabled="savingAppName"
+                      @click="cancelEditName"
+                    />
+                  </div>
+                  <h3
+                    v-else
+                    class="font-semibold text-lg cursor-pointer hover:text-red-500 transition-colors group/name"
+                    title="Click to edit name"
+                    @click="startEditName(app)"
+                  >
+                    {{ app.name }}
+                    <UIcon name="i-heroicons-pencil" class="w-4 h-4 inline-block ml-1 opacity-0 group-hover/name:opacity-50 transition-opacity" />
+                  </h3>
                 </div>
                 <div class="text-sm text-slate-600 dark:text-white/60 mt-1 space-x-4">
                   <span>{{ app.bundleId || 'Unknown bundle' }}</span>
@@ -645,6 +680,53 @@ function uploadWithProgress(
 const showDeleteModal = ref(false)
 const appToDelete = ref<AppRow | null>(null)
 const deletingAppId = ref<string | null>(null)
+
+// Edit app name state
+const editingAppId = ref<string | null>(null)
+const editingAppName = ref('')
+const savingAppName = ref(false)
+
+function startEditName(app: AppRow) {
+  editingAppId.value = app.id
+  editingAppName.value = app.name
+}
+
+function cancelEditName() {
+  editingAppId.value = null
+  editingAppName.value = ''
+}
+
+async function saveAppName(appId: string) {
+  if (!editingAppName.value.trim()) {
+    toast.add({ title: 'App name cannot be empty', color: 'red' })
+    return
+  }
+  
+  savingAppName.value = true
+  try {
+    await $fetch(`/api/admin/apps/${appId}/update`, {
+      method: 'POST',
+      body: { name: editingAppName.value.trim() }
+    })
+    
+    toast.add({
+      title: 'App name updated',
+      color: 'green'
+    })
+    
+    editingAppId.value = null
+    editingAppName.value = ''
+    await refresh()
+  } catch (e: any) {
+    toast.add({
+      title: 'Failed to update app name',
+      description: e?.data?.message || e?.message || 'Unknown error',
+      color: 'red'
+    })
+  } finally {
+    savingAppName.value = false
+  }
+}
 
 // Toggle build number visibility for a specific app (persisted to database)
 async function toggleBuildNumber(appId: string) {
