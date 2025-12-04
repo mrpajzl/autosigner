@@ -1,5 +1,5 @@
 {
-  "name": "autosigner",
+  "name": "fastsigner",
   "type": "module",
   "description": "iOS/tvOS IPA signing service for M4 Mac server",
   "engines": {

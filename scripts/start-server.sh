@@ -1,5 +1,5 @@
 #!/bin/bash
-# AutoSigner production server startup script
+# FastSigner production server startup script
 
 cd "$(dirname "$0")/.."
 

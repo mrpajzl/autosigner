@@ -31,7 +31,7 @@ const shouldUseS3 = Boolean(
 )
 
 const driver: StorageDriver = shouldUseS3 ? 's3' : 'local'
-const bucket = process.env.MINIO_BUCKET || 'autosigner'
+const bucket = process.env.MINIO_BUCKET || 'fastsigner'
 const region = process.env.MINIO_REGION || 'us-east-1'
 const endpoint = resolveEndpoint() || 'http://127.0.0.1:9000'
 

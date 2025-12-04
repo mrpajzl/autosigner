@@ -6,7 +6,7 @@
       <div class="relative space-y-6">
         <div class="text-center space-y-3">
           <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-red-500 to-violet-500 bg-clip-text text-transparent">
-            Vítejte v AutoSigner
+            Vítejte ve FastSigner
           </h1>
           <p class="text-lg text-slate-600 dark:text-white/70 max-w-2xl mx-auto">
             Vaše místo pro sideloading aplikací na Apple zařízení
@@ -218,7 +218,7 @@
           </p>
         </div>
         <p class="text-xs text-slate-400 dark:text-white/30 mt-4">
-          © {{ new Date().getFullYear() }} AutoSigner
+          © {{ new Date().getFullYear() }} FastSigner
         </p>
       </div>
     </footer>

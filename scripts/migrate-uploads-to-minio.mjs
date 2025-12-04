@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import fse from 'fs-extra'
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 
-const bucket = process.env.MINIO_BUCKET || 'autosigner'
+const bucket = process.env.MINIO_BUCKET || 'fastsigner'
 const region = process.env.MINIO_REGION || 'us-east-1'
 const accessKeyId = process.env.MINIO_USER
 const secretAccessKey = process.env.MINIO_PASSWORD

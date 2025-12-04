@@ -150,7 +150,7 @@ async function importCertToKeychain(
   p12Password: string = '',
   keychainName?: string
 ): Promise<{ keychainPath: string; identity: string; isTemp: boolean }> {
-  const tmpKeychain = keychainName || `autosigner-${Date.now()}.keychain-db`
+  const tmpKeychain = keychainName || `fastsigner-${Date.now()}.keychain-db`
   const keychainPath = path.join(process.env.HOME || '/tmp', 'Library', 'Keychains', tmpKeychain)
   const keychainPassword = randomUUID()
 

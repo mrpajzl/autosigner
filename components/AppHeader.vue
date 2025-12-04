@@ -11,7 +11,7 @@
           @click="mobileOpen = true" 
         />
         <UIcon name="i-heroicons-sparkles" class="text-primary-400 hidden md:block" size="22" />
-        <NuxtLink to="/" class="font-semibold">AutoSigner</NuxtLink>
+        <NuxtLink to="/" class="font-semibold">FastSigner</NuxtLink>
         <nav class="hidden md:flex items-center gap-3 text-sm text-slate-600 dark:text-white/80">
           <ClientOnly>
             <NuxtLink
@@ -54,7 +54,7 @@
       <div class="p-4 flex flex-col gap-4">
         <div class="flex items-center gap-3">
           <UIcon name="i-heroicons-sparkles" class="text-primary-400" size="28" />
-          <span class="font-semibold tracking-wide">AutoSigner</span>
+          <span class="font-semibold tracking-wide">FastSigner</span>
         </div>
         <nav class="flex flex-col gap-2 text-slate-600 dark:text-slate-200">
           <ClientOnly>

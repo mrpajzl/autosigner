@@ -17,7 +17,7 @@ const { asyncData } = useAuth()
 await asyncData
 
 useHead({
-  titleTemplate: (title) => (title ? `${title} · AutoSigner` : 'AutoSigner'),
+  titleTemplate: (title) => (title ? `${title} · FastSigner` : 'FastSigner'),
   meta: [
     { name: 'viewport', content: 'width=device-width, initial-scale=1' }
   ]

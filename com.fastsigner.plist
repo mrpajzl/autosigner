@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.autosigner</string>
+    <string>com.fastsigner</string>
     
     <key>ProgramArguments</key>
     <array>
@@ -12,7 +12,7 @@
     </array>
     
     <key>WorkingDirectory</key>
-    <string>/Users/ondrejzraly/autosigner</string>
+    <string>/Users/ondrejzraly/fastsigner</string>
     
     <key>EnvironmentVariables</key>
     <dict>
@@ -32,10 +32,10 @@
     </dict>
     
     <key>StandardOutPath</key>
-    <string>/Users/ondrejzraly/autosigner/logs/stdout.log</string>
+    <string>/Users/ondrejzraly/fastsigner/logs/stdout.log</string>
     
     <key>StandardErrorPath</key>
-    <string>/Users/ondrejzraly/autosigner/logs/stderr.log</string>
+    <string>/Users/ondrejzraly/fastsigner/logs/stderr.log</string>
 </dict>
 </plist>
 

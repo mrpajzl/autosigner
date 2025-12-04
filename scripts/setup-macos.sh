@@ -1,18 +1,18 @@
 #!/bin/bash
 #
-# AutoSigner M4 Mac Setup Script
-# Run this script to set up AutoSigner on a fresh macOS server
+# FastSigner M4 Mac Setup Script
+# Run this script to set up FastSigner on a fresh macOS server
 #
 
 set -e
 
 # Configuration
-INSTALL_DIR="${INSTALL_DIR:-/opt/autosigner}"
-APP_USER="${APP_USER:-_autosigner}"
-APP_GROUP="${APP_GROUP:-_autosigner}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/fastsigner}"
+APP_USER="${APP_USER:-_fastsigner}"
+APP_GROUP="${APP_GROUP:-_fastsigner}"
 NODE_VERSION="${NODE_VERSION:-22}"
 
-echo "=== AutoSigner M4 Mac Setup ==="
+echo "=== FastSigner M4 Mac Setup ==="
 echo ""
 
 # Check if running as root
@@ -58,14 +58,14 @@ if ! dscl . -read /Users/${APP_USER} &>/dev/null; then
     # Create group
     dscl . -create /Groups/${APP_GROUP}
     dscl . -create /Groups/${APP_GROUP} PrimaryGroupID ${NEXT_UID}
-    dscl . -create /Groups/${APP_GROUP} RealName "AutoSigner Service"
+    dscl . -create /Groups/${APP_GROUP} RealName "FastSigner Service"
     
     # Create user
     dscl . -create /Users/${APP_USER}
     dscl . -create /Users/${APP_USER} UniqueID ${NEXT_UID}
     dscl . -create /Users/${APP_USER} PrimaryGroupID ${NEXT_UID}
     dscl . -create /Users/${APP_USER} UserShell /usr/bin/false
-    dscl . -create /Users/${APP_USER} RealName "AutoSigner Service"
+    dscl . -create /Users/${APP_USER} RealName "FastSigner Service"
     dscl . -create /Users/${APP_USER} NFSHomeDirectory ${INSTALL_DIR}
     
     echo "   Created user ${APP_USER} (UID: ${NEXT_UID})"
@@ -78,7 +78,7 @@ mkdir -p ${INSTALL_DIR}/{data,logs,public/uploads}
 chown -R ${APP_USER}:${APP_GROUP} ${INSTALL_DIR}
 
 echo ""
-echo "3. Installing AutoSigner..."
+echo "3. Installing FastSigner..."
 # Copy application files
 if [ -d "$(dirname "$0")/.." ]; then
     SOURCE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -113,11 +113,11 @@ echo ""
 echo "5. Configuring launchd service..."
 # Create environment config
 cat > ${INSTALL_DIR}/.env << 'ENVEOF'
-# AutoSigner Environment Configuration
+# FastSigner Environment Configuration
 # Edit these values before starting the service
 
 NODE_ENV=production
-DATABASE_URL=file:/opt/autosigner/data/autosigner.db
+DATABASE_URL=file:/opt/fastsigner/data/fastsigner.db
 
 # IMPORTANT: Generate a random secret (at least 32 characters)
 # Example: openssl rand -base64 32
@@ -131,8 +131,8 @@ chown ${APP_USER}:${APP_GROUP} ${INSTALL_DIR}/.env
 chmod 600 ${INSTALL_DIR}/.env
 
 # Copy launchd plist
-if [ -f "${SOURCE_DIR}/com.autosigner.plist" ]; then
-    cp "${SOURCE_DIR}/com.autosigner.plist" /Library/LaunchDaemons/
+if [ -f "${SOURCE_DIR}/com.fastsigner.plist" ]; then
+    cp "${SOURCE_DIR}/com.fastsigner.plist" /Library/LaunchDaemons/
 fi
 
 echo ""
@@ -151,7 +151,7 @@ echo "   sudo -u ${APP_USER} node -e \"require('./.output/server/index.mjs')\""
 echo "   # Then call POST /api/bootstrap.superadmin with your credentials"
 echo ""
 echo "3. Load and start the service:"
-echo "   sudo launchctl load /Library/LaunchDaemons/com.autosigner.plist"
+echo "   sudo launchctl load /Library/LaunchDaemons/com.fastsigner.plist"
 echo ""
 echo "4. Check logs:"
 echo "   tail -f ${INSTALL_DIR}/logs/stdout.log"

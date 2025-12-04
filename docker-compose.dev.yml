@@ -3,11 +3,11 @@
 # This is only useful for UI/API development and testing.
 
 services:
-  autosigner-dev:
+  fastsigner-dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
-    image: autosigner-dev:latest
+    image: fastsigner-dev:latest
     working_dir: /app
     volumes:
       - .:/app:delegated

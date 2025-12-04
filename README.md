@@ -1,6 +1,6 @@
-# AutoSigner
+# FastSigner
 
-AutoSigner is a Nuxt app for signing iOS/tvOS applications on an M4 Mac server. Managers upload `.ipa` files with their provisioning profile and P12 certificate; the server signs them locally using macOS native `codesign` and generates OTA installation manifests.
+FastSigner is a Nuxt app for signing iOS/tvOS applications on an M4 Mac server. Managers upload `.ipa` files with their provisioning profile and P12 certificate; the server signs them locally using macOS native `codesign` and generates OTA installation manifests.
 
 ## Features
 
@@ -89,10 +89,10 @@ Uploads are no longer committed into the repository. Set the following env vars 
 ```bash
 MINIO_PUBLIC="http://127.0.0.1"
 MINIO_PORT="9000"
-MINIO_USER="autosigner"
+MINIO_USER="fastsigner"
 MINIO_PASSWORD="super-secret-pass"
 # Optional overrides
-MINIO_BUCKET="autosigner"
+MINIO_BUCKET="fastsigner"
 MINIO_REGION="us-east-1"
 # MINIO_ENDPOINT can be provided if PUBLIC/PORT should not be combined
 ```
@@ -104,7 +104,7 @@ When the `MINIO_*` variables are present the server streams uploads directly int
 Run the migration script **on the production host** after configuring the env vars and before cleaning up the old files:
 
 ```bash
-cd /path/to/autosigner
+cd /path/to/fastsigner
 node scripts/migrate-uploads-to-minio.mjs
 ```
 
