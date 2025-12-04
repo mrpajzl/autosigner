@@ -105,6 +105,9 @@ export default defineNuxtConfig({
       ensure('/profile/apple-developer', './pages/profile/apple-developer.vue', 'profile-apple-developer')
       ensure('/profile/devices', './pages/profile/devices.vue', 'profile-devices')
       ensure('/profile/apple-profiles', './pages/profile/apple-profiles.vue', 'profile-apple-profiles')
+      // User database pages
+      ensure('/profile/user-database', './pages/profile/user-database.vue', 'profile-user-database')
+      ensure('/profile/user-import', './pages/profile/user-import.vue', 'profile-user-import')
       ensure('/signing', './pages/signing.vue', 'signing')
       ensure('/auth/login', './pages/auth/login.vue', 'auth-login')
       ensure('/admin/approvals', './pages/admin/approvals.vue', 'admin-approvals')

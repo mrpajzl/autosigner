@@ -26,6 +26,7 @@ model User {
   provisioningProfiles ProvisioningProfile[]
   signedVersions SignedVersion[]
   appleDeveloperCredentials AppleDeveloperCredentials?
+  registeredUsers RegisteredUser[]
 }
 
 model ManagerProfile {
@@ -149,5 +150,39 @@ model AppleDeveloperCredentials {
   updatedAt     DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id])
+}
+
+// A registered user (typically Discord member who wants apps signed)
+// Each moderator maintains their own user database
+model RegisteredUser {
+  id          String   @id @default(cuid())
+  ownerId     String   // The moderator who owns this user database
+  discordName String   // Discord nickname (e.g., "john_doe" or "John#1234")
+  notes       String?  // Optional notes about the user
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner   User         @relation(fields: [ownerId], references: [id])
+  devices UserDevice[]
+
+  @@unique([ownerId, discordName]) // Unique per moderator
+  @@index([ownerId])
+}
+
+// A device belonging to a registered user
+model UserDevice {
+  id               String   @id @default(cuid())
+  registeredUserId String
+  udid             String   // Device UDID
+  name             String   // Device name (e.g., "John's iPhone 15")
+  platform         String   @default("IOS") // IOS | MAC_OS
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  registeredUser RegisteredUser @relation(fields: [registeredUserId], references: [id], onDelete: Cascade)
+
+  @@unique([registeredUserId, udid]) // One device per user
+  @@index([registeredUserId])
+  @@index([udid]) // For quick lookup when checking Apple registration
 }
 

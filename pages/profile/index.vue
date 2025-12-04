@@ -36,7 +36,7 @@
           Connect your Apple Developer account to manage devices (UDIDs) and provisioning profiles directly from this app.
           This is optional - you can still upload profiles manually.
         </p>
-        <div class="grid md:grid-cols-3 gap-4">
+        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           <UButton
             to="/profile/apple-developer"
             variant="ghost"
@@ -59,6 +59,13 @@
             icon="i-heroicons-cloud-arrow-down"
             label="Apple Profiles"
             :disabled="!appleConnected"
+          />
+          <UButton
+            to="/profile/user-database"
+            variant="ghost"
+            class="surface-button"
+            icon="i-heroicons-users"
+            label="User Database"
           />
         </div>
       </div>
