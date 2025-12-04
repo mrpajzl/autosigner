@@ -1,5 +1,65 @@
 <template>
   <div class="mt-10 px-5 max-w-7xl mx-auto space-y-10">
+    <!-- Welcome Section -->
+    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-500/10 via-violet-500/10 to-red-500/10 dark:from-red-500/20 dark:via-violet-500/20 dark:to-red-500/20 p-8 border border-white/10">
+      <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-red-500/5 via-transparent to-transparent"></div>
+      <div class="relative space-y-6">
+        <div class="text-center space-y-3">
+          <h1 class="text-3xl md:text-4xl font-bold bg-gradient-to-r from-red-500 to-violet-500 bg-clip-text text-transparent">
+            Vítejte v AutoSigner
+          </h1>
+          <p class="text-lg text-slate-600 dark:text-white/70 max-w-2xl mx-auto">
+            Vaše místo pro sideloading aplikací na Apple zařízení
+          </p>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-4 text-center">
+          <div class="p-4 rounded-xl bg-white/50 dark:bg-white/5 backdrop-blur-sm">
+            <UIcon name="i-heroicons-device-phone-mobile" class="w-8 h-8 text-red-500 mx-auto mb-2" />
+            <h3 class="font-semibold text-slate-800 dark:text-white">Podepsané aplikace</h3>
+            <p class="text-sm text-slate-500 dark:text-white/60">Pro iPhone, iPad, Apple TV a Mac</p>
+          </div>
+          <div class="p-4 rounded-xl bg-white/50 dark:bg-white/5 backdrop-blur-sm">
+            <UIcon name="i-heroicons-shield-check" class="w-8 h-8 text-red-500 mx-auto mb-2" />
+            <h3 class="font-semibold text-slate-800 dark:text-white">Certifikáty & Profily</h3>
+            <p class="text-sm text-slate-500 dark:text-white/60">Vše potřebné pro instalaci</p>
+          </div>
+          <div class="p-4 rounded-xl bg-white/50 dark:bg-white/5 backdrop-blur-sm">
+            <UIcon name="i-heroicons-user-group" class="w-8 h-8 text-red-500 mx-auto mb-2" />
+            <h3 class="font-semibold text-slate-800 dark:text-white">Komunita</h3>
+            <p class="text-sm text-slate-500 dark:text-white/60">Podpora a novinky na Discordu</p>
+          </div>
+        </div>
+
+        <div class="bg-violet-500/10 dark:bg-violet-500/20 rounded-xl p-5 border border-violet-500/20">
+          <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-start gap-3">
+              <UIcon name="i-heroicons-information-circle" class="w-6 h-6 text-violet-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 class="font-semibold text-slate-800 dark:text-white">Před prvním použitím</h3>
+                <p class="text-sm text-slate-600 dark:text-white/70">
+                  Pro registraci zařízení a získání přístupu je nutné se nejprve připojit na náš Discord server.
+                </p>
+              </div>
+            </div>
+            <UButton
+              to="https://discord.gg/AK3WFCzYzN"
+              target="_blank"
+              color="violet"
+              variant="solid"
+              size="lg"
+              class="group flex-shrink-0"
+            >
+              <svg class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+              </svg>
+              Připojit se na Discord
+            </UButton>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Quick scroll buttons -->
     <div v-if="moderators && moderators.length > 0" class="flex flex-wrap justify-center gap-2">
       <UButton
