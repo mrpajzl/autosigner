@@ -25,9 +25,6 @@
                 <UButton color="gray" variant="soft" icon="i-heroicons-user-circle" :label="me.nickname || me.email" />
               </UDropdown>
             </div>
-            <div v-else>
-              <UButton to="/auth/login" color="gray" variant="soft" icon="i-heroicons-arrow-right-end-on-rectangle" label="Sign in" />
-            </div>
           </div>
         </div>
       </header>

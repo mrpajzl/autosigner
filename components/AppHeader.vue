@@ -39,9 +39,6 @@
               <UButton color="gray" variant="outline" icon="i-heroicons-user-circle" :label="me.nickname" />
             </UDropdown>
           </template>
-          <template v-else>
-            <UButton to="/auth/login" color="gray" variant="outline" icon="i-heroicons-arrow-right-end-on-rectangle" label="Sign in" />
-          </template>
           <template #fallback>
             <UButton color="gray" variant="outline" icon="i-heroicons-user-circle" loading />
           </template>
