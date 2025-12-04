@@ -112,6 +112,11 @@ export default defineNuxtConfig({
       ensure('/auth/login', './pages/auth/login.vue', 'auth-login')
       ensure('/admin/approvals', './pages/admin/approvals.vue', 'admin-approvals')
       ensure('/admin/apps', './pages/admin/apps.vue', 'admin-apps')
+      // Guides pages
+      ensure('/guides/apple-tv-sideloading', './pages/guides/apple-tv-sideloading.vue', 'guides-apple-tv-sideloading')
+      ensure('/guides/ios-mac-installation', './pages/guides/ios-mac-installation.vue', 'guides-ios-mac-installation')
+      ensure('/guides/hackintosh-vmware', './pages/guides/hackintosh-vmware.vue', 'guides-hackintosh-vmware')
+      ensure('/guides/self-signing', './pages/guides/self-signing.vue', 'guides-self-signing')
     }
   }
 })
