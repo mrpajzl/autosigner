@@ -204,6 +204,24 @@
         </div>
       </UCard>
     </div>
+
+    <!-- Footer Disclaimer -->
+    <footer class="mt-16 pb-10 border-t border-slate-200 dark:border-white/10 pt-8">
+      <div class="flex flex-col items-center gap-4 text-center">
+        <UIcon name="i-heroicons-shield-exclamation" class="w-8 h-8 text-slate-400 dark:text-white/40" />
+        <div class="max-w-2xl space-y-2">
+          <h4 class="font-semibold text-slate-600 dark:text-white/70">Prohlášení o odpovědnosti</h4>
+          <p class="text-sm text-slate-500 dark:text-white/50 leading-relaxed">
+            Provozovatel tohoto webu nenese žádnou odpovědnost za obsah, funkčnost ani legálnost aplikací zde poskytovaných. 
+            Aplikace jsou nahrávány třetími stranami a provozovatel není jejich autorem ani distributorem. 
+            Používání aplikací je na vlastní riziko uživatele.
+          </p>
+        </div>
+        <p class="text-xs text-slate-400 dark:text-white/30 mt-4">
+          © {{ new Date().getFullYear() }} AutoSigner
+        </p>
+      </div>
+    </footer>
   </div>
   
 </template>
