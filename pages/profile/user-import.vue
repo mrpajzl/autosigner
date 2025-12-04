@@ -96,7 +96,6 @@
         <div class="flex flex-wrap items-center gap-4">
           <span class="text-sm text-slate-600 dark:text-white/60">Quick Actions:</span>
           <UButton
-            v-if="existingUsers.length > 0"
             color="blue"
             variant="soft"
             size="sm"
