@@ -58,8 +58,11 @@ export default defineEventHandler(async (event) => {
   let ipaMetadata: Awaited<ReturnType<typeof extractVersionInfoFromIpa>> | undefined
   if (!version || !buildNumber) {
     try {
+      console.log(`[IPA Metadata] Extracting version info from: ${originalIpaAbsPath}`)
       ipaMetadata = await extractVersionInfoFromIpa(originalIpaAbsPath)
-    } catch {
+      console.log(`[IPA Metadata] Extracted version info:`, ipaMetadata)
+    } catch (e) {
+      console.error(`[IPA Metadata] Failed to extract version info:`, e)
       ipaMetadata = undefined
     }
   }
@@ -73,9 +76,13 @@ export default defineEventHandler(async (event) => {
   // If no bundleId provided, try to extract CFBundleIdentifier from IPA
   if (!bundleId) {
     try {
+      console.log(`[IPA Metadata] Extracting bundle ID from: ${originalIpaAbsPath}`)
       const fromIpa = await extractBundleIdFromIpa(originalIpaAbsPath)
+      console.log(`[IPA Metadata] Extracted bundle ID: ${fromIpa}`)
       if (fromIpa) bundleId = fromIpa
-    } catch {}
+    } catch (e) {
+      console.error(`[IPA Metadata] Failed to extract bundle ID:`, e)
+    }
   }
 
   // Handle icon - only from manual upload (automatic extraction removed for reliability)
@@ -289,10 +296,13 @@ async function findInfoPlistPath(ipaPath: string): Promise<string | undefined> {
 
   for (const cmd of commands) {
     try {
+      console.log(`[IPA Metadata] Running command: ${cmd}`)
       const { stdout } = await execa('bash', ['-lc', cmd])
       const trimmed = stdout.trim()
+      console.log(`[IPA Metadata] Command output: "${trimmed}"`)
       if (trimmed) return trimmed
-    } catch {
+    } catch (e) {
+      console.error(`[IPA Metadata] Command failed:`, e)
       // continue
     }
   }

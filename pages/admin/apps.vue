@@ -344,6 +344,17 @@
                     target="_blank"
                   />
                 </template>
+                <!-- Retry button for failed signings -->
+                <UButton
+                  v-if="sv.status === 'FAILED'"
+                  size="xs"
+                  color="red"
+                  variant="ghost"
+                  icon="i-heroicons-arrow-path"
+                  :loading="retryingVersionId === sv.id"
+                  title="Retry signing"
+                  @click.stop="retrySignedVersion(app.id, sv)"
+                />
               </div>
             </div>
           </div>
@@ -567,6 +578,7 @@ const uploadStatus = ref('')
 // Signing state
 const signingAppId = ref<string | null>(null)
 const signingAllAppId = ref<string | null>(null)
+const retryingVersionId = ref<string | null>(null)
 const refreshing = ref(false)
 const openMenuId = ref<string | null>(null)
 
@@ -863,6 +875,31 @@ async function signByAllModerators(appId: string) {
     })
   } finally {
     signingAllAppId.value = null
+  }
+}
+
+async function retrySignedVersion(appId: string, sv: SignedVersion) {
+  try {
+    retryingVersionId.value = sv.id
+    const result = await $fetch<{ ok: boolean; signerName: string; queuePosition?: number }>(`/api/admin/apps/${appId}/retry/${sv.id}`, { method: 'POST' })
+    const queueMsg = result.queuePosition && result.queuePosition > 1 
+      ? ` (Position ${result.queuePosition} in queue)` 
+      : ''
+    toast.add({ 
+      title: 'Retry queued', 
+      description: `Retrying signing for ${result.signerName}.${queueMsg}`,
+      color: 'green' 
+    })
+    // Non-blocking refresh - signing happens in background
+    triggerRefresh()
+  } catch (e: any) {
+    toast.add({ 
+      title: 'Retry failed', 
+      description: e?.data?.message || e?.message || 'Unknown error',
+      color: 'red' 
+    })
+  } finally {
+    retryingVersionId.value = null
   }
 }
 
