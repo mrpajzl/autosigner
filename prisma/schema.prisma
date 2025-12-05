@@ -155,12 +155,13 @@ model AppleDeveloperCredentials {
 // A registered user (typically Discord member who wants apps signed)
 // Each moderator maintains their own user database
 model RegisteredUser {
-  id          String   @id @default(cuid())
-  ownerId     String   // The moderator who owns this user database
-  discordName String   // Discord nickname (e.g., "john_doe" or "John#1234")
-  notes       String?  // Optional notes about the user
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  ownerId         String   // The moderator who owns this user database
+  discordName     String   // Discord nickname (e.g., "john_doe" or "John#1234")
+  notes           String?  // Optional notes about the user
+  paidForNextYear Boolean  @default(false) // Track if user has paid for the next year's registration
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   owner   User         @relation(fields: [ownerId], references: [id])
   devices UserDevice[]

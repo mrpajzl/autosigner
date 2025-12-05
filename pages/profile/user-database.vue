@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 max-w-7xl mx-auto px-4 pt-6">
     <!-- Connection Required Alert -->
     <UAlert
       v-if="!appleConnected"
@@ -45,7 +45,7 @@
     </div>
 
     <!-- Statistics Summary -->
-    <div v-if="users.length > 0" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div v-if="users.length > 0" class="grid grid-cols-2 md:grid-cols-5 gap-4">
       <UCard class="glass">
         <div class="text-center">
           <div class="text-3xl font-bold text-slate-900 dark:text-white">{{ users.length }}</div>
@@ -56,6 +56,12 @@
         <div class="text-center">
           <div class="text-3xl font-bold text-blue-500">{{ totalDevices }}</div>
           <div class="text-sm text-slate-600 dark:text-white/60">Total Devices</div>
+        </div>
+      </UCard>
+      <UCard class="glass border-2 border-emerald-500/30">
+        <div class="text-center">
+          <div class="text-3xl font-bold text-emerald-500">{{ paidUsersCount }}</div>
+          <div class="text-sm text-slate-600 dark:text-white/60">Paid for Next Year</div>
         </div>
       </UCard>
       <UCard v-if="appleConnected" class="glass">
@@ -71,6 +77,28 @@
         </div>
       </UCard>
     </div>
+
+    <!-- Bulk Paid Actions -->
+    <UCard v-if="paidUsersCount > 0" class="glass border-2 border-emerald-500/30">
+      <div class="flex items-center justify-between flex-wrap gap-4">
+        <div class="flex items-center gap-3">
+          <UIcon name="i-heroicons-check-badge" class="text-2xl text-emerald-400" />
+          <div>
+            <p class="font-semibold text-slate-900 dark:text-white">{{ paidUsersCount }} user{{ paidUsersCount === 1 ? '' : 's' }} paid for next year</p>
+            <p class="text-sm text-slate-600 dark:text-white/60">Reset all when starting a new year cycle</p>
+          </div>
+        </div>
+        <UButton
+          color="amber"
+          variant="soft"
+          :loading="resettingAllPaid"
+          icon="i-heroicons-arrow-path"
+          @click="confirmResetAllPaid"
+        >
+          Reset All Paid Status
+        </UButton>
+      </div>
+    </UCard>
 
     <!-- Bulk Import to Apple -->
     <UCard v-if="appleConnected && notRegisteredInApple > 0" class="glass border-2 border-orange-500/50">
@@ -98,20 +126,56 @@
 
     <!-- Search and Filter -->
     <UCard class="glass">
-      <div class="flex items-center gap-4">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
         <UInput
           v-model="search"
           placeholder="Search users or devices..."
           icon="i-heroicons-magnifying-glass"
           class="flex-1"
         />
-        <UButton
-          icon="i-heroicons-arrow-path"
-          color="gray"
-          variant="ghost"
-          :loading="refreshing"
-          @click="refreshUsers"
-        />
+        <div class="flex items-center gap-2">
+          <div class="flex rounded-lg bg-white/5 p-1 gap-1">
+            <button
+              type="button"
+              class="px-3 py-1.5 text-sm font-medium rounded-md transition-all"
+              :class="paymentFilter === 'all' 
+                ? 'bg-white/15 text-white shadow-sm' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5'"
+              @click="paymentFilter = 'all'"
+            >
+              All
+            </button>
+            <button
+              type="button"
+              class="px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5"
+              :class="paymentFilter === 'paid' 
+                ? 'bg-emerald-500/20 text-emerald-400 shadow-sm' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5'"
+              @click="paymentFilter = 'paid'"
+            >
+              <UIcon name="i-heroicons-check-badge" class="w-4 h-4" />
+              Paid
+            </button>
+            <button
+              type="button"
+              class="px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5"
+              :class="paymentFilter === 'unpaid' 
+                ? 'bg-orange-500/20 text-orange-400 shadow-sm' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5'"
+              @click="paymentFilter = 'unpaid'"
+            >
+              <UIcon name="i-heroicons-exclamation-circle" class="w-4 h-4" />
+              Unpaid
+            </button>
+          </div>
+          <UButton
+            icon="i-heroicons-arrow-path"
+            color="gray"
+            variant="ghost"
+            :loading="refreshing"
+            @click="refreshUsers"
+          />
+        </div>
       </div>
     </UCard>
 
@@ -134,17 +198,45 @@
       <UCard
         v-for="regUser in filteredUsers"
         :key="regUser.id"
-        class="glass hover:ring-2 hover:ring-white/20 transition-all"
+        class="glass ring-0 ring-white/20"
       >
         <div class="space-y-4">
           <!-- User Header -->
           <div class="flex items-start justify-between">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+              <div 
+                class="w-10 h-10 rounded-full flex items-center justify-center"
+                :class="regUser.paidForNextYear 
+                  ? 'bg-gradient-to-br from-emerald-500 to-teal-500 ring-2 ring-emerald-400/50' 
+                  : 'bg-gradient-to-br from-blue-500 to-purple-500'"
+              >
                 <span class="text-white font-bold">{{ regUser.discordName.charAt(0).toUpperCase() }}</span>
               </div>
               <div>
-                <h3 class="font-semibold text-lg text-slate-900 dark:text-white">{{ regUser.discordName }}</h3>
+                <div class="flex items-center gap-2">
+                  <h3 class="font-semibold text-lg text-slate-900 dark:text-white">{{ regUser.discordName }}</h3>
+                  <UBadge 
+                    v-if="regUser.paidForNextYear" 
+                    color="emerald" 
+                    variant="soft" 
+                    size="xs"
+                    class="gap-1"
+                  >
+                    <UIcon name="i-heroicons-check-badge" class="w-3 h-3" />
+                    Paid
+                  </UBadge>
+                  <button
+                    type="button"
+                    class="text-[#5865F2] hover:text-[#7289DA] transition-colors"
+                    :title="`Copy username and open Discord`"
+                    @click="copyAndOpenDiscord(regUser.discordName)"
+                  >
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                    </svg>
+                  </button>
+                  <span v-if="copiedDiscordUser === regUser.discordName" class="text-xs text-green-400 animate-pulse">Copied!</span>
+                </div>
                 <div class="flex items-center gap-2 text-sm text-slate-500 dark:text-white/50">
                   <span>{{ regUser.deviceCount }} device{{ regUser.deviceCount === 1 ? '' : 's' }}</span>
                   <span v-if="regUser.registeredInAppleCount !== undefined">
@@ -153,32 +245,52 @@
                 </div>
               </div>
             </div>
-            <div class="flex items-center gap-2">
-              <UButton
+            <div class="flex items-center gap-1.5">
+              <button
+                type="button"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-all"
+                :class="regUser.paidForNextYear 
+                  ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30' 
+                  : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'"
+                :title="regUser.paidForNextYear ? 'Mark as unpaid' : 'Mark as paid for next year'"
+                :disabled="togglingPaid === regUser.id"
+                @click="togglePaidStatus(regUser)"
+              >
+                <UIcon 
+                  :name="togglingPaid === regUser.id ? 'i-heroicons-arrow-path' : (regUser.paidForNextYear ? 'i-heroicons-check-badge' : 'i-heroicons-currency-dollar')" 
+                  :class="{ 'animate-spin': togglingPaid === regUser.id }"
+                  class="w-4 h-4" 
+                />
+                {{ regUser.paidForNextYear ? 'Paid' : 'Mark Paid' }}
+              </button>
+              <button
                 v-if="appleConnected && regUser.devices.some(d => !d.isRegisteredInApple)"
-                color="orange"
-                variant="soft"
-                size="sm"
-                icon="i-heroicons-arrow-up-on-square"
-                :loading="importingUser === regUser.id"
+                type="button"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 transition-all"
+                :disabled="importingUser === regUser.id"
                 @click="handleImportUser(regUser)"
               >
+                <UIcon 
+                  :name="importingUser === regUser.id ? 'i-heroicons-arrow-path' : 'i-heroicons-arrow-up-on-square'" 
+                  :class="{ 'animate-spin': importingUser === regUser.id }"
+                  class="w-4 h-4" 
+                />
                 Import
-              </UButton>
-              <UButton
-                color="gray"
-                variant="ghost"
-                size="sm"
-                icon="i-heroicons-pencil"
+              </button>
+              <button
+                type="button"
+                class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all"
                 @click="editUser(regUser)"
-              />
-              <UButton
-                color="red"
-                variant="ghost"
-                size="sm"
-                icon="i-heroicons-trash"
+              >
+                <UIcon name="i-heroicons-pencil" class="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                class="p-2 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
                 @click="confirmDeleteUser(regUser)"
-              />
+              >
+                <UIcon name="i-heroicons-trash" class="w-4 h-4" />
+              </button>
             </div>
           </div>
 
@@ -201,7 +313,7 @@
                   <p class="font-mono text-xs text-slate-500 dark:text-white/40 truncate">{{ device.udid }}</p>
                 </div>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-1.5">
                 <UBadge
                   v-if="device.isRegisteredInApple !== undefined"
                   :color="device.isRegisteredInApple ? 'green' : 'orange'"
@@ -211,27 +323,27 @@
                   {{ device.isRegisteredInApple ? 'In Apple' : 'Not in Apple' }}
                 </UBadge>
                 <UBadge color="blue" variant="soft" size="xs">{{ device.platform }}</UBadge>
-                <UButton
-                  color="gray"
-                  variant="ghost"
-                  size="xs"
-                  icon="i-heroicons-pencil-square"
+                <button
+                  type="button"
+                  class="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-all"
                   @click="editDevice(regUser, device)"
-                />
-                <UButton
-                  color="red"
-                  variant="ghost"
-                  size="xs"
-                  icon="i-heroicons-trash"
+                >
+                  <UIcon name="i-heroicons-pencil-square" class="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  class="p-1.5 rounded-md text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
                   @click="confirmDeleteDevice(regUser, device)"
-                />
+                >
+                  <UIcon name="i-heroicons-trash" class="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           </div>
 
           <!-- Add Device Button -->
           <UButton
-            color="gray"
+            color="green"
             variant="soft"
             size="sm"
             icon="i-heroicons-plus"
@@ -387,6 +499,34 @@
         </template>
       </UCard>
     </UModal>
+
+    <!-- Reset All Paid Confirmation Modal -->
+    <UModal v-model="showResetPaidConfirm">
+      <UCard class="glass">
+        <template #header>
+          <div class="flex items-center gap-2 text-amber-400">
+            <UIcon name="i-heroicons-arrow-path" />
+            <span class="font-semibold">Reset All Paid Status</span>
+          </div>
+        </template>
+
+        <div class="space-y-3">
+          <p class="text-slate-600 dark:text-white/70">
+            Are you sure you want to reset the paid status for all <strong>{{ paidUsersCount }}</strong> user{{ paidUsersCount === 1 ? '' : 's' }}?
+          </p>
+          <p class="text-sm text-slate-500 dark:text-white/50">
+            This is typically done when starting a new yearly cycle. All users will be marked as unpaid.
+          </p>
+        </div>
+
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton color="gray" variant="ghost" @click="showResetPaidConfirm = false">Cancel</UButton>
+            <UButton color="amber" :loading="resettingAllPaid" @click="handleResetAllPaid">Reset All</UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
   </div>
 </template>
 
@@ -407,6 +547,7 @@ interface RegisteredUser {
   id: string
   discordName: string
   notes: string | null
+  paidForNextYear: boolean
   devices: Device[]
   deviceCount: number
   registeredInAppleCount?: number
@@ -416,6 +557,7 @@ interface RegisteredUser {
 
 const search = ref('')
 const refreshing = ref(false)
+const paymentFilter = ref<'all' | 'paid' | 'unpaid'>('all')
 
 // Apple connection status
 const { data: appleStatus } = await useFetch('/api/apple/credentials')
@@ -430,19 +572,33 @@ const { data: usersData, pending: loading, refresh: refreshUsersData } = await u
 const users = computed(() => usersData.value || [])
 
 const filteredUsers = computed(() => {
-  if (!search.value) return users.value
-  const s = search.value.toLowerCase()
-  return users.value.filter(u =>
-    u.discordName.toLowerCase().includes(s) ||
-    u.notes?.toLowerCase().includes(s) ||
-    u.devices.some(d => d.name.toLowerCase().includes(s) || d.udid.toLowerCase().includes(s))
-  )
+  let result = users.value
+  
+  // Apply payment filter
+  if (paymentFilter.value === 'paid') {
+    result = result.filter(u => u.paidForNextYear)
+  } else if (paymentFilter.value === 'unpaid') {
+    result = result.filter(u => !u.paidForNextYear)
+  }
+  
+  // Apply search filter
+  if (search.value) {
+    const s = search.value.toLowerCase()
+    result = result.filter(u =>
+      u.discordName.toLowerCase().includes(s) ||
+      u.notes?.toLowerCase().includes(s) ||
+      u.devices.some(d => d.name.toLowerCase().includes(s) || d.udid.toLowerCase().includes(s))
+    )
+  }
+  
+  return result
 })
 
 // Statistics
 const totalDevices = computed(() => users.value.reduce((sum, u) => sum + u.deviceCount, 0))
 const registeredInApple = computed(() => users.value.reduce((sum, u) => sum + (u.registeredInAppleCount || 0), 0))
 const notRegisteredInApple = computed(() => totalDevices.value - registeredInApple.value)
+const paidUsersCount = computed(() => users.value.filter(u => u.paidForNextYear).length)
 
 // Platform options
 const platformOptions = [
@@ -502,14 +658,88 @@ const importingUser = ref<string | null>(null)
 const importingAll = ref(false)
 const importAllResult = ref<{ success: boolean; message: string } | null>(null)
 
+// Paid status toggle state
+const togglingPaid = ref<string | null>(null)
+const resettingAllPaid = ref(false)
+const showResetPaidConfirm = ref(false)
+
 function getDeviceIcon(platform: string) {
   return platform === 'MAC_OS' ? 'i-heroicons-computer-desktop' : 'i-heroicons-device-phone-mobile'
+}
+
+// Discord copy + open state
+const copiedDiscordUser = ref<string | null>(null)
+
+async function copyAndOpenDiscord(discordName: string) {
+  try {
+    // Copy username to clipboard
+    await navigator.clipboard.writeText(discordName)
+    
+    // Show "Copied!" feedback
+    copiedDiscordUser.value = discordName
+    setTimeout(() => {
+      copiedDiscordUser.value = null
+    }, 2000)
+    
+    // Open Discord app (tries discord:// protocol first, falls back to web)
+    // The DM page is where you can search for users
+    window.open('https://discord.com/channels/@me', '_blank')
+  } catch (e) {
+    console.error('Failed to copy:', e)
+    // Still try to open Discord even if copy fails
+    window.open('https://discord.com/channels/@me', '_blank')
+  }
 }
 
 async function refreshUsers() {
   refreshing.value = true
   await refreshUsersData()
   refreshing.value = false
+}
+
+// Toggle paid status
+async function togglePaidStatus(regUser: RegisteredUser) {
+  togglingPaid.value = regUser.id
+  try {
+    await $fetch(`/api/registered-users/${regUser.id}`, {
+      method: 'PATCH',
+      body: {
+        paidForNextYear: !regUser.paidForNextYear
+      }
+    })
+    await refreshUsers()
+  } catch (e: any) {
+    console.error('Failed to toggle paid status:', e)
+  } finally {
+    togglingPaid.value = null
+  }
+}
+
+// Reset all paid statuses
+function confirmResetAllPaid() {
+  showResetPaidConfirm.value = true
+}
+
+async function handleResetAllPaid() {
+  resettingAllPaid.value = true
+  try {
+    // Reset all paid users
+    const paidUsers = users.value.filter(u => u.paidForNextYear)
+    await Promise.all(
+      paidUsers.map(u =>
+        $fetch(`/api/registered-users/${u.id}`, {
+          method: 'PATCH',
+          body: { paidForNextYear: false }
+        })
+      )
+    )
+    showResetPaidConfirm.value = false
+    await refreshUsers()
+  } catch (e: any) {
+    console.error('Failed to reset paid statuses:', e)
+  } finally {
+    resettingAllPaid.value = false
+  }
 }
 
 // User CRUD

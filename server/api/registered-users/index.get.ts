@@ -50,6 +50,7 @@ export default defineEventHandler(async (event) => {
     id: regUser.id,
     discordName: regUser.discordName,
     notes: regUser.notes,
+    paidForNextYear: regUser.paidForNextYear,
     createdAt: regUser.createdAt,
     updatedAt: regUser.updatedAt,
     devices: regUser.devices.map(device => ({
