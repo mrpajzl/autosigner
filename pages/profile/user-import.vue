@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 max-w-7xl mx-auto px-4 pt-6">
     <!-- Back Button -->
     <div>
       <UButton to="/profile/user-database" color="gray" variant="ghost" icon="i-heroicons-arrow-left">

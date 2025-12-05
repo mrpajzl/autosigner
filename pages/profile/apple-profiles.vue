@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 max-w-7xl mx-auto px-4 pt-6">
     <!-- Connection Required Alert -->
     <UAlert
       v-if="!appleConnected"
@@ -15,55 +15,6 @@
         </UButton>
       </template>
     </UAlert>
-
-    <!-- TEMPORARY: Quick Profile Recovery Card -->
-    <UCard v-if="appleConnected && showRecoveryCard" class="glass border-2 border-red-500/50">
-      <template #header>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <UIcon name="i-heroicons-wrench-screwdriver" class="text-red-400" />
-            <span class="font-semibold text-red-400">Quick Profile Recovery</span>
-          </div>
-          <UButton icon="i-heroicons-x-mark" color="gray" variant="ghost" size="xs" @click="showRecoveryCard = false" />
-        </div>
-      </template>
-
-      <div class="space-y-4">
-        <p class="text-sm text-slate-600 dark:text-white/70">
-          Quickly recreate a provisioning profile with ALL devices and certificates:
-        </p>
-
-        <div class="grid md:grid-cols-3 gap-4">
-          <UFormGroup label="Profile Name" required>
-            <UInput v-model="recoveryForm.name" placeholder="My App Ad Hoc" />
-          </UFormGroup>
-          <UFormGroup label="Bundle ID" required>
-            <USelect 
-              v-model="recoveryForm.bundleIdId" 
-              :options="bundleIdOptions" 
-              placeholder="Select bundle ID"
-              :loading="loadingBundleIds"
-            />
-          </UFormGroup>
-          <UFormGroup label="Profile Type">
-            <USelect v-model="recoveryForm.profileType" :options="recoveryProfileTypes" />
-          </UFormGroup>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <UButton 
-            color="red" 
-            :loading="recovering" 
-            icon="i-heroicons-plus-circle"
-            @click="handleRecover"
-          >
-            Create Profile & Activate
-          </UButton>
-          <p v-if="recoverSuccess" class="text-sm text-green-400">{{ recoverSuccess }}</p>
-          <p v-if="recoverError" class="text-sm text-red-400">{{ recoverError }}</p>
-        </div>
-      </div>
-    </UCard>
 
     <!-- Create New Profile -->
     <UCard v-if="appleConnected" class="glass">
@@ -301,23 +252,6 @@ const regenerating = ref<string | null>(null)
 const regenerateSuccess = ref('')
 const regenerateError = ref('')
 
-// Recovery form state (TEMPORARY)
-const showRecoveryCard = ref(true)
-const recovering = ref(false)
-const recoverSuccess = ref('')
-const recoverError = ref('')
-const recoveryForm = reactive({
-  name: '',
-  bundleIdId: '',
-  profileType: 'IOS_APP_ADHOC'
-})
-const recoveryProfileTypes = [
-  { label: 'iOS Ad Hoc', value: 'IOS_APP_ADHOC' },
-  { label: 'iOS Development', value: 'IOS_APP_DEVELOPMENT' },
-  { label: 'tvOS Ad Hoc', value: 'TVOS_APP_ADHOC' },
-  { label: 'tvOS Development', value: 'TVOS_APP_DEVELOPMENT' }
-]
-
 // Create form state
 const showCreateForm = ref(false)
 const creating = ref(false)
@@ -441,41 +375,6 @@ async function handleRegenerate(profileId: string, profileName: string) {
     regenerateError.value = e?.data?.message || 'Failed to regenerate profile'
   } finally {
     regenerating.value = null
-  }
-}
-
-// TEMPORARY: Recovery function
-async function handleRecover() {
-  recoverError.value = ''
-  recoverSuccess.value = ''
-
-  if (!recoveryForm.name || !recoveryForm.bundleIdId) {
-    recoverError.value = 'Please fill in profile name and select a bundle ID'
-    return
-  }
-
-  recovering.value = true
-  try {
-    const result = await $fetch<{ success: boolean; devicesIncluded: number; certificatesIncluded: number; profile: any }>('/api/apple/profiles/recover', {
-      method: 'POST',
-      body: {
-        name: recoveryForm.name.trim(),
-        bundleIdId: recoveryForm.bundleIdId,
-        profileType: recoveryForm.profileType
-      }
-    })
-    recoverSuccess.value = `Profile created with ${result.devicesIncluded} devices, ${result.certificatesIncluded} certificates, and activated!`
-    
-    // Reset form
-    recoveryForm.name = ''
-    recoveryForm.bundleIdId = ''
-    
-    // Refresh profiles
-    await refreshProfiles()
-  } catch (e: any) {
-    recoverError.value = e?.data?.message || 'Failed to create profile'
-  } finally {
-    recovering.value = false
   }
 }
 

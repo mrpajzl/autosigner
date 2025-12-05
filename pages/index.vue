@@ -60,8 +60,42 @@
       </div>
     </div>
 
+    <!-- Skeleton Loading State -->
+    <template v-if="pending">
+      <!-- Skeleton moderator buttons -->
+      <div class="flex flex-wrap justify-center gap-2">
+        <USkeleton class="h-8 w-24 rounded-md" />
+        <USkeleton class="h-8 w-28 rounded-md" />
+        <USkeleton class="h-8 w-20 rounded-md" />
+      </div>
+
+      <!-- Skeleton moderator section -->
+      <div v-for="i in 2" :key="i" class="grid gap-6 md:grid-cols-3">
+        <div class="md:col-span-3 flex items-center gap-3">
+          <USkeleton class="w-5 h-5 rounded" />
+          <USkeleton class="h-6 w-32" />
+        </div>
+        
+        <!-- Skeleton cards -->
+        <UCard v-for="j in 3" :key="j" class="glass">
+          <template #header>
+            <div class="flex items-center gap-3">
+              <USkeleton class="w-5 h-5 rounded" />
+              <USkeleton class="h-5 w-32" />
+            </div>
+          </template>
+          <div class="space-y-4">
+            <div v-for="k in 2" :key="k" class="flex items-center gap-3">
+              <USkeleton class="w-10 h-10 rounded-xl" />
+              <USkeleton class="h-9 w-28 rounded-md" />
+            </div>
+          </div>
+        </UCard>
+      </div>
+    </template>
+
     <!-- Quick scroll buttons -->
-    <div v-if="moderators && moderators.length > 0" class="flex flex-wrap justify-center gap-2">
+    <div v-else-if="moderators && moderators.length > 0" class="flex flex-wrap justify-center gap-2">
       <UButton
         v-for="mod in moderators"
         :key="mod.id"
@@ -75,11 +109,11 @@
       </UButton>
     </div>
 
-    <div v-if="!moderators || moderators.length === 0" class="text-center text-slate-500 dark:text-white/70">
+    <div v-else-if="!moderators || moderators.length === 0" class="text-center text-slate-500 dark:text-white/70">
       No moderators or apps available yet.
     </div>
 
-    <div v-for="mod in moderators || []" :key="mod.id" :id="`moderator-${mod.id}`" class="grid gap-6 md:grid-cols-3 scroll-mt-24">
+    <div v-if="!pending" v-for="mod in moderators || []" :key="mod.id" :id="`moderator-${mod.id}`" class="grid gap-6 md:grid-cols-3 scroll-mt-24">
       <div class="md:col-span-3">
         <div class="flex items-center gap-3">
           <UIcon name="i-heroicons-user-circle" class="text-red-500" />
@@ -173,7 +207,7 @@
             <UIcon name="i-heroicons-device-phone-mobile" class="text-red-500" />
             <div class="flex items-center gap-2">
               <p class="font-semibold">Registrovaná zařízení</p>
-              <UBadge color="red" variant="soft">{{ mod.deviceCounts.total }}</UBadge>
+              <UBadge color="red" variant="soft">{{ mod.deviceCounts.total }}/100</UBadge>
             </div>
           </div>
         </template>
@@ -241,7 +275,8 @@ type PublicModerator = {
   deviceCounts: DeviceCounts | null
 }
 
-const { data: moderators } = await useFetch<PublicModerator[]>('/api/public/moderators')
+const { data: moderators, status } = useFetch<PublicModerator[]>('/api/public/moderators', { lazy: true })
+const pending = computed(() => status.value === 'pending')
 const { public: publicConfig } = useRuntimeConfig()
 
 function installLink(app: PublicApp) {

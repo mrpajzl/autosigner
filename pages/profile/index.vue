@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 max-w-7xl mx-auto px-4 pt-6">
     <!-- Account Settings -->
     <UCard class="glass">
       <template #header>
