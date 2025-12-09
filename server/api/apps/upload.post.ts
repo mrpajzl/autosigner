@@ -21,7 +21,12 @@ export default defineEventHandler(async (event) => {
   const uploadDir = path.join(process.cwd(), '.storage-tmp', 'incoming', user.id)
   await fse.ensureDir(uploadDir)
 
-  const form = formidable({ multiples: true, uploadDir, keepExtensions: true })
+  const form = formidable({ 
+    multiples: true, 
+    uploadDir, 
+    keepExtensions: true,
+    maxFileSize: 500 * 1024 * 1024 // 500MB limit for IPA files
+  })
   const { fields, files } = await new Promise<{ fields: formidable.Fields; files: formidable.Files }>((resolve, reject) => {
     form.parse(event.node.req, (err: any, fields: any, files: any) => (err ? reject(err) : resolve({ fields, files })))
   })

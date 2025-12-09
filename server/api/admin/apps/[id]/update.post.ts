@@ -52,3 +52,4 @@ export default defineEventHandler(async (event) => {
   return { success: true, app: { id: updated.id, name: updated.name } }
 })
 
+

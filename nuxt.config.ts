@@ -82,6 +82,8 @@ export default defineNuxtConfig({
   },
 
   nitro: {
+    // Allow large file uploads (500MB) for IPA files
+    maxRequestBodySize: 500 * 1024 * 1024,
     routeRules: {
       '/apps/**': { headers: { 'cache-control': 'public, max-age=3600, immutable' } }
     },
