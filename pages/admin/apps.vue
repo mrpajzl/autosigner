@@ -105,16 +105,24 @@
             <span class="text-2xl font-mono font-bold text-red-600 dark:text-red-400">{{ uploadProgress }}%</span>
           </div>
           
+          <!-- Connection status when not yet uploading -->
+          <div v-if="uploadProgress === 0" class="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
+            <UIcon name="i-heroicons-signal" class="w-4 h-4 animate-pulse" />
+            <span>{{ connectionStatus || 'Connecting to server...' }}</span>
+            <span class="ml-auto text-slate-400 font-mono">{{ uploadElapsed }}s</span>
+          </div>
+          
           <!-- Speed and ETA info -->
-          <div v-if="uploadProgress > 0 && uploadProgress < 100" class="flex items-center justify-between text-xs text-slate-500 dark:text-white/60">
+          <div v-else-if="uploadProgress < 100" class="flex items-center justify-between text-xs text-slate-500 dark:text-white/60">
             <span v-if="uploadSpeed > 0" class="flex items-center gap-1">
-              <UIcon name="i-heroicons-bolt" class="w-3 h-3" />
+              <UIcon name="i-heroicons-bolt" class="w-3 h-3 text-green-500" />
               {{ uploadSpeed >= 1024 * 1024 ? `${(uploadSpeed / 1024 / 1024).toFixed(1)} MB/s` : `${Math.round(uploadSpeed / 1024)} KB/s` }}
             </span>
             <span v-else class="flex items-center gap-1">
-              <UIcon name="i-heroicons-signal" class="w-3 h-3 animate-pulse" />
-              Connecting...
+              <UIcon name="i-heroicons-signal" class="w-3 h-3 animate-pulse text-amber-500" />
+              Starting transfer...
             </span>
+            <span class="text-slate-400">{{ connectionStatus }}</span>
             <span v-if="uploadEta" class="flex items-center gap-1">
               <UIcon name="i-heroicons-clock" class="w-3 h-3" />
               {{ uploadEta }}
@@ -125,14 +133,14 @@
             <div
               class="h-full bg-gradient-to-r from-red-500 via-red-600 to-red-500 rounded-full transition-all duration-300 ease-out"
               :class="{ 'animate-pulse': uploadProgress === 100 }"
-              :style="{ width: `${uploadProgress}%` }"
+              :style="{ width: `${Math.max(uploadProgress, uploadProgress === 0 ? 2 : 0)}%` }"
             />
           </div>
           
           <!-- Processing status when upload is complete -->
           <p v-if="uploadProgress === 100" class="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
             <UIcon name="i-heroicons-cog-6-tooth" class="w-4 h-4 animate-spin" />
-            {{ uploadStatus || 'Processing IPA on server...' }}
+            {{ connectionStatus || uploadStatus || 'Processing IPA on server...' }}
           </p>
         </div>
       </UCard>
@@ -662,6 +670,26 @@ const uploadEta = ref('') // estimated time remaining
 const uploadStartTime = ref(0)
 const uploadLastBytes = ref(0)
 const uploadLastTime = ref(0)
+const connectionStatus = ref('') // detailed connection status
+const uploadElapsed = ref(0) // elapsed seconds, updated by interval
+
+// Update elapsed time while uploading
+let elapsedInterval: ReturnType<typeof setInterval> | null = null
+watch(uploading, (isUploading) => {
+  if (isUploading) {
+    uploadElapsed.value = 0
+    elapsedInterval = setInterval(() => {
+      if (uploadStartTime.value > 0) {
+        uploadElapsed.value = Math.round((Date.now() - uploadStartTime.value) / 1000)
+      }
+    }, 1000)
+  } else {
+    if (elapsedInterval) {
+      clearInterval(elapsedInterval)
+      elapsedInterval = null
+    }
+  }
+})
 
 // Signing state
 const signingAppId = ref<string | null>(null)
@@ -686,16 +714,32 @@ const newVersionUploadStatus = ref('')
 function uploadWithProgress(
   url: string,
   formData: FormData,
-  onProgress: (percent: number, loaded: number, total: number) => void
+  onProgress: (percent: number, loaded: number, total: number) => void,
+  onStatusChange?: (status: string) => void
 ): Promise<{ id: string }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
+    let uploadStarted = false
+    
+    // Track upload start
+    xhr.upload.addEventListener('loadstart', () => {
+      onStatusChange?.('Establishing connection...')
+    })
     
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) {
+        if (!uploadStarted && event.loaded > 0) {
+          uploadStarted = true
+          onStatusChange?.('Upload in progress...')
+        }
         const percent = Math.round((event.loaded / event.total) * 100)
         onProgress(percent, event.loaded, event.total)
       }
+    })
+    
+    // When upload finishes, server is now processing
+    xhr.upload.addEventListener('load', () => {
+      onStatusChange?.('Upload complete, server processing...')
     })
     
     xhr.addEventListener('load', () => {
@@ -709,22 +753,30 @@ function uploadWithProgress(
       } else {
         try {
           const error = JSON.parse(xhr.responseText)
-          reject({ data: error })
+          reject({ data: error, statusCode: xhr.status })
         } catch {
-          reject(new Error(`Upload failed with status ${xhr.status}`))
+          reject(new Error(`Upload failed with status ${xhr.status}: ${xhr.statusText}`))
         }
       }
     })
     
     xhr.addEventListener('error', () => {
-      reject(new Error('Network error during upload'))
+      reject(new Error('Network error - connection failed or was reset'))
     })
     
     xhr.addEventListener('abort', () => {
       reject(new Error('Upload aborted'))
     })
     
+    xhr.addEventListener('timeout', () => {
+      reject(new Error('Upload timed out'))
+    })
+    
+    // Set a generous timeout (30 minutes for large files)
+    xhr.timeout = 30 * 60 * 1000
+    
     xhr.open('POST', url)
+    onStatusChange?.('Sending request...')
     xhr.send(formData)
   })
 }
@@ -893,6 +945,7 @@ async function uploadIpa() {
   uploadStartTime.value = Date.now()
   uploadLastBytes.value = 0
   uploadLastTime.value = Date.now()
+  connectionStatus.value = 'Initializing...'
   
   try {
     const body = new FormData()
@@ -942,6 +995,9 @@ async function uploadIpa() {
           uploadSpeed.value = 0
           uploadEta.value = ''
         }
+      },
+      (status) => {
+        connectionStatus.value = status
       }
     )
     
@@ -989,6 +1045,7 @@ async function uploadIpa() {
     uploadStatus.value = ''
     uploadSpeed.value = 0
     uploadEta.value = ''
+    connectionStatus.value = ''
   }
 }
 
