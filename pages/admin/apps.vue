@@ -91,7 +91,11 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <div class="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center">
-                <UIcon name="i-heroicons-arrow-up-tray" class="w-4 h-4 text-red-500 animate-bounce" />
+                <UIcon 
+                  :name="uploadProgress === 100 ? 'i-heroicons-arrow-path' : 'i-heroicons-arrow-up-tray'" 
+                  class="w-4 h-4 text-red-500" 
+                  :class="uploadProgress === 100 ? 'animate-spin' : 'animate-bounce'" 
+                />
               </div>
               <div>
                 <p class="font-medium text-slate-800 dark:text-white">{{ uploadStatus || 'Uploading IPA...' }}</p>
@@ -100,6 +104,23 @@
             </div>
             <span class="text-2xl font-mono font-bold text-red-600 dark:text-red-400">{{ uploadProgress }}%</span>
           </div>
+          
+          <!-- Speed and ETA info -->
+          <div v-if="uploadProgress > 0 && uploadProgress < 100" class="flex items-center justify-between text-xs text-slate-500 dark:text-white/60">
+            <span v-if="uploadSpeed > 0" class="flex items-center gap-1">
+              <UIcon name="i-heroicons-bolt" class="w-3 h-3" />
+              {{ uploadSpeed >= 1024 * 1024 ? `${(uploadSpeed / 1024 / 1024).toFixed(1)} MB/s` : `${Math.round(uploadSpeed / 1024)} KB/s` }}
+            </span>
+            <span v-else class="flex items-center gap-1">
+              <UIcon name="i-heroicons-signal" class="w-3 h-3 animate-pulse" />
+              Connecting...
+            </span>
+            <span v-if="uploadEta" class="flex items-center gap-1">
+              <UIcon name="i-heroicons-clock" class="w-3 h-3" />
+              {{ uploadEta }}
+            </span>
+          </div>
+          
           <div class="h-4 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
             <div
               class="h-full bg-gradient-to-r from-red-500 via-red-600 to-red-500 rounded-full transition-all duration-300 ease-out"
@@ -107,9 +128,11 @@
               :style="{ width: `${uploadProgress}%` }"
             />
           </div>
+          
+          <!-- Processing status when upload is complete -->
           <p v-if="uploadProgress === 100" class="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
-            <UIcon name="i-heroicons-arrow-path" class="w-4 h-4 animate-spin" />
-            {{ uploadStatus || 'Processing...' }}
+            <UIcon name="i-heroicons-cog-6-tooth" class="w-4 h-4 animate-spin" />
+            {{ uploadStatus || 'Processing IPA on server...' }}
           </p>
         </div>
       </UCard>
@@ -634,6 +657,11 @@ const iconInput = ref<HTMLInputElement | null>(null)
 const uploading = ref(false)
 const uploadProgress = ref(0)
 const uploadStatus = ref('')
+const uploadSpeed = ref(0) // bytes per second
+const uploadEta = ref('') // estimated time remaining
+const uploadStartTime = ref(0)
+const uploadLastBytes = ref(0)
+const uploadLastTime = ref(0)
 
 // Signing state
 const signingAppId = ref<string | null>(null)
@@ -658,7 +686,7 @@ const newVersionUploadStatus = ref('')
 function uploadWithProgress(
   url: string,
   formData: FormData,
-  onProgress: (percent: number) => void
+  onProgress: (percent: number, loaded: number, total: number) => void
 ): Promise<{ id: string }> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
@@ -666,7 +694,7 @@ function uploadWithProgress(
     xhr.upload.addEventListener('progress', (event) => {
       if (event.lengthComputable) {
         const percent = Math.round((event.loaded / event.total) * 100)
-        onProgress(percent)
+        onProgress(percent, event.loaded, event.total)
       }
     })
     
@@ -859,7 +887,13 @@ async function uploadIpa() {
 
   uploading.value = true
   uploadProgress.value = 0
-  uploadStatus.value = 'Uploading IPA file...'
+  uploadStatus.value = 'Preparing upload...'
+  uploadSpeed.value = 0
+  uploadEta.value = ''
+  uploadStartTime.value = Date.now()
+  uploadLastBytes.value = 0
+  uploadLastTime.value = Date.now()
+  
   try {
     const body = new FormData()
     body.set('name', uploadForm.name.trim())
@@ -875,12 +909,38 @@ async function uploadIpa() {
     const result = await uploadWithProgress(
       '/api/apps/upload',
       body,
-      (percent) => {
+      (percent, loaded, total) => {
         uploadProgress.value = percent
+        
+        // Calculate upload speed (smoothed over last interval)
+        const now = Date.now()
+        const timeDiff = (now - uploadLastTime.value) / 1000 // seconds
+        if (timeDiff >= 0.5) { // Update speed every 500ms
+          const bytesDiff = loaded - uploadLastBytes.value
+          uploadSpeed.value = bytesDiff / timeDiff
+          uploadLastBytes.value = loaded
+          uploadLastTime.value = now
+          
+          // Calculate ETA
+          if (uploadSpeed.value > 0 && percent < 100) {
+            const remaining = total - loaded
+            const etaSeconds = remaining / uploadSpeed.value
+            if (etaSeconds < 60) {
+              uploadEta.value = `${Math.ceil(etaSeconds)}s remaining`
+            } else if (etaSeconds < 3600) {
+              uploadEta.value = `${Math.ceil(etaSeconds / 60)}m remaining`
+            } else {
+              uploadEta.value = `${Math.floor(etaSeconds / 3600)}h ${Math.ceil((etaSeconds % 3600) / 60)}m remaining`
+            }
+          }
+        }
+        
         if (percent < 100) {
-          uploadStatus.value = `Uploading IPA file... (${Math.round(file.size * percent / 100 / 1024 / 1024)}MB / ${Math.round(file.size / 1024 / 1024)}MB)`
+          uploadStatus.value = `Uploading IPA file... (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)`
         } else {
           uploadStatus.value = 'Processing IPA on server...'
+          uploadSpeed.value = 0
+          uploadEta.value = ''
         }
       }
     )
@@ -927,6 +987,8 @@ async function uploadIpa() {
     uploading.value = false
     uploadProgress.value = 0
     uploadStatus.value = ''
+    uploadSpeed.value = 0
+    uploadEta.value = ''
   }
 }
 
@@ -1046,10 +1108,10 @@ async function uploadNewVersion() {
     const result = await uploadWithProgress(
       '/api/apps/upload',
       body,
-      (percent) => {
+      (percent, loaded, total) => {
         newVersionUploadProgress.value = percent
         if (percent < 100) {
-          newVersionUploadStatus.value = `Uploading... (${Math.round(file.size * percent / 100 / 1024 / 1024)}MB / ${Math.round(file.size / 1024 / 1024)}MB)`
+          newVersionUploadStatus.value = `Uploading... (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)`
         } else {
           newVersionUploadStatus.value = 'Processing IPA on server...'
         }
