@@ -105,15 +105,30 @@
             <span class="text-2xl font-mono font-bold text-red-600 dark:text-red-400">{{ uploadProgress }}%</span>
           </div>
           
+          <!-- Chunked upload indicator -->
+          <div v-if="totalChunks > 1 && uploadProgress < 100" class="flex items-center gap-2 text-xs bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-2">
+            <UIcon name="i-heroicons-squares-2x2" class="w-4 h-4 text-blue-500" />
+            <span class="text-blue-600 dark:text-blue-400">
+              Chunk {{ currentChunk }}/{{ totalChunks }}
+            </span>
+            <div class="flex-1 h-1.5 bg-blue-200 dark:bg-blue-800 rounded-full overflow-hidden">
+              <div 
+                class="h-full bg-blue-500 rounded-full transition-all duration-150"
+                :style="{ width: `${chunkProgress}%` }"
+              />
+            </div>
+            <span class="text-blue-500 font-mono">{{ chunkProgress }}%</span>
+          </div>
+          
           <!-- Connection status when not yet uploading -->
-          <div v-if="uploadProgress === 0" class="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
+          <div v-if="uploadProgress === 0 && totalChunks === 0" class="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
             <UIcon name="i-heroicons-signal" class="w-4 h-4 animate-pulse" />
             <span>{{ connectionStatus || 'Connecting to server...' }}</span>
             <span class="ml-auto text-slate-400 font-mono">{{ uploadElapsed }}s</span>
           </div>
           
           <!-- Speed and ETA info -->
-          <div v-else-if="uploadProgress < 100" class="flex items-center justify-between text-xs text-slate-500 dark:text-white/60">
+          <div v-else-if="uploadProgress > 0 && uploadProgress < 100" class="flex items-center justify-between text-xs text-slate-500 dark:text-white/60">
             <span v-if="uploadSpeed > 0" class="flex items-center gap-1">
               <UIcon name="i-heroicons-bolt" class="w-3 h-3 text-green-500" />
               {{ uploadSpeed >= 1024 * 1024 ? `${(uploadSpeed / 1024 / 1024).toFixed(1)} MB/s` : `${Math.round(uploadSpeed / 1024)} KB/s` }}
@@ -122,17 +137,17 @@
               <UIcon name="i-heroicons-signal" class="w-3 h-3 animate-pulse text-amber-500" />
               Starting transfer...
             </span>
-            <span class="text-slate-400">{{ connectionStatus }}</span>
             <span v-if="uploadEta" class="flex items-center gap-1">
               <UIcon name="i-heroicons-clock" class="w-3 h-3" />
               {{ uploadEta }}
             </span>
           </div>
           
+          <!-- Overall progress bar -->
           <div class="h-4 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
             <div
               class="h-full bg-gradient-to-r from-red-500 via-red-600 to-red-500 rounded-full transition-all duration-300 ease-out"
-              :class="{ 'animate-pulse': uploadProgress === 100 }"
+              :class="{ 'animate-pulse': uploadProgress >= 99 && uploadProgress < 100 }"
               :style="{ width: `${Math.max(uploadProgress, uploadProgress === 0 ? 2 : 0)}%` }"
             />
           </div>
@@ -141,6 +156,12 @@
           <p v-if="uploadProgress === 100" class="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-2">
             <UIcon name="i-heroicons-cog-6-tooth" class="w-4 h-4 animate-spin" />
             {{ connectionStatus || uploadStatus || 'Processing IPA on server...' }}
+          </p>
+          
+          <!-- Assembling status -->
+          <p v-else-if="uploadProgress >= 99 && totalChunks > 1" class="text-sm text-blue-600 dark:text-blue-400 flex items-center gap-2">
+            <UIcon name="i-heroicons-arrow-path" class="w-4 h-4 animate-spin" />
+            {{ connectionStatus || 'Assembling chunks on server...' }}
           </p>
         </div>
       </UCard>
@@ -672,6 +693,9 @@ const uploadLastBytes = ref(0)
 const uploadLastTime = ref(0)
 const connectionStatus = ref('') // detailed connection status
 const uploadElapsed = ref(0) // elapsed seconds, updated by interval
+const currentChunk = ref(0)
+const totalChunks = ref(0)
+const chunkProgress = ref(0) // progress within current chunk
 
 // Update elapsed time while uploading
 let elapsedInterval: ReturnType<typeof setInterval> | null = null
@@ -779,6 +803,116 @@ function uploadWithProgress(
     onStatusChange?.('Sending request...')
     xhr.send(formData)
   })
+}
+
+// Chunked upload for large files (bypasses Cloudflare 100MB limit)
+const CHUNK_SIZE = 50 * 1024 * 1024 // 50MB chunks
+
+interface ChunkedUploadCallbacks {
+  onProgress: (percent: number, loaded: number, total: number) => void
+  onStatusChange: (status: string) => void
+  onChunkProgress: (chunkIndex: number, totalChunks: number, chunkPercent: number) => void
+}
+
+async function uploadChunked(
+  file: File,
+  metadata: { name: string; platform: string; appId?: string },
+  callbacks: ChunkedUploadCallbacks
+): Promise<{ id: string }> {
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE)
+  const uploadId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  
+  callbacks.onStatusChange(`Preparing ${totalChunks} chunks...`)
+  
+  let totalUploaded = 0
+  
+  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+    const start = chunkIndex * CHUNK_SIZE
+    const end = Math.min(start + CHUNK_SIZE, file.size)
+    const chunk = file.slice(start, end)
+    
+    callbacks.onStatusChange(`Uploading chunk ${chunkIndex + 1}/${totalChunks}...`)
+    
+    // Upload this chunk with progress tracking
+    await new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const chunkPercent = Math.round((event.loaded / event.total) * 100)
+          callbacks.onChunkProgress(chunkIndex, totalChunks, chunkPercent)
+          
+          // Calculate overall progress
+          const chunkContribution = (chunkIndex / totalChunks) * 100
+          const thisChunkContribution = (chunkPercent / 100) * (100 / totalChunks)
+          const overallPercent = Math.round(chunkContribution + thisChunkContribution)
+          const currentLoaded = totalUploaded + event.loaded
+          callbacks.onProgress(Math.min(overallPercent, 99), currentLoaded, file.size)
+        }
+      })
+      
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          totalUploaded += (end - start)
+          resolve()
+        } else {
+          try {
+            const error = JSON.parse(xhr.responseText)
+            reject({ data: error, statusCode: xhr.status })
+          } catch {
+            reject(new Error(`Chunk upload failed with status ${xhr.status}: ${xhr.statusText}`))
+          }
+        }
+      })
+      
+      xhr.addEventListener('error', () => {
+        reject(new Error(`Network error uploading chunk ${chunkIndex + 1}`))
+      })
+      
+      xhr.addEventListener('timeout', () => {
+        reject(new Error(`Timeout uploading chunk ${chunkIndex + 1}`))
+      })
+      
+      xhr.timeout = 5 * 60 * 1000 // 5 minutes per chunk
+      
+      const formData = new FormData()
+      formData.set('uploadId', uploadId)
+      formData.set('chunkIndex', String(chunkIndex))
+      formData.set('totalChunks', String(totalChunks))
+      formData.set('fileName', file.name)
+      formData.set('chunk', chunk, file.name)
+      
+      // Include metadata in first chunk
+      if (chunkIndex === 0) {
+        formData.set('name', metadata.name)
+        formData.set('platform', metadata.platform)
+        if (metadata.appId) formData.set('appId', metadata.appId)
+      }
+      
+      xhr.open('POST', '/api/apps/upload-chunk')
+      xhr.send(formData)
+    })
+  }
+  
+  // All chunks uploaded, finalize
+  callbacks.onStatusChange('Assembling file on server...')
+  callbacks.onProgress(99, file.size, file.size)
+  
+  const result = await $fetch<{ id: string }>('/api/apps/upload-finalize', {
+    method: 'POST',
+    body: {
+      uploadId,
+      fileName: file.name,
+      name: metadata.name,
+      platform: metadata.platform,
+      appId: metadata.appId
+    }
+  })
+  
+  callbacks.onProgress(100, file.size, file.size)
+  callbacks.onStatusChange('Processing complete!')
+  
+  return result
 }
 
 // Delete modal state
@@ -946,60 +1080,122 @@ async function uploadIpa() {
   uploadLastBytes.value = 0
   uploadLastTime.value = Date.now()
   connectionStatus.value = 'Initializing...'
+  currentChunk.value = 0
+  totalChunks.value = 0
+  chunkProgress.value = 0
+  
+  // Use chunked upload for files > 80MB to stay under Cloudflare's 100MB limit
+  const useChunked = file.size > 80 * 1024 * 1024
   
   try {
-    const body = new FormData()
-    body.set('name', uploadForm.name.trim())
-    body.set('platform', uploadForm.platform)
-    body.set('ipa', file)
+    let result: { id: string }
     
-    // Add optional icon if provided
-    const iconFile = iconInput.value?.files?.[0]
-    if (iconFile) {
-      body.set('icon', iconFile)
-    }
-    
-    const result = await uploadWithProgress(
-      '/api/apps/upload',
-      body,
-      (percent, loaded, total) => {
-        uploadProgress.value = percent
-        
-        // Calculate upload speed (smoothed over last interval)
-        const now = Date.now()
-        const timeDiff = (now - uploadLastTime.value) / 1000 // seconds
-        if (timeDiff >= 0.5) { // Update speed every 500ms
-          const bytesDiff = loaded - uploadLastBytes.value
-          uploadSpeed.value = bytesDiff / timeDiff
-          uploadLastBytes.value = loaded
-          uploadLastTime.value = now
-          
-          // Calculate ETA
-          if (uploadSpeed.value > 0 && percent < 100) {
-            const remaining = total - loaded
-            const etaSeconds = remaining / uploadSpeed.value
-            if (etaSeconds < 60) {
-              uploadEta.value = `${Math.ceil(etaSeconds)}s remaining`
-            } else if (etaSeconds < 3600) {
-              uploadEta.value = `${Math.ceil(etaSeconds / 60)}m remaining`
-            } else {
-              uploadEta.value = `${Math.floor(etaSeconds / 3600)}h ${Math.ceil((etaSeconds % 3600) / 60)}m remaining`
+    if (useChunked) {
+      // Chunked upload for large files
+      totalChunks.value = Math.ceil(file.size / CHUNK_SIZE)
+      
+      result = await uploadChunked(
+        file,
+        { name: uploadForm.name.trim(), platform: uploadForm.platform },
+        {
+          onProgress: (percent, loaded, total) => {
+            uploadProgress.value = percent
+            
+            // Calculate upload speed
+            const now = Date.now()
+            const timeDiff = (now - uploadLastTime.value) / 1000
+            if (timeDiff >= 0.5) {
+              const bytesDiff = loaded - uploadLastBytes.value
+              uploadSpeed.value = bytesDiff / timeDiff
+              uploadLastBytes.value = loaded
+              uploadLastTime.value = now
+              
+              if (uploadSpeed.value > 0 && percent < 100) {
+                const remaining = total - loaded
+                const etaSeconds = remaining / uploadSpeed.value
+                if (etaSeconds < 60) {
+                  uploadEta.value = `${Math.ceil(etaSeconds)}s remaining`
+                } else if (etaSeconds < 3600) {
+                  uploadEta.value = `${Math.ceil(etaSeconds / 60)}m remaining`
+                } else {
+                  uploadEta.value = `${Math.floor(etaSeconds / 3600)}h ${Math.ceil((etaSeconds % 3600) / 60)}m remaining`
+                }
+              }
             }
+            
+            if (percent < 99) {
+              uploadStatus.value = `Uploading... (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)`
+            } else if (percent < 100) {
+              uploadStatus.value = 'Assembling file on server...'
+              uploadSpeed.value = 0
+              uploadEta.value = ''
+            } else {
+              uploadStatus.value = 'Processing IPA...'
+            }
+          },
+          onStatusChange: (status) => {
+            connectionStatus.value = status
+          },
+          onChunkProgress: (chunkIdx, total, chunkPct) => {
+            currentChunk.value = chunkIdx + 1
+            totalChunks.value = total
+            chunkProgress.value = chunkPct
           }
         }
-        
-        if (percent < 100) {
-          uploadStatus.value = `Uploading IPA file... (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)`
-        } else {
-          uploadStatus.value = 'Processing IPA on server...'
-          uploadSpeed.value = 0
-          uploadEta.value = ''
-        }
-      },
-      (status) => {
-        connectionStatus.value = status
+      )
+    } else {
+      // Regular upload for small files
+      const body = new FormData()
+      body.set('name', uploadForm.name.trim())
+      body.set('platform', uploadForm.platform)
+      body.set('ipa', file)
+      
+      // Add optional icon if provided
+      const iconFile = iconInput.value?.files?.[0]
+      if (iconFile) {
+        body.set('icon', iconFile)
       }
-    )
+      
+      result = await uploadWithProgress(
+        '/api/apps/upload',
+        body,
+        (percent, loaded, total) => {
+          uploadProgress.value = percent
+          
+          const now = Date.now()
+          const timeDiff = (now - uploadLastTime.value) / 1000
+          if (timeDiff >= 0.5) {
+            const bytesDiff = loaded - uploadLastBytes.value
+            uploadSpeed.value = bytesDiff / timeDiff
+            uploadLastBytes.value = loaded
+            uploadLastTime.value = now
+            
+            if (uploadSpeed.value > 0 && percent < 100) {
+              const remaining = total - loaded
+              const etaSeconds = remaining / uploadSpeed.value
+              if (etaSeconds < 60) {
+                uploadEta.value = `${Math.ceil(etaSeconds)}s remaining`
+              } else if (etaSeconds < 3600) {
+                uploadEta.value = `${Math.ceil(etaSeconds / 60)}m remaining`
+              } else {
+                uploadEta.value = `${Math.floor(etaSeconds / 3600)}h ${Math.ceil((etaSeconds % 3600) / 60)}m remaining`
+              }
+            }
+          }
+          
+          if (percent < 100) {
+            uploadStatus.value = `Uploading IPA file... (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)`
+          } else {
+            uploadStatus.value = 'Processing IPA on server...'
+            uploadSpeed.value = 0
+            uploadEta.value = ''
+          }
+        },
+        (status) => {
+          connectionStatus.value = status
+        }
+      )
+    }
     
     toast.add({ 
       title: 'App uploaded successfully', 
@@ -1046,6 +1242,9 @@ async function uploadIpa() {
     uploadSpeed.value = 0
     uploadEta.value = ''
     connectionStatus.value = ''
+    currentChunk.value = 0
+    totalChunks.value = 0
+    chunkProgress.value = 0
   }
 }
 
