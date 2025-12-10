@@ -525,14 +525,39 @@
               </span>
               <span class="font-mono font-medium text-red-600 dark:text-red-400">{{ newVersionUploadProgress }}%</span>
             </div>
+            
+            <!-- Chunk progress for large files -->
+            <div v-if="newVersionTotalChunks > 1 && newVersionUploadProgress < 100" class="flex items-center gap-2 text-xs">
+              <UIcon name="i-heroicons-squares-2x2" class="w-3 h-3 text-blue-500" />
+              <span class="text-blue-600 dark:text-blue-400">Chunk {{ newVersionCurrentChunk }}/{{ newVersionTotalChunks }}</span>
+              <div class="flex-1 h-1 bg-blue-200 dark:bg-blue-800 rounded-full overflow-hidden">
+                <div 
+                  class="h-full bg-blue-500 rounded-full transition-all duration-150"
+                  :style="{ width: `${newVersionChunkProgress}%` }"
+                />
+              </div>
+            </div>
+            
+            <!-- Speed and ETA -->
+            <div v-if="newVersionUploadSpeed > 0 && newVersionUploadProgress < 100" class="flex items-center justify-between text-xs text-slate-500 dark:text-white/50">
+              <span class="flex items-center gap-1">
+                <UIcon name="i-heroicons-bolt" class="w-3 h-3 text-green-500" />
+                {{ newVersionUploadSpeed >= 1024 * 1024 ? `${(newVersionUploadSpeed / 1024 / 1024).toFixed(1)} MB/s` : `${Math.round(newVersionUploadSpeed / 1024)} KB/s` }}
+              </span>
+              <span v-if="newVersionUploadEta" class="flex items-center gap-1">
+                <UIcon name="i-heroicons-clock" class="w-3 h-3" />
+                {{ newVersionUploadEta }}
+              </span>
+            </div>
+            
             <div class="h-2 bg-slate-200 dark:bg-white/10 rounded-full overflow-hidden">
               <div
                 class="h-full bg-gradient-to-r from-red-500 to-red-600 rounded-full transition-all duration-300 ease-out"
-                :class="{ 'animate-pulse': newVersionUploadProgress === 100 }"
+                :class="{ 'animate-pulse': newVersionUploadProgress >= 99 }"
                 :style="{ width: `${newVersionUploadProgress}%` }"
               />
             </div>
-            <p v-if="newVersionUploadProgress === 100" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+            <p v-if="newVersionUploadProgress >= 99" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
               <UIcon name="i-heroicons-arrow-path" class="w-3 h-3 animate-spin" />
               {{ newVersionUploadStatus || 'Processing...' }}
             </p>
@@ -733,6 +758,13 @@ const newVersionIconInput = ref<HTMLInputElement | null>(null)
 const uploadingNewVersion = ref(false)
 const newVersionUploadProgress = ref(0)
 const newVersionUploadStatus = ref('')
+const newVersionCurrentChunk = ref(0)
+const newVersionTotalChunks = ref(0)
+const newVersionChunkProgress = ref(0)
+const newVersionUploadSpeed = ref(0)
+const newVersionUploadEta = ref('')
+const newVersionLastBytes = ref(0)
+const newVersionLastTime = ref(0)
 
 // Upload with progress tracking using XMLHttpRequest
 function uploadWithProgress(
@@ -1347,32 +1379,107 @@ async function uploadNewVersion() {
 
   uploadingNewVersion.value = true
   newVersionUploadProgress.value = 0
-  newVersionUploadStatus.value = 'Uploading IPA file...'
+  newVersionUploadStatus.value = 'Preparing upload...'
+  newVersionCurrentChunk.value = 0
+  newVersionTotalChunks.value = 0
+  newVersionChunkProgress.value = 0
+  newVersionUploadSpeed.value = 0
+  newVersionUploadEta.value = ''
+  newVersionLastBytes.value = 0
+  newVersionLastTime.value = Date.now()
+  
+  // Use chunked upload for files > 80MB
+  const useChunked = file.size > 80 * 1024 * 1024
+  
   try {
-    const body = new FormData()
-    body.set('appId', selectedApp.value.id)
-    body.set('name', selectedApp.value.name)
-    body.set('platform', selectedApp.value.platform)
-    body.set('ipa', file)
+    let result: { id: string }
     
-    // Add optional icon if provided
-    const iconFile = newVersionIconInput.value?.files?.[0]
-    if (iconFile) {
-      body.set('icon', iconFile)
-    }
-    
-    const result = await uploadWithProgress(
-      '/api/apps/upload',
-      body,
-      (percent, loaded, total) => {
-        newVersionUploadProgress.value = percent
-        if (percent < 100) {
-          newVersionUploadStatus.value = `Uploading... (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)`
-        } else {
-          newVersionUploadStatus.value = 'Processing IPA on server...'
+    if (useChunked) {
+      newVersionTotalChunks.value = Math.ceil(file.size / CHUNK_SIZE)
+      
+      result = await uploadChunked(
+        file,
+        { 
+          name: selectedApp.value.name, 
+          platform: selectedApp.value.platform,
+          appId: selectedApp.value.id
+        },
+        {
+          onProgress: (percent, loaded, total) => {
+            newVersionUploadProgress.value = percent
+            
+            const now = Date.now()
+            const timeDiff = (now - newVersionLastTime.value) / 1000
+            if (timeDiff >= 0.5) {
+              const bytesDiff = loaded - newVersionLastBytes.value
+              newVersionUploadSpeed.value = bytesDiff / timeDiff
+              newVersionLastBytes.value = loaded
+              newVersionLastTime.value = now
+              
+              if (newVersionUploadSpeed.value > 0 && percent < 100) {
+                const remaining = total - loaded
+                const etaSeconds = remaining / newVersionUploadSpeed.value
+                if (etaSeconds < 60) {
+                  newVersionUploadEta.value = `${Math.ceil(etaSeconds)}s`
+                } else {
+                  newVersionUploadEta.value = `${Math.ceil(etaSeconds / 60)}m`
+                }
+              }
+            }
+            
+            if (percent < 99) {
+              newVersionUploadStatus.value = `Uploading... (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)`
+            } else if (percent < 100) {
+              newVersionUploadStatus.value = 'Assembling file...'
+            } else {
+              newVersionUploadStatus.value = 'Processing IPA...'
+            }
+          },
+          onStatusChange: (status) => {
+            // Could show connection status if needed
+          },
+          onChunkProgress: (chunkIdx, total, chunkPct) => {
+            newVersionCurrentChunk.value = chunkIdx + 1
+            newVersionTotalChunks.value = total
+            newVersionChunkProgress.value = chunkPct
+          }
         }
+      )
+    } else {
+      const body = new FormData()
+      body.set('appId', selectedApp.value.id)
+      body.set('name', selectedApp.value.name)
+      body.set('platform', selectedApp.value.platform)
+      body.set('ipa', file)
+      
+      const iconFile = newVersionIconInput.value?.files?.[0]
+      if (iconFile) {
+        body.set('icon', iconFile)
       }
-    )
+      
+      result = await uploadWithProgress(
+        '/api/apps/upload',
+        body,
+        (percent, loaded, total) => {
+          newVersionUploadProgress.value = percent
+          
+          const now = Date.now()
+          const timeDiff = (now - newVersionLastTime.value) / 1000
+          if (timeDiff >= 0.5) {
+            const bytesDiff = loaded - newVersionLastBytes.value
+            newVersionUploadSpeed.value = bytesDiff / timeDiff
+            newVersionLastBytes.value = loaded
+            newVersionLastTime.value = now
+          }
+          
+          if (percent < 100) {
+            newVersionUploadStatus.value = `Uploading... (${Math.round(loaded / 1024 / 1024)}MB / ${Math.round(total / 1024 / 1024)}MB)`
+          } else {
+            newVersionUploadStatus.value = 'Processing IPA on server...'
+          }
+        }
+      )
+    }
     
     toast.add({ 
       title: 'New version uploaded successfully', 
@@ -1415,6 +1522,11 @@ async function uploadNewVersion() {
     uploadingNewVersion.value = false
     newVersionUploadProgress.value = 0
     newVersionUploadStatus.value = ''
+    newVersionCurrentChunk.value = 0
+    newVersionTotalChunks.value = 0
+    newVersionChunkProgress.value = 0
+    newVersionUploadSpeed.value = 0
+    newVersionUploadEta.value = ''
   }
 }
 
