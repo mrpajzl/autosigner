@@ -317,7 +317,7 @@ function tvosLink(app: PublicApp) {
     : (typeof window !== 'undefined' ? window.location.origin : '')
   const path = app.downloadPath || ''
   if (!path) return undefined
-  return `${origin}${path}`
+  return `${origin}/api/download${path}`
 }
 
 function formatDate(iso: string | null) {
