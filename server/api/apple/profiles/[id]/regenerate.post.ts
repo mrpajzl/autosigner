@@ -92,7 +92,9 @@ export default defineEventHandler(async (event) => {
 
     // IMPORTANT: Create new profile FIRST before deleting the old one
     // This way if creation fails, the old profile is still intact
-    const newProfileName = `${existingProfile.attributes.name} (Updated ${new Date().toLocaleDateString()})`
+    // Strip any existing "(Updated ...)" suffix before adding the new one
+    const baseName = existingProfile.attributes.name.replace(/\s*\(Updated [^)]+\)/g, '')
+    const newProfileName = `${baseName} (Updated ${new Date().toLocaleDateString()})`
     
     // Create new profile with ALL enabled devices
     const newProfile = await api.createProfile(

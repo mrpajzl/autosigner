@@ -99,7 +99,7 @@ export default defineEventHandler(async (event) => {
       await api.registerDevice(
         device.udid,
         deviceName,
-        device.platform as 'IOS' | 'MAC_OS'
+        device.platform as 'IOS' | 'MAC_OS' | 'APPLE_TV'
       )
       
       results.push({

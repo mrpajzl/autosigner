@@ -7,7 +7,7 @@ import { z } from 'zod'
 const schema = z.object({
   udid: z.string().min(1, 'UDID is required'),
   name: z.string().min(1, 'Device name is required'),
-  platform: z.enum(['IOS', 'MAC_OS']).default('IOS')
+  platform: z.enum(['IOS', 'MAC_OS', 'APPLE_TV']).default('IOS')
 })
 
 export default defineEventHandler(async (event) => {

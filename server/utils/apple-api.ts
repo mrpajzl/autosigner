@@ -225,7 +225,7 @@ export class AppleDeveloperAPI {
   async registerDevice(
     udid: string,
     name: string,
-    platform: 'IOS' | 'MAC_OS' = 'IOS'
+    platform: 'IOS' | 'MAC_OS' | 'APPLE_TV' = 'IOS'
   ): Promise<AppleDevice> {
     const res = await this.request<AppleDevice>('/devices', {
       method: 'POST',

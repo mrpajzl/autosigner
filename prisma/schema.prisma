@@ -176,7 +176,7 @@ model UserDevice {
   registeredUserId String
   udid             String   // Device UDID
   name             String   // Device name (e.g., "John's iPhone 15")
-  platform         String   @default("IOS") // IOS | MAC_OS
+  platform         String   @default("IOS") // IOS | MAC_OS | APPLE_TV
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
