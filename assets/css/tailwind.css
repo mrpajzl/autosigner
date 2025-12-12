@@ -85,4 +85,43 @@ body {
     background-color: color-mix(in srgb, #fecaca 40%, transparent);
     border-color: rgba(248, 113, 113, 0.8);
   }
+
+  /* Typography hierarchy for better title distinction */
+  .page-title {
+    @apply text-3xl md:text-4xl font-bold text-slate-900 dark:text-white;
+    @apply mb-2 tracking-tight;
+    letter-spacing: -0.02em;
+  }
+
+  .page-title-gradient {
+    @apply text-3xl md:text-4xl font-bold mb-2 tracking-tight;
+    @apply bg-gradient-to-r from-red-500 to-violet-500 bg-clip-text text-transparent;
+    letter-spacing: -0.02em;
+  }
+
+  .section-title {
+    @apply text-2xl font-bold text-slate-900 dark:text-white;
+    @apply mb-4 mt-8 first:mt-0;
+    @apply flex items-center gap-2;
+    @apply border-b border-slate-200 dark:border-white/10 pb-2;
+  }
+
+  .section-title-wrapper {
+    @apply flex items-center justify-between gap-3;
+  }
+
+  .subsection-title {
+    @apply text-xl font-semibold text-slate-800 dark:text-white;
+    @apply mb-3 mt-6;
+    @apply flex items-center gap-2;
+  }
+
+  .card-title {
+    @apply text-lg font-semibold text-slate-900 dark:text-white;
+    @apply flex items-center gap-2;
+  }
+
+  .card-subtitle {
+    @apply text-base font-medium text-slate-700 dark:text-white/90;
+  }
 }

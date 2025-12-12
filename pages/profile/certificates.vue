@@ -5,7 +5,7 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-identification" />
-            <span class="font-semibold">Certificates</span>
+            <span class="card-title">Certificates</span>
           </div>
         </div>
       </template>

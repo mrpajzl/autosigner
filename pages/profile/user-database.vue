@@ -19,7 +19,7 @@
     <!-- Header with Actions -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-white">User Database</h1>
+        <h1 class="page-title">User Database</h1>
         <p class="text-sm text-slate-600 dark:text-white/60 mt-1">
           Manage your registered users and their devices for yearly device resets
         </p>

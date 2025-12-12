@@ -6,7 +6,7 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-cog-6-tooth" />
-            <span class="font-semibold">Account Settings</span>
+            <span class="card-title">Account Settings</span>
           </div>
         </div>
       </template>
@@ -33,7 +33,7 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-user" />
-            <span class="font-semibold">Signing Assets</span>
+            <span class="card-title">Signing Assets</span>
           </div>
         </div>
       </template>
@@ -52,7 +52,7 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-building-storefront" />
-            <span class="font-semibold">Apple Developer Integration</span>
+            <span class="card-title">Apple Developer Integration</span>
           </div>
           <UBadge v-if="appleConnected" color="green" variant="soft">Connected</UBadge>
           <UBadge v-else color="gray" variant="soft">Not Connected</UBadge>
@@ -105,7 +105,7 @@
         <template #header>
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-key" />
-            <span class="font-semibold">Change Password</span>
+            <span class="card-title">Change Password</span>
           </div>
         </template>
 

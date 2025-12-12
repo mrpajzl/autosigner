@@ -5,7 +5,7 @@
       <template #header>
         <div class="flex items-center gap-2">
           <UIcon name="i-heroicons-user-plus" />
-          <span class="font-semibold">Create New User</span>
+          <span class="card-title">Create New User</span>
         </div>
       </template>
       <UForm :state="newUser" class="space-y-4" @submit="createNewUser">
@@ -31,7 +31,7 @@
       <template #header>
         <div class="flex items-center gap-2">
           <UIcon name="i-heroicons-users" />
-          <span class="font-semibold">Users</span>
+          <span class="card-title">Users</span>
         </div>
       </template>
       <UTable :rows="rows" :columns="columns">

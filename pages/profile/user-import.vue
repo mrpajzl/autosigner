@@ -9,7 +9,7 @@
 
     <!-- Header -->
     <div>
-      <h1 class="text-2xl font-bold text-slate-900 dark:text-white">Import Devices from Apple</h1>
+      <h1 class="page-title">Import Devices from Apple</h1>
       <p class="text-sm text-slate-600 dark:text-white/60 mt-1">
         Map your existing Apple Developer devices to users in your database
       </p>

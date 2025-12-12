@@ -11,7 +11,7 @@
           <UIcon name="i-heroicons-book-open" class="w-4 h-4" />
           <span>Návod</span>
         </div>
-        <h1 class="text-3xl md:text-4xl font-bold text-white">
+        <h1 class="page-title text-white">
           Hackintosh ve VMware na Windows
         </h1>
         <p class="text-lg text-white/70 max-w-2xl">
@@ -65,7 +65,7 @@
 
     <!-- VMware Player / Workstation Guide -->
     <div v-if="activeTab === 'vmware'" class="space-y-6">
-      <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+      <h2 class="subsection-title">
         <UIcon name="i-heroicons-computer-desktop" class="w-6 h-6 text-orange-500" />
         Instalace na VMware Player / Workstation Pro
       </h2>
@@ -274,7 +274,7 @@
 
     <!-- ESXi Guide -->
     <div v-if="activeTab === 'esxi'" class="space-y-6">
-      <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+      <h2 class="subsection-title">
         <UIcon name="i-heroicons-server" class="w-6 h-6 text-orange-500" />
         Instalace na VMware ESXi 7.0 Update 3
       </h2>
@@ -453,7 +453,7 @@
 
     <!-- Common section - Apple TV pairing -->
     <div class="space-y-6 pt-6 border-t border-slate-200 dark:border-white/10">
-      <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+      <h2 class="subsection-title">
         <UIcon name="i-heroicons-tv" class="w-6 h-6 text-red-500" />
         Párování Apple TV v macOS
       </h2>

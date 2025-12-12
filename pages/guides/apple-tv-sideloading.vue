@@ -11,7 +11,7 @@
           <UIcon name="i-heroicons-book-open" class="w-4 h-4" />
           <span>Návod</span>
         </div>
-        <h1 class="text-3xl md:text-4xl font-bold text-white">
+        <h1 class="page-title text-white">
           Sideloading aplikací na Apple TV
         </h1>
         <p class="text-lg text-white/70 max-w-2xl">

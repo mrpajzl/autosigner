@@ -26,7 +26,7 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-document-text" />
-            <span class="font-semibold">Local Provisioning Profiles</span>
+            <span class="card-title">Local Provisioning Profiles</span>
           </div>
         </div>
       </template>

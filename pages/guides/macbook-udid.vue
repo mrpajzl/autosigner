@@ -11,7 +11,7 @@
           <UIcon name="i-heroicons-book-open" class="w-4 h-4" />
           <span>Návod</span>
         </div>
-        <h1 class="text-3xl md:text-4xl font-bold text-white">
+        <h1 class="page-title text-white">
           Jak zjistit UDID MacBooku
         </h1>
         <p class="text-lg text-white/70 max-w-2xl">
@@ -38,7 +38,7 @@
 
     <!-- Method 1: System Settings -->
     <div class="space-y-4">
-      <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+      <h2 class="subsection-title">
         <span class="w-8 h-8 rounded-full bg-gradient-to-br from-slate-500 to-zinc-600 text-white text-sm font-bold flex items-center justify-center">1</span>
         Metoda přes Nastavení systému
       </h2>
@@ -150,7 +150,7 @@
 
     <!-- Method 2: Terminal -->
     <div class="space-y-4">
-      <h2 class="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+      <h2 class="subsection-title">
         <span class="w-8 h-8 rounded-full bg-gradient-to-br from-slate-500 to-zinc-600 text-white text-sm font-bold flex items-center justify-center">2</span>
         Rychlá metoda přes Terminál
       </h2>

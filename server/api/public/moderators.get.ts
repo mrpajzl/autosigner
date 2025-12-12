@@ -32,6 +32,11 @@ type PublicModerator = {
   profileAvailable: boolean
   certificateExpiresAt: string | null
   deviceCounts: DeviceCounts | null
+  certificates: Array<{ id: string; displayName: string | null; expiresAt: string | null }>
+  profiles: Array<{ id: string; name: string | null; platform: 'IOS' | 'TVOS'; expiresAt: string | null }>
+  hasManagerProfileCertificate: boolean
+  hasManagerProfileIos: boolean
+  hasManagerProfileTvos: boolean
 }
 
 // Helper function to fetch device counts for a user with Apple credentials
@@ -90,7 +95,8 @@ export default defineEventHandler(async () => {
       },
       include: {
         managerProfile: true,
-        certificates: { where: { active: true }, take: 1 },
+        certificates: { where: { active: true }, take: 1, select: { id: true, displayName: true, expiresAt: true } },
+        provisioningProfiles: { where: { active: true }, select: { id: true, name: true, platform: true, expiresAt: true } },
         appleDeveloperCredentials: true,
         // Get apps the moderator has signed (SignedVersion)
         signedVersions: {
@@ -178,7 +184,22 @@ export default defineEventHandler(async () => {
             (u.managerProfile?.mobileprovisionIos || u.managerProfile?.mobileprovisionTvos)
           ),
           certificateExpiresAt,
-          deviceCounts
+          deviceCounts,
+          certificates: u.certificates.map(c => ({
+            id: c.id,
+            displayName: c.displayName,
+            expiresAt: c.expiresAt?.toISOString() || null
+          })),
+          profiles: u.provisioningProfiles.map(p => ({
+            id: p.id,
+            name: p.name,
+            platform: p.platform as 'IOS' | 'TVOS',
+            expiresAt: p.expiresAt?.toISOString() || null
+          })),
+          // Legacy support: also include managerProfile data if available
+          hasManagerProfileCertificate: Boolean(u.managerProfile?.certificatePem),
+          hasManagerProfileIos: Boolean(u.managerProfile?.mobileprovisionIos),
+          hasManagerProfileTvos: Boolean(u.managerProfile?.mobileprovisionTvos)
         }
       } else {
         // Fallback to old system - apps uploaded by this moderator
@@ -226,7 +247,22 @@ export default defineEventHandler(async () => {
             (u.managerProfile?.mobileprovisionIos || u.managerProfile?.mobileprovisionTvos)
           ),
           certificateExpiresAt,
-          deviceCounts
+          deviceCounts,
+          certificates: u.certificates.map(c => ({
+            id: c.id,
+            displayName: c.displayName,
+            expiresAt: c.expiresAt?.toISOString() || null
+          })),
+          profiles: u.provisioningProfiles.map(p => ({
+            id: p.id,
+            name: p.name,
+            platform: p.platform as 'IOS' | 'TVOS',
+            expiresAt: p.expiresAt?.toISOString() || null
+          })),
+          // Legacy support: also include managerProfile data if available
+          hasManagerProfileCertificate: Boolean(u.managerProfile?.certificatePem),
+          hasManagerProfileIos: Boolean(u.managerProfile?.mobileprovisionIos),
+          hasManagerProfileTvos: Boolean(u.managerProfile?.mobileprovisionTvos)
         }
       }
     })

@@ -10,7 +10,7 @@
         >
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-arrow-up-tray" />
-            <span class="font-semibold">Upload New App</span>
+            <span class="card-title">Upload New App</span>
           </div>
           <UIcon
             name="i-heroicons-chevron-down"
@@ -168,12 +168,12 @@
     </Transition>
 
     <!-- All Apps List -->
-    <UCard class="glass" :ui="{ body: { padding: 'p-3 sm:p-4' }, base: 'overflow-visible' }">
+    <UCard class="glass bg-transparent dark:bg-transparent" :ui="{ body: { padding: 'p-3 sm:p-4' }, base: 'overflow-visible border-0 shadow-none' }">
       <template #header>
         <div class="flex flex-col sm:flex-row sm:items-center gap-3">
           <div class="flex items-center gap-2 flex-shrink-0">
             <UIcon name="i-heroicons-rectangle-stack" />
-            <span class="font-semibold">All Uploaded Apps</span>
+            <span class="card-title">All Uploaded Apps</span>
             <UBadge color="gray" variant="soft" size="xs">
               {{ filteredApps.length }}{{ searchQuery ? ` / ${apps?.length || 0}` : '' }}
             </UBadge>
@@ -223,149 +223,178 @@
         <p class="text-sm mt-1">Try a different search term.</p>
       </div>
 
-      <div v-else class="space-y-2">
+      <div v-else class="space-y-3">
         <div
           v-for="app in filteredApps"
           :key="app.id"
-          class="p-3 rounded-lg border border-slate-200 dark:border-white/10 bg-white/90 dark:bg-white/5"
+          class="flex items-center gap-4 px-4 py-3 rounded-2xl bg-transparent hover:bg-white/5 dark:hover:bg-white/5 transition-colors group"
         >
-          <!-- Compact App Row -->
-          <div class="flex items-center gap-3">
-            <!-- App Icon with upload overlay -->
-            <div class="relative group flex-shrink-0">
-              <img
-                v-if="app.iconPath"
-                :src="`/api/download${app.iconPath}`"
-                :alt="app.name"
-                class="w-12 h-12 rounded-xl shadow-sm object-cover"
+          <!-- App Icon with upload overlay - iOS App Store style -->
+          <div class="relative flex-shrink-0">
+            <img
+              v-if="app.iconPath"
+              :src="`/api/download${app.iconPath}`"
+              :alt="app.name"
+              class="w-16 h-16 rounded-2xl shadow-lg object-cover"
+            />
+            <div v-else class="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-lg">
+              <UIcon :name="app.platform === 'IOS' ? 'i-heroicons-device-phone-mobile' : 'i-heroicons-tv'" class="w-8 h-8 text-slate-400 dark:text-white/40" />
+            </div>
+            <!-- Upload overlay -->
+            <label
+              class="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              :title="app.iconPath ? 'Change icon' : 'Add icon'"
+            >
+              <UIcon name="i-heroicons-camera" class="w-6 h-6 text-white" />
+              <input
+                type="file"
+                accept="image/png,image/jpeg,.png,.jpg,.jpeg"
+                class="hidden"
+                @change="uploadIconForApp(app.id, $event)"
               />
-              <div v-else class="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-sm">
-                <UIcon :name="app.platform === 'IOS' ? 'i-heroicons-device-phone-mobile' : 'i-heroicons-tv'" class="w-6 h-6 text-slate-400 dark:text-white/40" />
-              </div>
-              <!-- Upload overlay -->
-              <label
-                class="absolute inset-0 flex items-center justify-center rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                :title="app.iconPath ? 'Change icon' : 'Add icon'"
-              >
-                <UIcon name="i-heroicons-camera" class="w-5 h-5 text-white" />
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,.png,.jpg,.jpeg"
-                  class="hidden"
-                  @change="uploadIconForApp(app.id, $event)"
-                />
-              </label>
-            </div>
-            
-            <!-- App Info -->
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <UBadge :color="app.platform === 'IOS' ? 'blue' : 'purple'" variant="soft" size="xs">
-                  {{ app.platform }}
-                </UBadge>
-                <!-- Editable app name -->
-                <div v-if="editingAppId === app.id" class="flex items-center gap-1">
-                  <UInput
-                    v-model="editingAppName"
-                    size="xs"
-                    class="font-semibold w-32"
-                    autofocus
-                    @keyup.enter="saveAppName(app.id)"
-                    @keyup.escape="cancelEditName"
-                  />
-                  <UButton
-                    color="green"
-                    variant="ghost"
-                    icon="i-heroicons-check"
-                    size="2xs"
-                    :loading="savingAppName"
-                    @click="saveAppName(app.id)"
-                  />
-                  <UButton
-                    color="gray"
-                    variant="ghost"
-                    icon="i-heroicons-x-mark"
-                    size="2xs"
-                    :disabled="savingAppName"
-                    @click="cancelEditName"
-                  />
-                </div>
-                <span
-                  v-else
-                  class="font-semibold truncate cursor-pointer hover:text-red-500 transition-colors"
-                  title="Click to edit name"
-                  @click="startEditName(app)"
-                >
-                  {{ app.name }}
-                </span>
-              </div>
-              <div class="text-xs text-slate-500 dark:text-white/50 truncate">
-                {{ app.bundleId || 'Unknown bundle' }} &bull; v{{ displayVersion(app) }} &bull; by {{ app.owner.nickname }}
-              </div>
-            </div>
-
-            <!-- Action buttons - horizontal compact layout -->
-            <div class="flex items-center gap-1.5 flex-shrink-0">
+            </label>
+          </div>
+          
+          <!-- App Info - iOS App Store style -->
+          <div class="flex-1 min-w-0">
+            <!-- Editable app name -->
+            <div v-if="editingAppId === app.id" class="flex items-center gap-2 mb-1">
+              <UInput
+                v-model="editingAppName"
+                size="sm"
+                class="font-semibold text-white"
+                autofocus
+                @keyup.enter="saveAppName(app.id)"
+                @keyup.escape="cancelEditName"
+              />
+              <UButton
+                color="green"
+                variant="ghost"
+                icon="i-heroicons-check"
+                size="xs"
+                :loading="savingAppName"
+                @click="saveAppName(app.id)"
+              />
               <UButton
                 color="gray"
-                variant="outline"
-                icon="i-heroicons-arrow-up-on-square"
+                variant="ghost"
+                icon="i-heroicons-x-mark"
                 size="xs"
-                @click="openNewVersionModal(app)"
+                :disabled="savingAppName"
+                @click="cancelEditName"
+              />
+            </div>
+            <div v-else class="flex items-center gap-2 mb-0.5 flex-wrap">
+              <h3
+                class="text-white font-semibold text-base truncate cursor-pointer hover:text-blue-400 transition-colors"
+                title="Click to edit name"
+                @click="startEditName(app)"
               >
-                <span class="hidden sm:inline">Release New Version</span>
-              </UButton>
-              <UButton
-                color="amber"
-                variant="solid"
-                icon="i-heroicons-users"
-                size="xs"
-                :loading="signingAllAppId === app.id"
-                @click="signByAllModerators(app.id)"
+                {{ app.name }}
+              </h3>
+              <UBadge :color="app.platform === 'IOS' ? 'blue' : 'purple'" variant="soft" size="xs">
+                {{ app.platform === 'IOS' ? 'iOS' : 'tvOS' }}
+              </UBadge>
+            </div>
+            <p class="text-sm text-white/60 dark:text-white/60 truncate">
+              {{ app.bundleId || 'Unknown bundle' }} • v{{ displayVersion(app) }}
+            </p>
+            <!-- Signed Versions - Compact inline below subtitle -->
+            <div v-if="app.signedVersions.length > 0" class="flex items-center gap-1.5 flex-wrap mt-1.5">
+              <div
+                v-for="sv in app.signedVersions"
+                :key="sv.id"
+                class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]"
+                :class="statusClass(sv.status)"
               >
-                <span class="hidden sm:inline">Sign by All</span>
-              </UButton>
-              <!-- Sign button - different states based on user's signing status -->
-              <UButton
+                <UIcon
+                  :name="statusIcon(sv.status)"
+                  class="w-2.5 h-2.5"
+                  :class="{ 'animate-spin': sv.status === 'SIGNING' }"
+                />
+                <span class="font-medium">{{ sv.signerName }}</span>
+                <!-- Install/Download buttons for signed versions -->
+                <template v-if="sv.status === 'SIGNED'">
+                  <a
+                    v-if="app.platform === 'IOS' && installLink(sv)"
+                    :href="installLink(sv)"
+                    class="ml-0.5 hover:opacity-70 transition-opacity"
+                    target="_blank"
+                    title="Install on device"
+                  >
+                    <UIcon name="i-heroicons-arrow-down-tray" class="w-2.5 h-2.5" />
+                  </a>
+                  <a
+                    v-else-if="app.platform === 'TVOS' && downloadLink(sv)"
+                    :href="downloadLink(sv)"
+                    class="ml-0.5 hover:opacity-70 transition-opacity"
+                    target="_blank"
+                    title="Download"
+                  >
+                    <UIcon name="i-heroicons-arrow-down-tray" class="w-2.5 h-2.5" />
+                  </a>
+                </template>
+                <!-- Retry button for failed signings -->
+                <button
+                  v-if="sv.status === 'FAILED'"
+                  class="ml-0.5 hover:opacity-70 transition-opacity"
+                  title="Retry signing"
+                  :disabled="retryingVersionId === sv.id"
+                  @click.stop="retrySignedVersion(app.id, sv)"
+                >
+                  <UIcon name="i-heroicons-arrow-path" class="w-2.5 h-2.5" :class="{ 'animate-spin': retryingVersionId === sv.id }" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action buttons - iOS App Store style Sign button -->
+          <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
+            <div class="flex items-center gap-1.5">
+              <!-- Sign button - iOS style -->
+              <button
                 v-if="!mySignedVersion(app) || mySignedVersion(app)?.status === 'FAILED'"
-                color="emerald"
-                variant="solid"
-                icon="i-heroicons-check-circle"
-                size="xs"
-                :loading="signingAppId === app.id"
+                class="px-5 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                :disabled="signingAppId === app.id"
                 @click="signApp(app.id)"
               >
-                <span class="hidden sm:inline">{{ mySignedVersion(app)?.status === 'FAILED' ? 'Retry' : 'Re-sign with my credentials' }}</span>
-              </UButton>
-              <UButton
+                <UIcon
+                  v-if="signingAppId === app.id"
+                  name="i-heroicons-arrow-path"
+                  class="w-4 h-4 animate-spin"
+                />
+                <UIcon
+                  v-else
+                  name="i-heroicons-check-circle"
+                  class="w-4 h-4"
+                />
+                <span>{{ mySignedVersion(app)?.status === 'FAILED' ? 'Retry Sign' : 'Sign' }}</span>
+              </button>
+              <button
                 v-else-if="mySignedVersion(app)?.status === 'SIGNING'"
-                color="amber"
-                variant="outline"
-                icon="i-heroicons-arrow-path"
-                size="xs"
+                class="px-5 py-1.5 rounded-xl bg-gray-600 text-white text-sm font-medium cursor-not-allowed flex items-center gap-1.5"
                 disabled
               >
-                <span class="hidden sm:inline">Signing...</span>
-              </UButton>
-              <UButton
+                <UIcon name="i-heroicons-arrow-path" class="w-4 h-4 animate-spin" />
+                <span>Signing...</span>
+              </button>
+              <button
                 v-else-if="mySignedVersion(app)?.status === 'SIGNED'"
-                color="emerald"
-                variant="solid"
-                icon="i-heroicons-check-circle"
-                size="xs"
+                class="px-5 py-1.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors flex items-center gap-1.5"
                 @click="signApp(app.id)"
               >
-                <span class="hidden sm:inline">Re-sign with my credentials</span>
-              </UButton>
+                <UIcon name="i-heroicons-arrow-path" class="w-4 h-4" />
+                <span>Re-sign</span>
+              </button>
+              
               <!-- Three-dots menu -->
               <div class="relative">
-                <UButton
-                  color="gray"
-                  variant="ghost"
-                  icon="i-heroicons-ellipsis-vertical"
-                  size="xs"
+                <button
+                  class="p-1.5 rounded-lg hover:bg-white/10 text-white/70 hover:text-white transition-colors"
                   @click.stop="openMenuId = openMenuId === app.id ? null : app.id"
-                />
+                >
+                  <UIcon name="i-heroicons-ellipsis-vertical" class="w-5 h-5" />
+                </button>
                 <!-- Backdrop to catch clicks outside -->
                 <div
                   v-if="openMenuId === app.id"
@@ -383,10 +412,29 @@
                 >
                   <div
                     v-if="openMenuId === app.id"
-                    class="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-lg bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 p-1"
+                    class="absolute right-0 top-full mt-1 z-50 min-w-[200px] rounded-xl bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 p-1"
                   >
                     <button
-                      class="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-gray-100 dark:hover:bg-white/10 text-left"
+                      class="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-left"
+                      @click="openNewVersionModal(app); openMenuId = null"
+                    >
+                      <UIcon name="i-heroicons-arrow-up-on-square" class="w-4 h-4" />
+                      Release New Version
+                    </button>
+                    <button
+                      class="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-left"
+                      :disabled="signingAllAppId === app.id"
+                      @click="signByAllModerators(app.id); openMenuId = null"
+                    >
+                      <UIcon
+                        :name="signingAllAppId === app.id ? 'i-heroicons-arrow-path' : 'i-heroicons-users'"
+                        class="w-4 h-4"
+                        :class="{ 'animate-spin': signingAllAppId === app.id }"
+                      />
+                      Sign by All
+                    </button>
+                    <button
+                      class="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-left"
                       @click="toggleBuildNumber(app.id); openMenuId = null"
                     >
                       <UIcon :name="app.showBuildNumber ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'" class="w-4 h-4" />
@@ -394,7 +442,7 @@
                     </button>
                     <button
                       v-if="canDelete(app)"
-                      class="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-gray-100 dark:hover:bg-white/10 text-left text-red-500"
+                      class="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-left text-red-500"
                       @click="confirmDeleteApp(app); openMenuId = null"
                     >
                       <UIcon name="i-heroicons-trash" class="w-4 h-4" />
@@ -404,57 +452,11 @@
                 </Transition>
               </div>
             </div>
-          </div>
-
-          <!-- Signed Versions - Compact inline -->
-          <div v-if="app.signedVersions.length > 0" class="mt-2 pt-2 border-t border-slate-100 dark:border-white/5">
-            <div class="flex items-center gap-1.5 flex-wrap">
-              <span class="text-[10px] text-slate-400 dark:text-white/40 uppercase tracking-wider mr-1">Signed:</span>
-              <div
-                v-for="sv in app.signedVersions"
-                :key="sv.id"
-                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
-                :class="statusClass(sv.status)"
-              >
-                <UIcon
-                  :name="statusIcon(sv.status)"
-                  class="w-3 h-3"
-                  :class="{ 'animate-spin': sv.status === 'SIGNING' }"
-                />
-                <span class="font-medium">{{ sv.signerName }}</span>
-                <span v-if="sv.status === 'SIGNED'" class="opacity-60">{{ formatDateShort(sv.signedAt) }}</span>
-                
-                <!-- Install/Download buttons for signed versions -->
-                <template v-if="sv.status === 'SIGNED'">
-                  <a
-                    v-if="app.platform === 'IOS'"
-                    :href="installLink(sv)"
-                    class="ml-0.5 hover:opacity-70"
-                    target="_blank"
-                  >
-                    <UIcon name="i-heroicons-arrow-down-tray" class="w-3 h-3" />
-                  </a>
-                  <a
-                    v-else
-                    :href="downloadLink(sv)"
-                    class="ml-0.5 hover:opacity-70"
-                    target="_blank"
-                  >
-                    <UIcon name="i-heroicons-arrow-down-tray" class="w-3 h-3" />
-                  </a>
-                </template>
-                <!-- Retry button for failed signings -->
-                <button
-                  v-if="sv.status === 'FAILED'"
-                  class="ml-0.5 hover:opacity-70"
-                  title="Retry signing"
-                  :disabled="retryingVersionId === sv.id"
-                  @click.stop="retrySignedVersion(app.id, sv)"
-                >
-                  <UIcon name="i-heroicons-arrow-path" class="w-3 h-3" :class="{ 'animate-spin': retryingVersionId === sv.id }" />
-                </button>
-              </div>
-            </div>
+            
+            <!-- In-App Purchases / Additional info label -->
+            <p class="text-[10px] text-white/40 dark:text-white/40">
+              {{ app.platform === 'IOS' ? 'iOS' : 'tvOS' }} • by {{ app.owner.nickname }}
+            </p>
           </div>
         </div>
       </div>
@@ -466,7 +468,7 @@
         <template #header>
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-arrow-up-on-square" class="text-red-500" />
-            <span class="font-semibold">Release New Version</span>
+            <span class="card-title">Release New Version</span>
           </div>
         </template>
 
@@ -593,7 +595,7 @@
         <template #header>
           <div class="flex items-center gap-2 text-red-500">
             <UIcon name="i-heroicons-exclamation-triangle" />
-            <span class="font-semibold">Delete App</span>
+            <span class="card-title">Delete App</span>
           </div>
         </template>
 

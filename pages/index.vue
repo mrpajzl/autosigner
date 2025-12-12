@@ -5,7 +5,7 @@
       <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-red-500/5 via-transparent to-transparent"></div>
       <div class="relative space-y-4 md:space-y-6">
         <div class="text-center space-y-2 md:space-y-3">
-          <h1 class="text-2xl md:text-4xl font-bold bg-gradient-to-r from-red-500 to-violet-500 bg-clip-text text-transparent">
+          <h1 class="page-title-gradient">
             Vítejte ve FastSigner
           </h1>
           <p class="text-sm md:text-lg text-slate-600 dark:text-white/70 max-w-2xl mx-auto">
@@ -39,17 +39,17 @@
         <div class="hidden md:grid md:grid-cols-3 gap-4 text-center">
           <div class="p-4 rounded-xl bg-white/50 dark:bg-white/5 backdrop-blur-sm">
             <UIcon name="i-heroicons-device-phone-mobile" class="w-8 h-8 text-red-500 mx-auto mb-2" />
-            <h3 class="font-semibold text-slate-800 dark:text-white">Podepsané aplikace</h3>
+            <h3 class="card-subtitle">Podepsané aplikace</h3>
             <p class="text-sm text-slate-500 dark:text-white/60">Pro iPhone, iPad, Apple TV a Mac</p>
           </div>
           <div class="p-4 rounded-xl bg-white/50 dark:bg-white/5 backdrop-blur-sm">
             <UIcon name="i-heroicons-shield-check" class="w-8 h-8 text-red-500 mx-auto mb-2" />
-            <h3 class="font-semibold text-slate-800 dark:text-white">Certifikáty & Profily</h3>
+            <h3 class="card-subtitle">Certifikáty & Profily</h3>
             <p class="text-sm text-slate-500 dark:text-white/60">Vše potřebné pro instalaci</p>
           </div>
           <div class="p-4 rounded-xl bg-white/50 dark:bg-white/5 backdrop-blur-sm">
             <UIcon name="i-heroicons-user-group" class="w-8 h-8 text-red-500 mx-auto mb-2" />
-            <h3 class="font-semibold text-slate-800 dark:text-white">Komunita</h3>
+            <h3 class="card-subtitle">Komunita</h3>
             <p class="text-sm text-slate-500 dark:text-white/60">Podpora a novinky na Discordu</p>
           </div>
         </div>
@@ -59,7 +59,7 @@
             <div class="flex items-start gap-2 md:gap-3">
               <UIcon name="i-heroicons-information-circle" class="w-5 h-5 md:w-6 md:h-6 text-violet-500 flex-shrink-0 mt-0.5" />
               <div>
-                <h3 class="font-semibold text-sm md:text-base text-slate-800 dark:text-white">Před prvním použitím</h3>
+                <h3 class="card-title text-sm md:text-base">Před prvním použitím</h3>
                 <p class="text-xs md:text-sm text-slate-600 dark:text-white/70">
                   Pro registraci zařízení a získání přístupu je nutné se nejprve připojit na náš Discord server.
                 </p>
@@ -93,27 +93,31 @@
       </div>
 
       <!-- Skeleton moderator section -->
-      <div v-for="i in 2" :key="i" class="grid gap-6 md:grid-cols-3">
-        <div class="md:col-span-3 flex items-center gap-3">
+      <div v-for="i in 2" :key="i" class="space-y-6 md:space-y-8 mt-8">
+        <div class="flex items-center gap-3">
           <USkeleton class="w-5 h-5 rounded" />
           <USkeleton class="h-6 w-32" />
         </div>
         
-        <!-- Skeleton cards -->
-        <UCard v-for="j in 3" :key="j" class="glass">
-          <template #header>
-            <div class="flex items-center gap-3">
+        <!-- Skeleton iOS App Store style list - Grid layout -->
+        <div class="grid gap-6 md:grid-cols-3">
+          <div v-for="j in 3" :key="j" class="space-y-1">
+            <div class="flex items-center gap-2 mb-3">
               <USkeleton class="w-5 h-5 rounded" />
               <USkeleton class="h-5 w-32" />
             </div>
-          </template>
-          <div class="space-y-4">
-            <div v-for="k in 2" :key="k" class="flex items-center gap-3">
-              <USkeleton class="w-10 h-10 rounded-xl" />
-              <USkeleton class="h-9 w-28 rounded-md" />
+            <div class="rounded-2xl bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-white/10 overflow-hidden">
+              <div v-for="k in 2" :key="k" class="flex items-center gap-4 px-4 py-3 border-b border-white/5 last:border-b-0">
+                <USkeleton class="w-14 h-14 rounded-2xl flex-shrink-0" />
+                <div class="flex-1 min-w-0 space-y-2">
+                  <USkeleton class="h-4 w-32" />
+                  <USkeleton class="h-3 w-24" />
+                </div>
+                <USkeleton class="h-8 w-16 rounded-md flex-shrink-0" />
+              </div>
             </div>
           </div>
-        </UCard>
+        </div>
       </div>
     </template>
 
@@ -136,134 +140,319 @@
       No moderators or apps available yet.
     </div>
 
-    <div v-if="!pending" v-for="mod in moderators || []" :key="mod.id" :id="`moderator-${mod.id}`" class="grid gap-6 md:grid-cols-3 scroll-mt-24">
+    <div v-if="!pending" v-for="mod in moderators || []" :key="mod.id" :id="`moderator-${mod.id}`" class="space-y-6 md:space-y-8 scroll-mt-24">
+      <!-- Moderator Header -->
       <div class="md:col-span-3">
-        <div class="flex items-center gap-3">
-          <UIcon name="i-heroicons-user-circle" class="text-red-500" />
-          <h2 class="text-xl font-semibold tracking-wide">{{ mod.name }}</h2>
+        <div class="flex items-center justify-between gap-3 mb-4 mt-8 first:mt-0 border-b border-slate-200 dark:border-white/10 pb-2">
+          <h2 class="section-title flex-1 border-0 mb-0 mt-0 pb-0">
+            <div class="p-1.5 rounded-full bg-red-500/10 dark:bg-red-500/20 flex items-center justify-center">
+              <UIcon name="i-heroicons-user-circle" class="text-red-500 dark:text-red-400 w-5 h-5" />
+            </div>
+            <span>{{ mod.name }}</span>
+          </h2>
+          <UButton 
+            icon="i-heroicons-information-circle" 
+            variant="ghost" 
+            color="gray" 
+            size="sm"
+            @click="openModeratorModal(mod)"
+          />
         </div>
       </div>
-      <UCard class="glass">
-        <template #header>
-          <div class="flex items-center gap-3">
-            <UIcon name="i-heroicons-computer-desktop" class="text-red-500" />
-            <div>
-              <p class="font-semibold">Apple TV</p>
-            </div>
-          </div>
-        </template>
 
-        <div class="space-y-4">
-          <div v-for="app in mod.tvosApps" :key="app.id" class="flex items-center gap-3">
-            <img
-              v-if="app.iconPath"
-              :src="`/api/download${app.iconPath}`"
-              :alt="app.name"
-              class="w-10 h-10 rounded-xl shadow-sm object-cover"
-            />
-            <div v-else class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-white/10 flex items-center justify-center">
-              <UIcon name="i-heroicons-tv" class="w-5 h-5 text-slate-400 dark:text-white/40" />
+      <!-- Grid Layout: Side by side on desktop, stacked on mobile -->
+      <div class="grid gap-6 md:grid-cols-2">
+        <!-- Apple TV Apps Section - iOS App Store Style -->
+        <div v-if="mod.tvosApps.length > 0" class="space-y-1">
+          <h3 class="subsection-title">
+            <div class="w-8 h-8 rounded-lg bg-orange-500/10 dark:bg-orange-500/20 flex items-center justify-center">
+              <UIcon name="i-heroicons-tv" class="text-orange-500 dark:text-orange-400 w-5 h-5" />
             </div>
-            <UButton :to="tvosLink(app)" target="_blank" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ displayVersion(app) }}</UButton>
-          </div>
-          <p v-if="mod.tvosApps.length === 0" class="text-sm text-slate-500 dark:text-white/60">No tvOS apps.</p>
-        </div>
-      </UCard>
-
-      <UCard class="glass">
-        <template #header>
-          <div class="flex items-center gap-3">
-            <UIcon name="i-heroicons-device-phone-mobile" class="text-red-500" />
-            <div>
-              <p class="font-semibold">iPhone, iPad, Mac M1</p>
+            <span>Apple TV</span>
+          </h3>
+          <div class="rounded-2xl bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-white/10 overflow-hidden">
+            <div
+              v-for="app in mod.tvosApps"
+              :key="app.id"
+              class="flex items-center gap-4 px-4 py-3 hover:bg-white/10 dark:hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
+            >
+              <!-- App Icon -->
+              <div class="flex-shrink-0">
+                <img
+                  v-if="app.iconPath"
+                  :src="`/api/download${app.iconPath}`"
+                  :alt="app.name"
+                  class="w-14 h-14 rounded-2xl shadow-sm object-cover"
+                />
+                <div v-else class="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-sm">
+                  <UIcon name="i-heroicons-tv" class="w-7 h-7 text-slate-400 dark:text-white/40" />
+                </div>
+              </div>
+              
+              <!-- App Info -->
+              <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-base text-slate-900 dark:text-white truncate">{{ app.name }}</h4>
+                <p class="text-sm text-slate-500 dark:text-white/60 mt-0.5">
+                  {{ displayVersion(app) || 'Apple TV App' }}
+                </p>
+              </div>
+              
+              <!-- Download Button (tvOS downloads IPA) -->
+              <div class="flex-shrink-0 flex flex-col items-end">
+                <a
+                  v-if="app.status === 'SIGNED' && tvosLink(app)"
+                  :href="tvosLink(app)"
+                  target="_blank"
+                  class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-transparent hover:bg-white/5 active:bg-white/10 transition-colors"
+                  title="Download IPA"
+                >
+                  <UIcon name="i-heroicons-cloud-arrow-down" class="w-6 h-6 text-blue-500" />
+                </a>
+                <div
+                  v-else
+                  class="inline-flex items-center justify-center w-10 h-10 rounded-xl cursor-not-allowed"
+                >
+                  <span class="text-xs text-slate-400 dark:text-slate-500">—</span>
+                </div>
+              </div>
             </div>
-          </div>
-        </template>
-
-        <div class="space-y-4">
-          <div v-for="app in mod.iosApps" :key="app.id" class="flex items-center gap-3">
-            <img
-              v-if="app.iconPath"
-              :src="`/api/download${app.iconPath}`"
-              :alt="app.name"
-              class="w-10 h-10 rounded-xl shadow-sm object-cover"
-            />
-            <div v-else class="w-10 h-10 rounded-xl bg-slate-200 dark:bg-white/10 flex items-center justify-center">
-              <UIcon name="i-heroicons-device-phone-mobile" class="w-5 h-5 text-slate-400 dark:text-white/40" />
-            </div>
-            <UButton :to="installLink(app)" :disabled="app.status !== 'SIGNED'" color="red" variant="solid">{{ app.name }} {{ displayVersion(app) }}</UButton>
-          </div>
-          <p v-if="mod.iosApps.length === 0" class="text-sm text-slate-500 dark:text-white/60">No iOS apps.</p>
-        </div>
-      </UCard>
-
-      <UCard class="glass">
-        <template #header>
-          <div class="flex items-center gap-3">
-            <UIcon name="i-heroicons-identification" class="text-red-500" />
-            <div>
-              <p class="font-semibold">Certifikáty, Profily</p>
-            </div>
-          </div>
-        </template>
-
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <UButton color="red" variant="solid" :disabled="!mod.profileAvailable">Certifikát</UButton>
-              <span v-if="mod.certificateExpiresAt" class="text-xs" :class="isCertExpiringSoon(mod.certificateExpiresAt) ? 'text-orange-400' : 'text-slate-500 dark:text-white/60'">
-                Platnost do {{ formatDateShort(mod.certificateExpiresAt) }}
-              </span>
-            </div>
-          </div>
-          <div class="flex items-center justify-between">
-            <UButton color="red" variant="solid" :disabled="!mod.profileAvailable">Profil</UButton>
-            <span class="text-xs text-slate-500 dark:text-white/60">{{ formatDate(mod.profileUpdatedAt) }}</span>
           </div>
         </div>
-      </UCard>
 
-      <!-- Device Statistics -->
-      <UCard v-if="mod.deviceCounts" class="glass md:col-span-3">
-        <template #header>
-          <div class="flex items-center gap-3">
-            <UIcon name="i-heroicons-device-phone-mobile" class="text-red-500" />
-            <div class="flex items-center gap-2">
-              <p class="font-semibold">Registrovaná zařízení</p>
-              <UBadge color="red" variant="soft">{{ mod.deviceCounts.total }}/100</UBadge>
+        <!-- iOS Apps Section - iOS App Store Style -->
+        <div v-if="mod.iosApps.length > 0" class="space-y-1">
+          <h3 class="subsection-title">
+            <div class="w-8 h-8 rounded-lg bg-blue-500/10 dark:bg-blue-500/20 flex items-center justify-center">
+              <UIcon name="i-heroicons-device-phone-mobile" class="text-blue-500 dark:text-blue-400 w-5 h-5" />
+            </div>
+            <span>iPhone, iPad, Mac M1</span>
+          </h3>
+          <div class="rounded-2xl bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-white/10 overflow-hidden">
+            <div
+              v-for="app in mod.iosApps"
+              :key="app.id"
+              class="flex items-center gap-4 px-4 py-3 hover:bg-white/10 dark:hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
+            >
+              <!-- App Icon -->
+              <div class="flex-shrink-0">
+                <img
+                  v-if="app.iconPath"
+                  :src="`/api/download${app.iconPath}`"
+                  :alt="app.name"
+                  class="w-14 h-14 rounded-2xl shadow-sm object-cover"
+                />
+                <div v-else class="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-sm">
+                  <UIcon name="i-heroicons-device-phone-mobile" class="w-7 h-7 text-slate-400 dark:text-white/40" />
+                </div>
+              </div>
+              
+              <!-- App Info -->
+              <div class="flex-1 min-w-0">
+                <h4 class="font-semibold text-base text-slate-900 dark:text-white truncate">{{ app.name }}</h4>
+                <p class="text-sm text-slate-500 dark:text-white/60 mt-0.5">
+                  {{ displayVersion(app) || 'iOS App' }}
+                </p>
+              </div>
+              
+              <!-- Install Button (iOS installs directly) -->
+              <div class="flex-shrink-0 flex flex-col items-end">
+                <a
+                  v-if="app.status === 'SIGNED' && installLink(app)"
+                  :href="installLink(app)"
+                  class="inline-flex items-center justify-center min-w-[70px] h-8 px-4 rounded-xl bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 active:bg-slate-600 dark:active:bg-slate-500 transition-colors"
+                  title="Install on device"
+                >
+                  <span class="text-sm font-medium text-blue-500">Install</span>
+                </a>
+                <div
+                  v-else
+                  class="inline-flex items-center justify-center min-w-[70px] h-8 px-4 rounded-xl bg-slate-800/50 dark:bg-slate-700/50 cursor-not-allowed"
+                >
+                  <span class="text-sm text-slate-400 dark:text-slate-500">—</span>
+                </div>
+              </div>
             </div>
           </div>
-        </template>
-
-        <div class="flex flex-wrap gap-3">
-          <div v-if="mod.deviceCounts.iOS > 0" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5">
-            <UIcon name="i-heroicons-device-phone-mobile" class="text-blue-500 dark:text-blue-400" />
-            <span class="text-sm font-medium">iOS</span>
-            <UBadge color="blue" variant="soft" size="xs">{{ mod.deviceCounts.iOS }}</UBadge>
-          </div>
-          <div v-if="mod.deviceCounts.APPLE_TV > 0" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5">
-            <UIcon name="i-heroicons-tv" class="text-slate-500 dark:text-gray-400" />
-            <span class="text-sm font-medium">Apple TV</span>
-            <UBadge color="gray" variant="soft" size="xs">{{ mod.deviceCounts.APPLE_TV }}</UBadge>
-          </div>
-          <div v-if="mod.deviceCounts.MAC > 0" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 dark:bg-white/5">
-            <UIcon name="i-heroicons-computer-desktop" class="text-emerald-500 dark:text-green-400" />
-            <span class="text-sm font-medium">Mac</span>
-            <UBadge color="emerald" variant="soft" size="xs">{{ mod.deviceCounts.MAC }}</UBadge>
-          </div>
-          <div v-if="mod.deviceCounts.total === 0" class="text-sm text-slate-500 dark:text-white/60">
-            Žádná registrovaná zařízení
-          </div>
         </div>
-      </UCard>
+
+      </div>
     </div>
+
+    <!-- Moderator Info Modal -->
+    <UModal v-model="showModeratorModal" :ui="{ width: 'max-w-2xl' }">
+      <UCard class="glass" v-if="selectedModerator">
+        <template #header>
+          <div class="flex items-center gap-2">
+            <UIcon name="i-heroicons-information-circle" />
+            <span class="card-title">{{ selectedModerator.name }}</span>
+          </div>
+        </template>
+
+        <div class="space-y-6">
+          <!-- Device Counts Section -->
+          <div v-if="selectedModerator.deviceCounts" class="space-y-3">
+            <div class="pb-2 border-b border-slate-200 dark:border-white/10">
+              <span class="subsection-title text-base mb-0 mt-0 pb-0 border-0">Registrovaná zařízení</span>
+            </div>
+            <div class="space-y-2">
+              <div class="flex items-center gap-2">
+                <UIcon name="i-heroicons-device-phone-mobile" class="text-blue-500 dark:text-blue-400 w-5 h-5" />
+                <span class="text-sm">iOS</span>
+                <UBadge color="blue" variant="soft" size="sm">{{ selectedModerator.deviceCounts.iOS }}/100</UBadge>
+              </div>
+              <div class="flex items-center gap-2">
+                <UIcon name="i-heroicons-tv" class="text-slate-500 dark:text-gray-400 w-5 h-5" />
+                <span class="text-sm">Apple TV</span>
+                <UBadge color="gray" variant="soft" size="sm">{{ selectedModerator.deviceCounts.APPLE_TV }}/100</UBadge>
+              </div>
+              <div class="flex items-center gap-2">
+                <UIcon name="i-heroicons-computer-desktop" class="text-emerald-500 dark:text-green-400 w-5 h-5" />
+                <span class="text-sm">Mac</span>
+                <UBadge color="emerald" variant="soft" size="sm">{{ selectedModerator.deviceCounts.MAC }}/100</UBadge>
+              </div>
+            </div>
+          </div>
+
+          <!-- Certificates Section -->
+          <div class="space-y-3">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-white/10">
+              <UIcon name="i-heroicons-identification" class="text-red-500 w-5 h-5" />
+              <span class="subsection-title text-base mb-0 mt-0 pb-0 border-0">Certifikáty</span>
+            </div>
+            <div v-if="(!selectedModerator.certificates || selectedModerator.certificates.length === 0) && !selectedModerator.hasManagerProfileCertificate" class="text-sm text-slate-500 dark:text-white/60">
+              Žádné certifikáty
+            </div>
+            <div v-else class="space-y-3">
+              <div 
+                v-for="cert in selectedModerator.certificates" 
+                :key="cert.id"
+                class="flex items-center justify-between gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                <div class="flex-1 min-w-0">
+                  <div class="text-base font-medium truncate">{{ cert.displayName || 'Certifikát' }}</div>
+                  <div v-if="cert.expiresAt" class="text-sm mt-1" :class="isCertExpiringSoon(cert.expiresAt) ? 'text-orange-400' : 'text-slate-500 dark:text-white/60'">
+                    Platnost do {{ formatDateShort(cert.expiresAt) }}
+                  </div>
+                </div>
+                <UButton 
+                  size="sm" 
+                  color="red" 
+                  variant="solid"
+                  icon="i-heroicons-arrow-down-tray"
+                  @click="downloadModeratorCertificate(selectedModerator.id, cert.displayName || 'certificate')"
+                >
+                  Stáhnout
+                </UButton>
+              </div>
+              <!-- Legacy managerProfile certificate -->
+              <div 
+                v-if="selectedModerator.hasManagerProfileCertificate && (!selectedModerator.certificates || selectedModerator.certificates.length === 0)"
+                class="flex items-center justify-between gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                <div class="flex-1 min-w-0">
+                  <div class="text-base font-medium truncate">Certifikát</div>
+                  <div v-if="selectedModerator.certificateExpiresAt" class="text-sm mt-1" :class="isCertExpiringSoon(selectedModerator.certificateExpiresAt) ? 'text-orange-400' : 'text-slate-500 dark:text-white/60'">
+                    Platnost do {{ formatDateShort(selectedModerator.certificateExpiresAt) }}
+                  </div>
+                </div>
+                <UButton 
+                  size="sm" 
+                  color="red" 
+                  variant="solid"
+                  icon="i-heroicons-arrow-down-tray"
+                  @click="downloadModeratorCertificate(selectedModerator.id, selectedModerator.name || 'certificate')"
+                >
+                  Stáhnout
+                </UButton>
+              </div>
+            </div>
+          </div>
+
+          <!-- Profiles Section -->
+          <div class="space-y-3">
+            <div class="flex items-center gap-2 pb-2 border-b border-slate-200 dark:border-white/10">
+              <UIcon name="i-heroicons-document-text" class="text-red-500 w-5 h-5" />
+              <span class="subsection-title text-base mb-0 mt-0 pb-0 border-0">Profily</span>
+            </div>
+            <div v-if="(!selectedModerator.profiles || selectedModerator.profiles.length === 0) && !selectedModerator.hasManagerProfileIos && !selectedModerator.hasManagerProfileTvos" class="text-sm text-slate-500 dark:text-white/60">
+              Žádné profily
+            </div>
+            <div v-else class="space-y-3">
+              <div 
+                v-for="profile in selectedModerator.profiles" 
+                :key="profile.id"
+                class="flex items-center justify-between gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                <div class="flex-1 min-w-0">
+                  <div class="text-base font-medium truncate">{{ profile.name || 'Profil' }}</div>
+                  <div class="text-sm mt-1 text-slate-500 dark:text-white/60">
+                    {{ profile.platform === 'IOS' ? 'iOS' : 'tvOS' }}
+                    <span v-if="profile.expiresAt"> • {{ formatDateShort(profile.expiresAt) }}</span>
+                  </div>
+                </div>
+                <UButton 
+                  size="sm" 
+                  color="red" 
+                  variant="solid"
+                  icon="i-heroicons-arrow-down-tray"
+                  @click="downloadModeratorProfile(selectedModerator.id, profile.platform, profile.name || 'profile')"
+                >
+                  Stáhnout
+                </UButton>
+              </div>
+              <!-- Legacy managerProfile profiles -->
+              <div 
+                v-if="selectedModerator.hasManagerProfileIos && (!selectedModerator.profiles || !selectedModerator.profiles.some(p => p.platform === 'IOS'))"
+                class="flex items-center justify-between gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                <div class="flex-1 min-w-0">
+                  <div class="text-base font-medium truncate">iOS Profil</div>
+                </div>
+                <UButton 
+                  size="sm" 
+                  color="red" 
+                  variant="solid"
+                  icon="i-heroicons-arrow-down-tray"
+                  @click="downloadModeratorProfile(selectedModerator.id, 'IOS', 'ios_profile')"
+                >
+                  Stáhnout
+                </UButton>
+              </div>
+              <div 
+                v-if="selectedModerator.hasManagerProfileTvos && (!selectedModerator.profiles || !selectedModerator.profiles.some(p => p.platform === 'TVOS'))"
+                class="flex items-center justify-between gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+              >
+                <div class="flex-1 min-w-0">
+                  <div class="text-base font-medium truncate">tvOS Profil</div>
+                </div>
+                <UButton 
+                  size="sm" 
+                  color="red" 
+                  variant="solid"
+                  icon="i-heroicons-arrow-down-tray"
+                  @click="downloadModeratorProfile(selectedModerator.id, 'TVOS', 'tvos_profile')"
+                >
+                  Stáhnout
+                </UButton>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <template #footer>
+          <div class="flex justify-end">
+            <UButton color="gray" variant="ghost" @click="showModeratorModal = false">Zavřít</UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
 
     <!-- Footer Disclaimer -->
     <footer class="mt-16 pb-10 border-t border-slate-200 dark:border-white/10 pt-8">
       <div class="flex flex-col items-center gap-4 text-center">
         <UIcon name="i-heroicons-shield-exclamation" class="w-8 h-8 text-slate-400 dark:text-white/40" />
         <div class="max-w-2xl space-y-2">
-          <h4 class="font-semibold text-slate-600 dark:text-white/70">Prohlášení o odpovědnosti</h4>
+          <h4 class="card-subtitle text-slate-600 dark:text-white/70">Prohlášení o odpovědnosti</h4>
           <p class="text-sm text-slate-500 dark:text-white/50 leading-relaxed">
             Provozovatel tohoto webu nenese žádnou odpovědnost za obsah, funkčnost ani legálnost aplikací zde poskytovaných. 
             Aplikace jsou nahrávány třetími stranami a provozovatel není jejich autorem ani distributorem. 
@@ -296,11 +485,24 @@ type PublicModerator = {
   profileAvailable: boolean
   certificateExpiresAt: string | null
   deviceCounts: DeviceCounts | null
+  certificates: Array<{ id: string; displayName: string | null; expiresAt: string | null }>
+  profiles: Array<{ id: string; name: string | null; platform: 'IOS' | 'TVOS'; expiresAt: string | null }>
+  hasManagerProfileCertificate: boolean
+  hasManagerProfileIos: boolean
+  hasManagerProfileTvos: boolean
 }
 
 const { data: moderators, status } = useFetch<PublicModerator[]>('/api/public/moderators', { lazy: true })
 const pending = computed(() => status.value === 'pending')
 const { public: publicConfig } = useRuntimeConfig()
+
+const showModeratorModal = ref(false)
+const selectedModerator = ref<PublicModerator | null>(null)
+
+function openModeratorModal(mod: PublicModerator) {
+  selectedModerator.value = mod
+  showModeratorModal.value = true
+}
 
 function installLink(app: PublicApp) {
   if (!app.manifestPath) return undefined
@@ -358,4 +560,55 @@ function displayVersion(app: PublicApp) {
   }
   return hasVersion ? `v${app.version}` : (hasBuild ? `v${app.buildNumber}` : '')
 }
+
+async function downloadModeratorCertificate(moderatorId: string, displayName: string) {
+  try {
+    const response = await fetch(`/api/public/moderators/${moderatorId}/certificate.download`)
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Nepodařilo se stáhnout certifikát' }))
+      throw new Error(error.message || 'Nepodařilo se stáhnout certifikát')
+    }
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${displayName.replace(/[^a-zA-Z0-9]/g, '_')}.${blob.type.includes('pem') ? 'pem' : 'p12'}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  } catch (e: any) {
+    useToast().add({ 
+      title: 'Chyba', 
+      description: e?.message || 'Nepodařilo se stáhnout certifikát', 
+      color: 'red' 
+    })
+  }
+}
+
+async function downloadModeratorProfile(moderatorId: string, platform: 'IOS' | 'TVOS', profileName: string) {
+  try {
+    const response = await fetch(`/api/public/moderators/${moderatorId}/profile.download?platform=${platform}`)
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Nepodařilo se stáhnout profil' }))
+      throw new Error(error.message || 'Nepodařilo se stáhnout profil')
+    }
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${profileName.replace(/[^a-zA-Z0-9]/g, '_')}.mobileprovision`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  } catch (e: any) {
+    useToast().add({ 
+      title: 'Chyba', 
+      description: e?.message || 'Nepodařilo se stáhnout profil', 
+      color: 'red' 
+    })
+  }
+}
 </script>
+

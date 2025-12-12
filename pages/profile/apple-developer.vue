@@ -5,7 +5,7 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-key" />
-            <span class="font-semibold">Apple Developer API Credentials</span>
+            <span class="card-title">Apple Developer API Credentials</span>
           </div>
           <UBadge v-if="isConnected" color="green" variant="soft">Connected</UBadge>
         </div>
