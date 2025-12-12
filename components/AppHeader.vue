@@ -143,6 +143,14 @@
               <UIcon name="i-heroicons-computer-desktop" class="w-4 h-4 text-orange-500" />
               Hackintosh ve VMware
             </NuxtLink>
+            <NuxtLink
+              to="/guides/macbook-udid"
+              class="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+              @click="mobileOpen = false"
+            >
+              <UIcon name="i-heroicons-finger-print" class="w-4 h-4 text-slate-500" />
+              UDID MacBooku
+            </NuxtLink>
           </div>
           
           <ClientOnly>
@@ -254,7 +262,8 @@ const guidesMenu = [[
   { label: 'Instalace na iOS a Mac', icon: 'i-heroicons-device-phone-mobile', to: '/guides/ios-mac-installation' },
   { label: 'Sideloading na Apple TV', icon: 'i-heroicons-tv', to: '/guides/apple-tv-sideloading' },
   { label: 'Vlastní podepisování', icon: 'i-heroicons-pencil-square', to: '/guides/self-signing' },
-  { label: 'Hackintosh ve VMware', icon: 'i-heroicons-computer-desktop', to: '/guides/hackintosh-vmware' }
+  { label: 'Hackintosh ve VMware', icon: 'i-heroicons-computer-desktop', to: '/guides/hackintosh-vmware' },
+  { label: 'UDID MacBooku', icon: 'i-heroicons-finger-print', to: '/guides/macbook-udid' }
 ]]
 
 // Apple connection status
