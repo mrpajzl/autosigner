@@ -58,11 +58,11 @@ export default defineEventHandler(async (event) => {
   try {
     // Get current profile details from Apple
     const existingProfile = await api.getProfile(profileId)
-    
+
     // Get devices filtered by platform
     const allDevices = await api.listDevices()
     const isTvOS = existingProfile.attributes.profileType.startsWith('TVOS')
-    
+
     // Filter devices by platform:
     // - tvOS profiles: only Apple TV devices (deviceClass === 'APPLE_TV')
     // - iOS profiles: only iOS devices (platform === 'IOS') BUT exclude Apple TV
@@ -94,8 +94,8 @@ export default defineEventHandler(async (event) => {
     // This way if creation fails, the old profile is still intact
     // Strip any existing "(Updated ...)" suffix before adding the new one
     const baseName = existingProfile.attributes.name.replace(/\s*\(Updated [^)]+\)/g, '')
-    const newProfileName = `${baseName} (Updated ${new Date().toLocaleDateString()})`
-    
+    const newProfileName = `${baseName} (Updated ${new Date().toLocaleString()})`
+
     // Create new profile with ALL enabled devices
     const newProfile = await api.createProfile(
       newProfileName,
@@ -116,7 +116,7 @@ export default defineEventHandler(async (event) => {
     // Download the profile content
     const profileData = Buffer.from(newProfile.attributes.profileContent, 'base64')
     const meta = await parseMobileProvision(profileData)
-    const platform = newProfile.attributes.profileType.startsWith('TVOS') ? 'TVOS' : 'IOS'
+    const platform = isTvOS ? 'TVOS' : 'IOS'
 
     // Save to local database
     const created = await prisma.provisioningProfile.create({
@@ -173,7 +173,7 @@ async function fetchProfileWithRelations(api: AppleDeveloperAPI, profileId: stri
   certificateIds: string[]
 }> {
   const token = api.generateToken()
-  
+
   // Apple API requires separate calls to get relationships
   // First get the profile's bundle ID
   const bundleIdRes = await fetch(
@@ -185,24 +185,24 @@ async function fetchProfileWithRelations(api: AppleDeveloperAPI, profileId: stri
       }
     }
   )
-  
+
   if (!bundleIdRes.ok) {
     const errorText = await bundleIdRes.text()
     throw new Error(`Failed to fetch bundle ID: ${bundleIdRes.status} - ${errorText}`)
   }
-  
+
   const bundleIdText = await bundleIdRes.text()
   if (!bundleIdText) {
     throw new Error('Empty response when fetching bundle ID')
   }
-  
+
   let bundleIdData: any
   try {
     bundleIdData = JSON.parse(bundleIdText)
   } catch {
     throw new Error(`Invalid JSON response for bundle ID: ${bundleIdText.slice(0, 200)}`)
   }
-  
+
   const bundleIdId = bundleIdData.data?.id
 
   if (!bundleIdId) {
@@ -219,24 +219,24 @@ async function fetchProfileWithRelations(api: AppleDeveloperAPI, profileId: stri
       }
     }
   )
-  
+
   if (!certsRes.ok) {
     const errorText = await certsRes.text()
     throw new Error(`Failed to fetch certificates: ${certsRes.status} - ${errorText}`)
   }
-  
+
   const certsText = await certsRes.text()
   if (!certsText) {
     throw new Error('Empty response when fetching certificates')
   }
-  
+
   let certsData: any
   try {
     certsData = JSON.parse(certsText)
   } catch {
     throw new Error(`Invalid JSON response for certificates: ${certsText.slice(0, 200)}`)
   }
-  
+
   const certificateIds = (certsData.data || []).map((c: any) => c.id)
 
   if (certificateIds.length === 0) {

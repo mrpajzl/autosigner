@@ -7,7 +7,9 @@ import { z } from 'zod'
 const schema = z.object({
   userIds: z.array(z.string()).optional(),
   deviceIds: z.array(z.string()).optional(),
-  all: z.boolean().optional()
+  all: z.boolean().optional(),
+  onlyPaid: z.boolean().optional(),
+  dryRun: z.boolean().optional()
 })
 
 export default defineEventHandler(async (event) => {
@@ -19,7 +21,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: parsed.error.errors[0].message })
   }
 
-  const { userIds, deviceIds, all } = parsed.data
+  const { userIds, deviceIds, all, onlyPaid, dryRun } = parsed.data
 
   // Get Apple credentials
   const credentials = await prisma.appleDeveloperCredentials.findUnique({
@@ -61,15 +63,22 @@ export default defineEventHandler(async (event) => {
     discordName: string
   }> = []
 
+  const whereCondition: any = {
+    registeredUser: {
+      ownerId: user.id
+    }
+  }
+
+  // Apply paid filter if requested
+  if (onlyPaid) {
+    whereCondition.registeredUser.paidForNextYear = true
+  }
+
   if (deviceIds && deviceIds.length > 0) {
     // Import specific devices
+    whereCondition.id = { in: deviceIds }
     const devices = await prisma.userDevice.findMany({
-      where: {
-        id: { in: deviceIds },
-        registeredUser: {
-          ownerId: user.id
-        }
-      },
+      where: whereCondition,
       include: {
         registeredUser: true
       }
@@ -83,13 +92,9 @@ export default defineEventHandler(async (event) => {
     }))
   } else if (userIds && userIds.length > 0) {
     // Import all devices from specific users
+    whereCondition.registeredUser.id = { in: userIds }
     const devices = await prisma.userDevice.findMany({
-      where: {
-        registeredUser: {
-          id: { in: userIds },
-          ownerId: user.id
-        }
-      },
+      where: whereCondition,
       include: {
         registeredUser: true
       }
@@ -104,11 +109,7 @@ export default defineEventHandler(async (event) => {
   } else if (all) {
     // Import all unregistered devices
     const devices = await prisma.userDevice.findMany({
-      where: {
-        registeredUser: {
-          ownerId: user.id
-        }
-      },
+      where: whereCondition,
       include: {
         registeredUser: true
       }
@@ -131,6 +132,18 @@ export default defineEventHandler(async (event) => {
   const unregisteredDevices = devicesToImport.filter(
     d => !appleDeviceUdids.has(d.udid.toLowerCase())
   )
+
+  // If dry run, simply return the list of devices that WOULD be imported
+  if (dryRun) {
+    return {
+      success: true,
+      registered: 0,
+      alreadyRegistered: devicesToImport.length - unregisteredDevices.length,
+      failed: [],
+      devices: unregisteredDevices,
+      totalToImport: unregisteredDevices.length
+    }
+  }
 
   if (unregisteredDevices.length === 0) {
     return {
@@ -155,13 +168,17 @@ export default defineEventHandler(async (event) => {
     try {
       // Format device name to include discord name for clarity
       const deviceName = `${device.discordName} - ${device.name}`
-      
+
+      // Map APPLE_TV to IOS for Apple API as it doesn't support APPLE_TV platform type explicitly
+      // but treats tvOS devices as part of the iOS family for registration
+      const applePlatform = device.platform === 'APPLE_TV' ? 'IOS' : device.platform
+
       await api.registerDevice(
         device.udid,
         deviceName,
-        device.platform as 'IOS' | 'MAC_OS' | 'APPLE_TV'
+        applePlatform as 'IOS' | 'MAC_OS'
       )
-      
+
       results.push({
         udid: device.udid,
         name: device.name,

@@ -112,11 +112,10 @@
         </div>
         <UButton
           color="orange"
-          :loading="importingAll"
           icon="i-heroicons-arrow-up-on-square"
-          @click="handleImportAll"
+          @click="openImportModal"
         >
-          Import All to Apple
+          Import to Apple
         </UButton>
       </div>
       <p v-if="importAllResult" class="mt-3 text-sm" :class="importAllResult.success ? 'text-green-400' : 'text-red-400'">
@@ -528,6 +527,111 @@
         </template>
       </UCard>
     </UModal>
+
+    <!-- Import Overview Modal -->
+    <UModal v-model="showImportModal" size="xl">
+      <UCard class="glass">
+        <template #header>
+          <div class="flex items-center gap-2 text-orange-400">
+            <UIcon name="i-heroicons-cloud-arrow-up" />
+            <span class="font-semibold">Import Devices to Apple</span>
+          </div>
+        </template>
+
+        <div class="space-y-4">
+          <div class="flex items-center justify-between bg-white/5 p-3 rounded-lg">
+            <div class="flex items-center gap-2">
+              <UToggle v-model="importOptions.onlyPaid" />
+              <div class="flex flex-col">
+                <span class="text-sm font-medium text-slate-900 dark:text-white">Only Paid Users</span>
+                <span class="text-xs text-slate-500 dark:text-white/50">Only import devices from users marked as paid</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="isLoadingPreview" class="flex flex-col items-center justify-center py-8">
+            <UIcon name="i-heroicons-arrow-path" class="animate-spin text-3xl text-orange-400 mb-2" />
+            <p class="text-slate-500 font-medium">Checking with Apple...</p>
+          </div>
+
+          <div v-else-if="previewData" class="space-y-4">
+            <div class="flex items-center justify-between">
+              <p class="text-slate-600 dark:text-white/70">
+                Found <strong>{{ previewData.totalToImport }}</strong> device(s) to import.
+              </p>
+              <UBadge :color="previewData.totalToImport > 0 ? 'orange' : 'gray'" variant="soft">
+                {{ previewData.totalToImport }} New
+              </UBadge>
+            </div>
+
+            <!-- Preview List -->
+            <div v-if="previewData.devices.length > 0" class="border border-white/10 rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+              <table class="min-w-full divide-y divide-white/10">
+                <thead class="bg-white/5">
+                  <tr>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Device</th>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Details</th>
+                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">User</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-white/10 bg-transparent">
+                  <tr v-for="device in previewData.devices" :key="device.id">
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-slate-900 dark:text-white">{{ device.name }}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-xs font-mono text-slate-500">{{ device.udid }}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-slate-500">{{ device.discordName }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            
+            <p v-else class="text-center py-4 text-slate-500 italic">
+              All devices matching criteria are already in Apple!
+            </p>
+
+            <UAlert
+              v-if="importOptions.onlyPaid && hiddenByFilterCount > 0 && previewData.totalToImport === 0"
+              icon="i-heroicons-information-circle"
+              color="blue"
+              variant="soft"
+              :title="`${hiddenByFilterCount} device(s) are hidden by the 'Paid Only' filter.`"
+            >
+              <template #description>
+                <p class="text-xs mt-1">
+                  Disable the filter above to see devices belonging to unpaid users.
+                </p>
+              </template>
+            </UAlert>
+
+            <UAlert
+              v-if="importError"
+              icon="i-heroicons-exclamation-circle"
+              color="red"
+              variant="soft"
+              :title="importError"
+            />
+          </div>
+        </div>
+
+        <template #footer>
+          <div class="flex justify-between items-center w-full">
+             <div class="text-xs text-slate-500">
+                {{ importingAll ? 'Importing...' : 'Ready to import' }}
+             </div>
+             <div class="flex gap-2">
+                <UButton color="gray" variant="ghost" @click="showImportModal = false" :disabled="importingAll">Cancel</UButton>
+                <UButton 
+                  v-if="previewData && previewData.totalToImport > 0"
+                  color="orange" 
+                  :loading="importingAll" 
+                  @click="confirmImport"
+                >
+                  Confirm Import
+                </UButton>
+             </div>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
   </div>
 </template>
 
@@ -601,6 +705,12 @@ const registeredInApple = computed(() => users.value.reduce((sum, u) => sum + (u
 const notRegisteredInApple = computed(() => totalDevices.value - registeredInApple.value)
 const paidUsersCount = computed(() => users.value.filter(u => u.paidForNextYear).length)
 
+const hiddenByFilterCount = computed(() => {
+  return users.value
+    .filter(u => !u.paidForNextYear)
+    .reduce((sum, u) => sum + u.devices.filter(d => !d.isRegisteredInApple).length, 0)
+})
+
 // Platform options
 const platformOptions = [
   { label: 'iOS', value: 'IOS' },
@@ -659,6 +769,24 @@ const deleting = ref(false)
 const importingUser = ref<string | null>(null)
 const importingAll = ref(false)
 const importAllResult = ref<{ success: boolean; message: string } | null>(null)
+
+// Advanced Import State
+const showImportModal = ref(false)
+const importOptions = reactive({
+  onlyPaid: true
+})
+const isLoadingPreview = ref(false)
+const previewData = ref<{
+  totalToImport: number;
+  devices: Array<{
+    id: string;
+    udid: string;
+    name: string;
+    platform: string;
+    discordName: string;
+  }>
+} | null>(null)
+const importError = ref('')
 
 // Paid status toggle state
 const togglingPaid = ref<string | null>(null)
@@ -933,27 +1061,98 @@ async function handleImportUser(user: RegisteredUser) {
   }
 }
 
-async function handleImportAll() {
-  importingAll.value = true
-  importAllResult.value = null
+async function openImportModal() {
+  showImportModal.value = true
+  importOptions.onlyPaid = true // Reset to default
+  importError.value = ''
+  await fetchPreview()
+}
+
+async function fetchPreview() {
+  isLoadingPreview.value = true
+  previewData.value = null
+  importError.value = ''
+  
   try {
-    const result = await $fetch<{ registered: number; alreadyRegistered: number; failed: any[] }>('/api/registered-users/import-to-apple', {
+    const result = await $fetch<any>('/api/registered-users/import-to-apple', {
       method: 'POST',
-      body: { all: true }
+      body: { 
+        all: true,
+        onlyPaid: importOptions.onlyPaid,
+        dryRun: true
+      }
     })
-    await refreshUsers()
-    importAllResult.value = {
-      success: true,
-      message: `Successfully registered ${result.registered} device(s) to Apple. ${result.alreadyRegistered} were already registered.`
+    
+    previewData.value = {
+      totalToImport: result.totalToImport,
+      devices: result.devices
     }
   } catch (e: any) {
-    importAllResult.value = {
-      success: false,
-      message: e?.data?.message || 'Failed to import devices'
+    importError.value = e?.data?.message || 'Failed to fetch preview'
+  } finally {
+    isLoadingPreview.value = false
+  }
+}
+
+// Watch option changes to re-fetch preview
+watch(() => importOptions.onlyPaid, () => {
+  if (showImportModal.value) {
+    fetchPreview()
+  }
+})
+
+async function confirmImport() {
+  importingAll.value = true
+  importAllResult.value = null
+  importError.value = ''
+  
+  try {
+    // We can just call with dryRun: false and same params
+    const result = await $fetch<{ registered: number; alreadyRegistered: number; failed: any[] }>('/api/registered-users/import-to-apple', {
+      method: 'POST',
+      body: { 
+        all: true, 
+        onlyPaid: importOptions.onlyPaid
+      }
+    })
+    
+    // Clear preview data to prevent UI glitches/reactivity errors during close
+    previewData.value = null
+    showImportModal.value = false
+    await refreshUsers()
+    
+    const failedCount = result.failed.length
+    let msg = `Successfully registered ${result.registered} device(s) to Apple. ${result.alreadyRegistered} were already registered.`
+    
+    if (failedCount > 0) {
+      msg += ` ${failedCount} device(s) failed to register.`
+      console.warn('Failed devices:', result.failed)
+      // If all failed, mark as error for visibility
+      if (result.registered === 0) {
+        importAllResult.value = {
+          success: false,
+          message: msg + ' Check console for details.'
+        }
+        return
+      }
     }
+
+    importAllResult.value = {
+      success: true,
+      message: msg
+    }
+  } catch (e: any) {
+    importError.value = e?.data?.message || 'Failed to import devices'
+    // Keep modal open on error to show it
   } finally {
     importingAll.value = false
   }
+}
+
+// Old simpler handler - kept but replaced in usage
+async function handleImportAll() {
+  // Redirect to new flow
+  openImportModal()
 }
 
 // Reset user modal when closed

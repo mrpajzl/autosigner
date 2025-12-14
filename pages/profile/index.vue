@@ -41,7 +41,7 @@
       <div class="space-y-4">
         <div class="grid md:grid-cols-2 gap-4">
           <UButton to="/profile/certificates" color="red" variant="solid" icon="i-heroicons-identification" label="Certificates" />
-          <UButton to="/profile/profiles" color="red" variant="solid" icon="i-heroicons-document-text" label="Provisioning Profiles" />
+          <UButton to="/profile/apple-profiles" color="red" variant="solid" icon="i-heroicons-document-text" label="Provisioning Profiles" />
         </div>
         <p class="text-sm text-slate-600 dark:text-white/60">Manage signing assets separately. Active assets will be used for automatic background signing of your apps.</p>
       </div>
@@ -64,7 +64,7 @@
           Connect your Apple Developer account to manage devices (UDIDs) and provisioning profiles directly from this app.
           This is optional - you can still upload profiles manually.
         </p>
-        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
           <UButton
             to="/profile/apple-developer"
             variant="ghost"
@@ -78,14 +78,6 @@
             class="surface-button"
             icon="i-heroicons-device-phone-mobile"
             label="Devices"
-            :disabled="!appleConnected"
-          />
-          <UButton
-            to="/profile/apple-profiles"
-            variant="ghost"
-            class="surface-button"
-            icon="i-heroicons-cloud-arrow-down"
-            label="Apple Profiles"
             :disabled="!appleConnected"
           />
           <UButton

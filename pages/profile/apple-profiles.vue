@@ -195,15 +195,56 @@
     </UCard>
 
     <!-- Link to local profiles -->
-    <UCard v-if="appleConnected" class="glass">
-      <div class="flex items-center justify-between">
-        <div>
-          <p class="font-medium">Local Provisioning Profiles</p>
-          <p class="text-sm text-slate-600 dark:text-white/60">Downloaded profiles are saved locally for signing.</p>
+    <UCard class="glass">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-heroicons-document-text" />
+            <span class="card-title">Local Provisioning Profiles</span>
+          </div>
         </div>
-        <UButton to="/profile/profiles" color="gray" variant="soft" icon="i-heroicons-arrow-right">
-          View Local Profiles
-        </UButton>
+      </template>
+
+      <div class="space-y-4">
+        <p class="text-sm text-slate-600 dark:text-white/60">Upload .mobileprovision files manually, or download them from Apple Developer Portal.</p>
+        
+        <form class="grid md:grid-cols-4 gap-4" @submit.prevent="onLocalUpload">
+          <UFormGroup label="Platform">
+            <USelect v-model="localPlatform" :options="localPlatformOptions" />
+          </UFormGroup>
+          <UFormGroup label="Name (optional)">
+            <UInput v-model="localName" />
+          </UFormGroup>
+          <UFormGroup label="Profile (.mobileprovision)">
+            <input ref="localProfileRef" type="file" accept=".mobileprovision" class="block w-full text-sm" />
+          </UFormGroup>
+          <div class="flex items-end">
+            <UButton type="submit" color="red" :loading="localUploading">Upload</UButton>
+          </div>
+        </form>
+
+        <p v-if="localUploadMessage" :class="localUploadError ? 'text-red-400' : 'text-green-400'" class="text-sm">{{ localUploadMessage }}</p>
+
+        <UDivider />
+
+        <UTable :rows="localRows" :columns="localColumns">
+          <template #active-data="{ row }">
+            <UBadge :color="row.active ? 'green' : 'gray'">{{ row.active ? 'Active' : 'Inactive' }}</UBadge>
+          </template>
+          <template #expiresAt-data="{ row }">
+            <span :class="isLocalExpired(row.expiresAt) ? 'text-red-400' : ''">
+              {{ row.expiresAt ? new Date(row.expiresAt).toLocaleDateString() : '-' }}
+            </span>
+          </template>
+          <template #actions-data="{ row }">
+            <div class="flex gap-2">
+              <UButton size="xs" color="white" variant="soft" @click="localActivate(row.id)" :disabled="row.active">Activate</UButton>
+              <UButton size="xs" color="red" variant="soft" @click="localRemove(row.id)">Delete</UButton>
+            </div>
+          </template>
+        </UTable>
+
+        <p v-if="!localRows?.length" class="text-center text-slate-500 dark:text-white/50 py-4">No profiles uploaded yet</p>
       </div>
     </UCard>
   </div>
@@ -369,8 +410,9 @@ async function handleRegenerate(profileId: string, profileName: string) {
     })
     regenerateSuccess.value = `"${profileName}" updated with ${result.devicesIncluded} devices and set as active signing profile!`
     
-    // Refresh profiles to show any changes
+    // Refresh both lists
     await refreshProfiles()
+    await refreshLocal()
   } catch (e: any) {
     regenerateError.value = e?.data?.message || 'Failed to regenerate profile'
   } finally {
@@ -388,8 +430,8 @@ async function handleDownload(profileId: string) {
   downloading.value = profileId
   try {
     await $fetch(`/api/apple/profiles/${profileId}/download`, { method: 'POST' })
-    // Show success toast or notification
     alert('Profile downloaded and saved locally!')
+    await refreshLocal()
   } catch (e: any) {
     alert(e?.data?.message || 'Failed to download profile')
   } finally {
@@ -460,6 +502,7 @@ async function handleCreate() {
     createForm.deviceIds = []
     showCreateForm.value = false
     await refreshProfiles()
+    await refreshLocal()
   } catch (e: any) {
     createError.value = e?.data?.message || 'Failed to create profile'
   } finally {
@@ -473,5 +516,70 @@ watch(showCreateForm, (show) => {
     loadCreateFormData()
   }
 })
+
+// === LOCAL PROFILES LOGIC ===
+
+type LocalProfRow = { id: string; name?: string | null; platform: 'IOS' | 'TVOS'; uuid?: string | null; expiresAt?: string | null; createdAt: string; active: boolean }
+const localColumns = [
+  { key: 'name', label: 'Name' },
+  { key: 'platform', label: 'Platform' },
+  { key: 'uuid', label: 'UUID' },
+  { key: 'expiresAt', label: 'Expires' },
+  { key: 'active', label: 'Status' },
+  { key: 'actions', label: 'Actions' }
+]
+
+const localPlatform = ref<'IOS' | 'TVOS'>('IOS')
+const localName = ref('')
+const localPlatformOptions = [
+  { label: 'iOS', value: 'IOS' },
+  { label: 'tvOS', value: 'TVOS' }
+]
+const localProfileRef = ref<HTMLInputElement | null>(null)
+const localUploading = ref(false)
+const localUploadMessage = ref('')
+const localUploadError = ref(false)
+
+const { data: localRows, refresh: refreshLocal } = await useFetch<LocalProfRow[]>('/api/profile/profiles')
+
+function isLocalExpired(date: string | null | undefined): boolean {
+  if (!date) return false
+  return new Date(date) < new Date()
+}
+
+async function onLocalUpload() {
+  localUploadMessage.value = ''
+  localUploadError.value = false
+  localUploading.value = true
+  
+  try {
+    const fd = new FormData()
+    fd.set('platform', localPlatform.value)
+    if (localName.value) fd.set('name', localName.value)
+    const file = localProfileRef.value?.files?.[0]
+    if (file) fd.set('profile', file)
+    await $fetch('/api/profile/profiles', { method: 'POST', body: fd })
+    localUploadMessage.value = 'Profile uploaded successfully'
+    localName.value = ''
+    if (localProfileRef.value) localProfileRef.value.value = ''
+    await refreshLocal()
+  } catch (e: any) {
+    localUploadMessage.value = e?.data?.message || 'Failed to upload profile'
+    localUploadError.value = true
+  } finally {
+    localUploading.value = false
+  }
+}
+
+async function localActivate(id: string) {
+  await $fetch(`/api/profile/profiles/${id}/activate`, { method: 'POST' })
+  await refreshLocal()
+}
+
+async function localRemove(id: string) {
+  if (!confirm('Are you sure you want to delete this profile?')) return
+  await $fetch(`/api/profile/profiles/${id}`, { method: 'DELETE' })
+  await refreshLocal()
+}
 </script>
 

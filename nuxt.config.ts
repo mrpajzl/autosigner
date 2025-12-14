@@ -27,7 +27,7 @@ export default defineNuxtConfig({
     // and across async boundaries (required for some modules with Unhead v2)
     asyncContext: true
   },
-  
+
 
   modules: [
     '@nuxt/eslint',
@@ -102,7 +102,7 @@ export default defineNuxtConfig({
       // legacy upload removed
       ensure('/profile', './pages/profile/index.vue', 'profile-index')
       ensure('/profile/certificates', './pages/profile/certificates.vue', 'profile-certificates')
-      ensure('/profile/profiles', './pages/profile/profiles.vue', 'profile-profiles')
+      // legacy upload removed
       // Apple Developer integration pages
       ensure('/profile/apple-developer', './pages/profile/apple-developer.vue', 'profile-apple-developer')
       ensure('/profile/devices', './pages/profile/devices.vue', 'profile-devices')
