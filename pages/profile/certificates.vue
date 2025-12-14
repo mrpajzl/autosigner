@@ -105,10 +105,10 @@ const createForm = reactive({
 })
 
 const certTypes = [
-  { label: 'iOS Distribution (App Store)', value: 'IOS_DISTRIBUTION' },
+  { label: 'Apple Distribution (Recommended - iOS, tvOS, macOS)', value: 'DISTRIBUTION' },
+  { label: 'iOS Distribution (App Store & Ad Hoc)', value: 'IOS_DISTRIBUTION' },
   { label: 'iOS Development', value: 'IOS_DEVELOPMENT' },
   { label: 'Mac App Distribution', value: 'MAC_APP_DISTRIBUTION' },
-  { label: 'Apple Distribution', value: 'DISTRIBUTION' },
   { label: 'Apple Development', value: 'DEVELOPMENT' }
 ]
 

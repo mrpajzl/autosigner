@@ -5,6 +5,8 @@ import { AppleDeveloperAPI } from '../../utils/apple-api'
 import { generateCSR, createP12 } from '../../utils/pki'
 import { nanoid } from 'nanoid'
 import { z } from 'zod'
+import path from 'node:path'
+import fse from 'fs-extra'
 
 const schema = z.object({
     certificateType: z.enum(['IOS_DISTRIBUTION', 'IOS_DEVELOPMENT', 'MAC_APP_DISTRIBUTION', 'MAC_INSTALLER_DISTRIBUTION', 'DEVELOPER_ID_KEXT', 'DEVELOPER_ID_APPLICATION', 'DEVELOPMENT', 'DISTRIBUTION']),
@@ -65,7 +67,17 @@ export default defineEventHandler(async (event) => {
 
         // 3. Create P12
         const p12Password = password || nanoid(32) // Use provided password or generate a strong random one
-        const p12Buffer = await createP12(privateKey, certContent, p12Password)
+
+        // Load Intermediate Certificate
+        const intermediatePath = path.join(process.cwd(), 'server/assets/AppleWWDRCA.pem')
+        let intermediateCert: string | undefined
+        try {
+            intermediateCert = await fse.readFile(intermediatePath, 'utf8')
+        } catch (e) {
+            console.warn('Warning: AppleWWDRCA.pem not found, P12 will be created without intermediate certificate.')
+        }
+
+        const p12Buffer = await createP12(privateKey, certContent, p12Password, intermediateCert)
 
         // 4. Save to DB
         const expirationDate = appleCert.attributes.expirationDate ? new Date(appleCert.attributes.expirationDate) : undefined

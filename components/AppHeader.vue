@@ -211,14 +211,22 @@
               
               <!-- Connected - show all options -->
               <template v-else>
-                <NuxtLink
-                  to="/profile/apple-developer"
-                  class="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-                  @click="mobileOpen = false"
-                >
-                  <UIcon name="i-heroicons-key" class="w-4 h-4 text-slate-500" />
-                  API Credentials
-                </NuxtLink>
+                  <NuxtLink
+                    to="/profile/apple-developer"
+                    class="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                    @click="mobileOpen = false"
+                  >
+                    <UIcon name="i-heroicons-key" class="w-4 h-4 text-slate-500" />
+                    API Credentials
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/profile/certificates"
+                    class="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                    @click="mobileOpen = false"
+                  >
+                    <UIcon name="i-heroicons-identification" class="w-4 h-4 text-amber-500" />
+                    Certificates
+                  </NuxtLink>
                 <NuxtLink
                   to="/profile/devices"
                   class="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
@@ -320,6 +328,7 @@ const appleMenu = computed(() => {
     ],
     [
       { label: 'API Credentials', icon: 'i-heroicons-key', to: '/profile/apple-developer' },
+      { label: 'Certificates', icon: 'i-heroicons-identification', to: '/profile/certificates' },
       { label: 'Devices', icon: 'i-heroicons-device-phone-mobile', to: '/profile/devices' },
       { label: 'Profiles', icon: 'i-heroicons-document-text', to: '/profile/apple-profiles' }
     ],

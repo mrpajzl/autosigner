@@ -44,9 +44,9 @@ emailAddress = ${email}
   } finally {
     // Cleanup
     await Promise.all([
-      fse.remove(keyPath).catch(() => {}),
-      fse.remove(csrPath).catch(() => {}),
-      fse.remove(cnfPath).catch(() => {})
+      fse.remove(keyPath).catch(() => { }),
+      fse.remove(csrPath).catch(() => { }),
+      fse.remove(cnfPath).catch(() => { })
     ])
   }
 }
@@ -54,23 +54,27 @@ emailAddress = ${email}
 /**
  * Combine a Private Key and a Certificate into a PKCS#12 (.p12) file
  */
-export async function createP12(privateKey: string, certificate: string, password: string): Promise<Buffer> {
+export async function createP12(privateKey: string, certificate: string, password: string, intermediateCert?: string): Promise<Buffer> {
   const tmpDir = os.tmpdir()
   const keyPath = path.join(tmpDir, `p12-key-${Date.now()}.pem`)
   const certPath = path.join(tmpDir, `p12-cert-${Date.now()}.pem`)
+  const caPath = path.join(tmpDir, `p12-ca-${Date.now()}.pem`)
   const p12Path = path.join(tmpDir, `out-${Date.now()}.p12`)
 
   try {
     // Write temp files
     await fse.writeFile(keyPath, privateKey)
     await fse.writeFile(certPath, certificate)
+    if (intermediateCert) {
+      await fse.writeFile(caPath, intermediateCert)
+    }
 
     // Check if openssl supports -legacy flag (OpenSSL 3.x does, LibreSSL doesn't)
     let useLegacy = false
     try {
       const { stdout } = await execa('openssl', ['version'])
       useLegacy = stdout.includes('OpenSSL 3') || stdout.includes('OpenSSL 1.1')
-    } catch {}
+    } catch { }
 
     const args = [
       'pkcs12', '-export',
@@ -79,6 +83,10 @@ export async function createP12(privateKey: string, certificate: string, passwor
       '-out', p12Path,
       '-passout', `pass:${password}`
     ]
+
+    if (intermediateCert) {
+      args.push('-certfile', caPath)
+    }
 
     // Use legacy encryption to ensure maximum compatibility with Apple/macOS tools
     // often needed for newer OpenSSL versions
@@ -89,9 +97,10 @@ export async function createP12(privateKey: string, certificate: string, passwor
     return await fse.readFile(p12Path)
   } finally {
     await Promise.all([
-      fse.remove(keyPath).catch(() => {}),
-      fse.remove(certPath).catch(() => {}),
-      fse.remove(p12Path).catch(() => {})
+      fse.remove(keyPath).catch(() => { }),
+      fse.remove(certPath).catch(() => { }),
+      fse.remove(caPath).catch(() => { }), // harmless if not exists
+      fse.remove(p12Path).catch(() => { })
     ])
   }
 }
