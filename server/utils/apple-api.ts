@@ -117,7 +117,7 @@ export class AppleDeveloperAPI {
   private derToRaw(derSignature: Buffer): Buffer {
     // DER format: 0x30 [total-length] 0x02 [r-length] [r] 0x02 [s-length] [s]
     let offset = 2 // Skip 0x30 and total length
-    
+
     // Parse r
     if (derSignature[offset] !== 0x02) throw new Error('Invalid DER signature')
     offset++
@@ -136,11 +136,11 @@ export class AppleDeveloperAPI {
     // Remove leading zeros and pad to 32 bytes
     if (r.length > 32) r = r.subarray(r.length - 32)
     if (s.length > 32) s = s.subarray(s.length - 32)
-    
+
     const raw = Buffer.alloc(64)
     r.copy(raw, 32 - r.length)
     s.copy(raw, 64 - s.length)
-    
+
     return raw
   }
 
@@ -178,7 +178,7 @@ export class AppleDeveloperAPI {
   private async fetchAll<T>(path: string, params?: Record<string, string>): Promise<T[]> {
     const results: T[] = []
     let nextUrl: string | undefined = `${this.baseUrl}${path}`
-    
+
     if (params) {
       const url = new URL(nextUrl)
       Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
@@ -294,7 +294,7 @@ export class AppleDeveloperAPI {
    */
   async getSigningCertificates(): Promise<AppleCertificate[]> {
     const certs = await this.listCertificates()
-    return certs.filter(c => 
+    return certs.filter(c =>
       c.attributes.certificateType.includes('DISTRIBUTION') ||
       c.attributes.certificateType.includes('DEVELOPMENT')
     )
@@ -380,14 +380,14 @@ export class AppleDeveloperAPI {
     const existingRes = await this.request<AppleProfile>(`/profiles/${profileId}`, {
       params: { include: 'bundleId,certificates' }
     }) as AppleApiResponse<AppleProfile> & { included?: any[] }
-    
+
     const existing = existingRes.data as AppleProfile
     const included = existingRes.included || []
-    
+
     // Extract bundle ID and certificate IDs from included
     const bundleId = included.find((i: any) => i.type === 'bundleIds')
     const certificates = included.filter((i: any) => i.type === 'certificates')
-    
+
     if (!bundleId) {
       throw new Error('Could not find bundle ID for profile')
     }
@@ -403,6 +403,30 @@ export class AppleDeveloperAPI {
       deviceIds,
       existing.attributes.profileType as any
     )
+  }
+
+  /**
+   * Create a new certificate using a CSR
+   * @param csrContent The PEM encoded CSR content
+   * @param certificateType The type of certificate to create (e.g., IOS_DISTRIBUTION)
+   */
+  async createCertificate(
+    csrContent: string,
+    certificateType: string
+  ): Promise<AppleCertificate> {
+    const res = await this.request<AppleCertificate>('/certificates', {
+      method: 'POST',
+      body: {
+        data: {
+          type: 'certificates',
+          attributes: {
+            certificateType,
+            csrContent
+          }
+        }
+      }
+    })
+    return res.data as AppleCertificate
   }
 
   // ============ VALIDATION ============

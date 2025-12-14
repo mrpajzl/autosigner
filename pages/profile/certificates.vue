@@ -7,6 +7,7 @@
             <UIcon name="i-heroicons-identification" />
             <span class="card-title">Certificates</span>
           </div>
+          <UButton icon="i-heroicons-plus" size="xs" color="black" @click="isCreateModalOpen = true">Create via API</UButton>
         </div>
       </template>
 
@@ -39,6 +40,38 @@
           </template>
         </UTable>
       </div>
+
+      <UModal v-model="isCreateModalOpen">
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between">
+              <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
+                Create New Certificate
+              </h3>
+              <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark-20-solid" class="-my-1" @click="isCreateModalOpen = false" />
+            </div>
+          </template>
+
+          <form @submit.prevent="createCert" class="space-y-4">
+            <UFormGroup label="Certificate Type" required>
+              <USelect v-model="createForm.certificateType" :options="certTypes" />
+            </UFormGroup>
+            
+            <UFormGroup label="Display Name" help="Optional, will use Apple ID name if empty">
+              <UInput v-model="createForm.displayName" placeholder="e.g. My Distribution Cert" />
+            </UFormGroup>
+            
+            <UFormGroup label="P12 Password" help="Optional, leave empty to generate a random secure password">
+              <UInput v-model="createForm.password" type="password" autocomplete="new-password" placeholder="••••••••" />
+            </UFormGroup>
+
+            <div class="flex justify-end gap-2 pt-4">
+              <UButton color="gray" variant="soft" @click="isCreateModalOpen = false">Cancel</UButton>
+              <UButton type="submit" color="black" :loading="isCreating">Create Certificate</UButton>
+            </div>
+          </form>
+        </UCard>
+      </UModal>
     </UCard>
   </div>
   
@@ -61,6 +94,51 @@ const displayName = ref('')
 const p12Ref = ref<HTMLInputElement | null>(null)
 const p12Password = ref('')
 const message = ref('')
+
+// Manual Creation UI
+const isCreateModalOpen = ref(false)
+const isCreating = ref(false)
+const createForm = reactive({
+  certificateType: 'IOS_DISTRIBUTION',
+  displayName: '',
+  password: ''
+})
+
+const certTypes = [
+  { label: 'iOS Distribution (App Store)', value: 'IOS_DISTRIBUTION' },
+  { label: 'iOS Development', value: 'IOS_DEVELOPMENT' },
+  { label: 'Mac App Distribution', value: 'MAC_APP_DISTRIBUTION' },
+  { label: 'Apple Distribution', value: 'DISTRIBUTION' },
+  { label: 'Apple Development', value: 'DEVELOPMENT' }
+]
+
+async function createCert() {
+  isCreating.value = true
+  message.value = ''
+  try {
+    await $fetch('/api/apple/certificates', {
+      method: 'POST',
+      body: {
+        certificateType: createForm.certificateType,
+        displayName: createForm.displayName || undefined,
+        password: createForm.password || undefined
+      }
+    })
+    isCreateModalOpen.value = false
+    message.value = 'Certificate created successfully!'
+    createForm.displayName = ''
+    createForm.password = ''
+    await refresh()
+  } catch (e: any) {
+    message.value = e?.data?.message || 'Failed to create certificate'
+    // Re-open modal if there was an error so user can correct? 
+    // Or just show error on main screen. Let's keep modal closed but show generic error message.
+    // Actually, forcing user to re-open is fine if we show toast, but we are using `message` ref.
+    // Let's rely on global toast if available, or just the message text.
+  } finally {
+    isCreating.value = false
+  }
+}
 
 async function onUpload() {
   try {
