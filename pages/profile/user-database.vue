@@ -93,24 +93,38 @@
 
 
     <!-- Bulk Import to Apple -->
-    <UCard v-if="appleConnected && notRegisteredInApple > 0" class="glass border-2 border-orange-500/50">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <UIcon name="i-heroicons-arrow-up-on-square-stack" class="text-2xl text-orange-400" />
-          <div>
-            <p class="font-semibold text-slate-900 dark:text-white">{{ notRegisteredInApple }} devices not registered in Apple</p>
-            <p class="text-sm text-slate-600 dark:text-white/60">Import all unregistered devices to your Apple Developer account</p>
+    <UCard
+      v-if="appleConnected && notRegisteredInApple > 0"
+      class="glass border border-orange-500/40 text-sm"
+    >
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <UIcon name="i-heroicons-arrow-up-on-square-stack" class="text-lg text-orange-400" />
+          <div class="space-y-0.5">
+            <p class="font-medium text-slate-900 dark:text-white">
+              {{ notRegisteredInApple }} device{{ notRegisteredInApple === 1 ? '' : 's' }} not registered in Apple
+            </p>
+            <p class="text-xs text-slate-600 dark:text-white/60">
+              {{ paidCustomersWithUnimportedDevices }}
+              paid customer{{ paidCustomersWithUnimportedDevices === 1 ? '' : 's' }}
+              currently have device{{ paidCustomersWithUnimportedDevices === 1 ? '' : 's' }} waiting to be imported.
+            </p>
           </div>
         </div>
         <UButton
           color="orange"
+          size="sm"
           icon="i-heroicons-arrow-up-on-square"
           @click="openImportModal"
         >
           Import to Apple
         </UButton>
       </div>
-      <p v-if="importAllResult" class="mt-3 text-sm" :class="importAllResult.success ? 'text-green-400' : 'text-red-400'">
+      <p
+        v-if="importAllResult"
+        class="mt-2 text-xs"
+        :class="importAllResult.success ? 'text-green-400' : 'text-red-400'"
+      >
         {{ importAllResult.message }}
       </p>
     </UCard>
@@ -444,19 +458,6 @@
           <UFormGroup label="Platform">
             <USelect v-model="deviceForm.platform" :options="platformOptions" />
           </UFormGroup>
-          <UAlert
-            icon="i-heroicons-light-bulb"
-            color="blue"
-            variant="soft"
-            title="How to find UDID"
-          >
-            <template #description>
-              <p class="text-sm">
-                Connect device to Mac → Open Finder → Select device → Click on device info to reveal UDID.
-                Or use <a href="https://udid.io" target="_blank" class="underline">udid.io</a> on the device.
-              </p>
-            </template>
-          </UAlert>
           <p v-if="deviceFormError" class="text-sm text-red-400">{{ deviceFormError }}</p>
         </form>
 
@@ -696,6 +697,11 @@ const totalDevices = computed(() => users.value.reduce((sum, u) => sum + u.devic
 const registeredInApple = computed(() => users.value.reduce((sum, u) => sum + (u.registeredInAppleCount || 0), 0))
 const notRegisteredInApple = computed(() => totalDevices.value - registeredInApple.value)
 const paidUsersCount = computed(() => users.value.filter(u => u.paidForNextYear).length)
+const paidCustomersWithUnimportedDevices = computed(() =>
+  users.value.filter(
+    u => u.paidForNextYear && u.devices.some(d => !d.isRegisteredInApple)
+  ).length
+)
 
 const hiddenByFilterCount = computed(() => {
   return users.value

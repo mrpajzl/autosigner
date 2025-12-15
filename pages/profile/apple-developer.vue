@@ -137,6 +137,14 @@
           label="View Apple Profiles"
           block
         />
+        <UButton
+          to="/profile/certificates"
+          variant="ghost"
+          class="surface-button"
+          icon="i-heroicons-identification"
+          label="Manage Certificates"
+          block
+        />
       </div>
     </UCard>
   </div>

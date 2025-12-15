@@ -1,11 +1,12 @@
 <template>
   <div class="space-y-6 max-w-7xl mx-auto px-4 pt-6">
+    <!-- Local certificates -->
     <UCard class="glass">
       <template #header>
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-identification" />
-            <span class="card-title">Certificates</span>
+            <span class="card-title">Local Certificates</span>
           </div>
           <UButton icon="i-heroicons-plus" size="xs" color="black" @click="isCreateModalOpen = true">Create via API</UButton>
         </div>
@@ -73,6 +74,192 @@
         </UCard>
       </UModal>
     </UCard>
+
+    <!-- Apple Developer certificates -->
+    <UAlert
+      v-if="!appleConnected"
+      icon="i-heroicons-exclamation-triangle"
+      color="yellow"
+      variant="soft"
+      title="Apple Developer Connection Required"
+    >
+      <template #description>
+        <p class="mb-2">Connect your Apple Developer account to manage certificates directly from Apple.</p>
+        <UButton to="/profile/apple-developer" size="sm" color="yellow" variant="solid">
+          Connect Now
+        </UButton>
+      </template>
+    </UAlert>
+
+    <UCard v-if="appleConnected" class="glass">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-heroicons-identification" />
+            <span class="card-title">Apple Developer Certificates</span>
+            <UBadge color="gray" variant="soft">{{ appleCertificatesFiltered.length }}</UBadge>
+          </div>
+          <div class="flex items-center gap-2">
+            <USelect v-model="appleFilter" :options="appleFilterOptions" size="sm" />
+            <UButton
+              icon="i-heroicons-arrow-path"
+              color="gray"
+              variant="ghost"
+              :loading="appleRefreshing"
+              @click="refreshApple"
+            />
+          </div>
+        </div>
+      </template>
+
+      <div v-if="appleLoading" class="flex items-center justify-center py-8">
+        <UIcon name="i-heroicons-arrow-path" class="animate-spin text-2xl" />
+      </div>
+
+      <div v-else-if="appleError" class="text-center py-8">
+        <p class="text-red-400 mb-2">{{ appleError }}</p>
+        <UButton color="gray" variant="soft" @click="refreshApple">Try Again</UButton>
+      </div>
+
+      <div v-else-if="appleCertificatesFiltered.length === 0" class="text-center py-8 text-slate-500 dark:text-white/50">
+        <UIcon name="i-heroicons-identification" class="text-4xl mb-2" />
+        <p>No certificates found for your Apple Developer account.</p>
+      </div>
+
+      <div v-else class="space-y-3">
+        <div
+          v-for="cert in appleCertificatesFiltered"
+          :key="cert.id"
+          class="p-4 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+        >
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0 space-y-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <p class="font-medium truncate">
+                  {{ cert.displayName || cert.name || 'Unnamed Certificate' }}
+                </p>
+                <UBadge
+                  :color="isAppleExpired(cert.expirationDate) ? 'red' : 'green'"
+                  variant="soft"
+                  size="xs"
+                >
+                  {{ isAppleExpired(cert.expirationDate) ? 'Expired' : 'Valid' }}
+                </UBadge>
+                <UBadge color="gray" variant="soft" size="xs">
+                  {{ cert.certificateType }}
+                </UBadge>
+                <UBadge v-if="cert.platform" color="blue" variant="soft" size="xs">
+                  {{ cert.platform }}
+                </UBadge>
+              </div>
+              <p class="text-xs text-slate-500 dark:text-white/40">
+                Serial: {{ cert.serialNumber }}
+                <span v-if="cert.expirationDate">
+                  • Expires: {{ new Date(cert.expirationDate).toLocaleDateString() }}
+                </span>
+              </p>
+
+              <div class="mt-2">
+                <p class="text-xs text-slate-500 dark:text-white/50 mb-1">
+                  Used in {{ cert.usedByProfiles.length }} provisioning profile{{ cert.usedByProfiles.length !== 1 ? 's' : '' }}:
+                </p>
+                <div v-if="cert.usedByProfiles.length" class="flex flex-wrap gap-2">
+                  <UBadge
+                    v-for="profile in cert.usedByProfiles"
+                    :key="profile.id"
+                    color="gray"
+                    variant="soft"
+                    size="xs"
+                    class="max-w-xs truncate"
+                  >
+                    {{ profile.name }} ({{ profile.profileType }})
+                  </UBadge>
+                </div>
+                <p v-else class="text-xs text-slate-500 dark:text-white/40">
+                  Not currently attached to any provisioning profiles.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex flex-col items-end gap-2 flex-shrink-0">
+              <UButton
+                color="red"
+                variant="soft"
+                size="sm"
+                icon="i-heroicons-trash"
+                :loading="appleRevokingId === cert.id"
+                @click="openAppleRevoke(cert)"
+              >
+                Revoke
+              </UButton>
+              <p v-if="cert.usedByProfiles.length" class="text-[11px] text-red-400 text-right max-w-xs">
+                Revoking this certificate will invalidate all attached profiles.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </UCard>
+
+    <!-- Apple revoke confirmation modal -->
+    <UModal v-model="showAppleRevokeModal">
+      <UCard>
+        <template #header>
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
+              Revoke Apple Certificate
+            </h3>
+            <UButton
+              color="gray"
+              variant="ghost"
+              icon="i-heroicons-x-mark"
+              @click="showAppleRevokeModal = false"
+            />
+          </div>
+        </template>
+
+        <div class="space-y-3">
+          <p class="text-sm text-gray-700 dark:text-gray-300">
+            Are you sure you want to revoke this certificate?
+          </p>
+          <p class="text-sm">
+            <span class="font-semibold">
+              {{ selectedAppleCert?.displayName || selectedAppleCert?.name || 'Unnamed Certificate' }}
+            </span>
+          </p>
+          <UAlert
+            v-if="selectedAppleCert && selectedAppleCert.usedByProfiles.length"
+            icon="i-heroicons-exclamation-triangle"
+            color="red"
+            variant="soft"
+            title="Profiles will be invalidated"
+          >
+            <template #description>
+              <p class="text-sm">
+                This certificate is used in {{ selectedAppleCert.usedByProfiles.length }}
+                provisioning profile{{ selectedAppleCert.usedByProfiles.length !== 1 ? 's' : '' }}.
+                After revocation, those profiles will become invalid and apps signed with them may stop working.
+              </p>
+            </template>
+          </UAlert>
+        </div>
+
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton color="gray" variant="soft" @click="showAppleRevokeModal = false">
+              Cancel
+            </UButton>
+            <UButton
+              color="red"
+              :loading="appleRevokingId === selectedAppleCert?.id"
+              @click="revokeAppleCert"
+            >
+              Revoke Certificate
+            </UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
   </div>
   
 </template>
@@ -89,6 +276,107 @@ const columns = [
 ]
 
 const { data: rows, refresh } = await useFetch<CertRow[]>('/api/profile/certificates')
+
+// Apple Developer certificates
+interface AppleProfileUsage {
+  id: string
+  name: string
+  platform: string
+  profileType: string
+  profileState: string
+  uuid: string
+  expirationDate: string
+}
+
+interface AppleCertWithUsage {
+  id: string
+  name: string
+  displayName: string | null
+  certificateType: string
+  serialNumber: string
+  platform?: string | null
+  expirationDate?: string | null
+  usedByProfiles: AppleProfileUsage[]
+}
+
+const { data: appleStatus } = await useFetch('/api/apple/credentials')
+const appleConnected = computed(() => appleStatus.value?.connected ?? false)
+
+const {
+  data: appleData,
+  pending: appleLoading,
+  error: appleFetchError,
+  refresh: refreshAppleData
+} = await useFetch<AppleCertWithUsage[]>('/api/apple/certificates/usage', {
+  immediate: true,
+  default: () => []
+})
+
+const appleCertificates = computed(() => appleData.value || [])
+const appleError = computed(() => appleFetchError.value?.data?.message || (appleFetchError.value ? 'Failed to load certificates from Apple' : ''))
+
+const appleFilter = ref('ALL')
+const appleFilterOptions = [
+  { label: 'All', value: 'ALL' },
+  { label: 'In Use', value: 'IN_USE' },
+  { label: 'Not Used', value: 'NOT_USED' },
+  { label: 'Expired', value: 'EXPIRED' },
+  { label: 'Valid', value: 'VALID' }
+]
+
+const appleRefreshing = ref(false)
+const appleRevokingId = ref<string | null>(null)
+const showAppleRevokeModal = ref(false)
+const selectedAppleCert = ref<AppleCertWithUsage | null>(null)
+
+const appleCertificatesFiltered = computed(() => {
+  const list = appleCertificates.value
+  switch (appleFilter.value) {
+    case 'IN_USE':
+      return list.filter(c => c.usedByProfiles.length > 0)
+    case 'NOT_USED':
+      return list.filter(c => c.usedByProfiles.length === 0)
+    case 'EXPIRED':
+      return list.filter(c => isAppleExpired(c.expirationDate))
+    case 'VALID':
+      return list.filter(c => !isAppleExpired(c.expirationDate))
+    default:
+      return list
+  }
+})
+
+function isAppleExpired(date: string | null | undefined): boolean {
+  if (!date) return false
+  return new Date(date) < new Date()
+}
+
+async function refreshApple() {
+  appleRefreshing.value = true
+  try {
+    await refreshAppleData()
+  } finally {
+    appleRefreshing.value = false
+  }
+}
+
+function openAppleRevoke(cert: AppleCertWithUsage) {
+  selectedAppleCert.value = cert
+  showAppleRevokeModal.value = true
+}
+
+async function revokeAppleCert() {
+  if (!selectedAppleCert.value) return
+  appleRevokingId.value = selectedAppleCert.value.id
+  try {
+    await $fetch(`/api/apple/certificates/${selectedAppleCert.value.id}`, { method: 'DELETE' })
+    showAppleRevokeModal.value = false
+    await refreshApple()
+  } catch (e: any) {
+    alert(e?.data?.message || 'Failed to revoke certificate')
+  } finally {
+    appleRevokingId.value = null
+  }
+}
 
 const displayName = ref('')
 const p12Ref = ref<HTMLInputElement | null>(null)

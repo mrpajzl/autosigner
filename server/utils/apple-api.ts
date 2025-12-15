@@ -170,7 +170,17 @@ export class AppleDeveloperAPI {
       body: options.body ? JSON.stringify(options.body) : undefined
     })
 
-    const json = await res.json() as AppleApiResponse<T>
+    // Some Apple endpoints (e.g. DELETE) return 204 with no body.
+    // Handle that gracefully instead of trying to parse empty JSON.
+    const text = await res.text()
+    if (!text) {
+      if (!res.ok) {
+        throw new Error(`Apple API error: ${res.status}`)
+      }
+      return { data: null as any } as AppleApiResponse<T>
+    }
+
+    const json = JSON.parse(text) as AppleApiResponse<T>
 
     if (!res.ok || json.errors) {
       const error = json.errors?.[0]
@@ -308,13 +318,21 @@ export class AppleDeveloperAPI {
     )
   }
 
+  /**
+   * Revoke (delete) a certificate by ID
+   */
+  async deleteCertificate(certificateId: string): Promise<void> {
+    await this.request(`/certificates/${certificateId}`, { method: 'DELETE' })
+  }
+
   // ============ PROFILES ============
 
   /**
    * List all provisioning profiles
    */
   async listProfiles(): Promise<AppleProfile[]> {
-    return this.fetchAll<AppleProfile>('/profiles', { limit: '200' })
+    // Include certificates so relationships.certificates.data is populated
+    return this.fetchAll<AppleProfile>('/profiles', { limit: '200', include: 'certificates' })
   }
 
   /**

@@ -78,7 +78,7 @@
               <div class="flex items-center justify-between mb-2">
                 <span class="text-sm text-slate-600 dark:text-white/60">
                   {{ createForm.deviceIds.length }} selected 
-                  <span class="text-slate-400 dark:text-white/40">({{ filteredDevicesForCreate.length }} {{ createForm.profileType.startsWith('TVOS') ? 'tvOS' : 'iOS' }} devices available)</span>
+                  <span class="text-slate-400 dark:text-white/40">({{ filteredDevicesForCreate.length }} {{ createForm.profileType.startsWith('TVOS') ? 'tvOS' : 'iOS/Mac' }} devices available)</span>
                 </span>
                 <UButton size="xs" color="gray" variant="ghost" @click="selectAllDevices">Select All</UButton>
               </div>
@@ -90,7 +90,7 @@
                   <UBadge color="gray" variant="soft" size="xs">{{ device.deviceClass }}</UBadge>
                 </label>
                 <p v-if="filteredDevicesForCreate.length === 0" class="text-sm text-slate-500 dark:text-white/50 p-2">
-                  No {{ createForm.profileType.startsWith('TVOS') ? 'Apple TV' : 'iOS (iPhone/iPad)' }} devices found
+                  No {{ createForm.profileType.startsWith('TVOS') ? 'Apple TV' : 'iOS (iPhone/iPad) or Mac' }} devices found
                 </p>
               </div>
             </div>
@@ -414,14 +414,14 @@ const bundleIdOptions = computed(() =>
 
 // Filter devices based on selected profile type
 // - tvOS profiles: only Apple TV devices
-// - iOS profiles: only iOS devices (iPhone/iPad), exclude Apple TV
+// - iOS profiles: iOS devices (iPhone/iPad) AND macOS devices, exclude Apple TV
 const filteredDevicesForCreate = computed(() => {
   const isTvOS = createForm.profileType.startsWith('TVOS')
   return appleDevices.value.filter(d => {
     if (isTvOS) {
       return d.deviceClass === 'APPLE_TV'
     } else {
-      return d.platform === 'IOS' && d.deviceClass !== 'APPLE_TV'
+      return (d.platform === 'IOS' || d.platform === 'MAC_OS') && d.deviceClass !== 'APPLE_TV'
     }
   })
 })

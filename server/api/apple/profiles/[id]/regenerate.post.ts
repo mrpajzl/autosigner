@@ -67,7 +67,7 @@ export default defineEventHandler(async (event) => {
 
     // Filter devices by platform:
     // - tvOS profiles: only Apple TV devices (deviceClass === 'APPLE_TV')
-    // - iOS profiles: only iOS devices (platform === 'IOS') BUT exclude Apple TV
+    // - iOS profiles: iOS devices (iPhone/iPad) AND macOS devices (for Mac Catalyst / Apple Silicon Macs)
     const enabledDeviceIds = allDevices
       .filter(d => {
         if (d.attributes.status !== 'ENABLED') return false
@@ -75,8 +75,9 @@ export default defineEventHandler(async (event) => {
           // tvOS profiles only accept Apple TV devices
           return d.attributes.deviceClass === 'APPLE_TV'
         } else {
-          // iOS profiles accept iOS devices but NOT Apple TV
-          return d.attributes.platform === 'IOS' && d.attributes.deviceClass !== 'APPLE_TV'
+          // iOS profiles accept iOS devices (iPhone/iPad) and macOS devices, but NOT Apple TV
+          return (d.attributes.platform === 'IOS' || d.attributes.platform === 'MAC_OS') 
+            && d.attributes.deviceClass !== 'APPLE_TV'
         }
       })
       .map(d => d.id)
@@ -84,7 +85,7 @@ export default defineEventHandler(async (event) => {
     if (enabledDeviceIds.length === 0) {
       throw createError({
         statusCode: 400,
-        message: `No enabled ${isTvOS ? 'tvOS (Apple TV)' : 'iOS (iPhone/iPad)'} devices found to add to profile`
+        message: `No enabled ${isTvOS ? 'tvOS (Apple TV)' : 'iOS (iPhone/iPad/Mac)'} devices found to add to profile`
       })
     }
 

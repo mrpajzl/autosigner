@@ -37,20 +37,6 @@
             <USelect v-model="newDevice.platform" :options="platformOptions" />
           </UFormGroup>
         </div>
-        
-        <UAlert
-          icon="i-heroicons-light-bulb"
-          color="blue"
-          variant="soft"
-          title="How to find UDID"
-        >
-          <template #description>
-            <p class="text-sm">
-              Connect device to Mac → Open Finder → Select device → Click on device info to reveal UDID.
-              Or use <a href="https://udid.io" target="_blank" class="underline">udid.io</a> on the device.
-            </p>
-          </template>
-        </UAlert>
 
         <div class="flex items-center gap-3">
           <UButton type="submit" color="green" :loading="registering" icon="i-heroicons-plus">
