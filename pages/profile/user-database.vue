@@ -59,9 +59,21 @@
         </div>
       </UCard>
       <UCard class="glass border-2 border-emerald-500/30">
-        <div class="text-center">
+        <div class="text-center relative">
           <div class="text-3xl font-bold text-emerald-500">{{ paidUsersCount }}</div>
           <div class="text-sm text-slate-600 dark:text-white/60">Paid for Next Year</div>
+          
+          <UButton
+            v-if="paidUsersCount > 0"
+            color="amber"
+            variant="ghost"
+            size="2xs"
+            class="absolute -top-4 -right-4"
+            icon="i-heroicons-arrow-path"
+            @click="confirmResetAllPaid"
+          >
+            Reset
+          </UButton>
         </div>
       </UCard>
       <UCard v-if="appleConnected" class="glass">
@@ -78,27 +90,7 @@
       </UCard>
     </div>
 
-    <!-- Bulk Paid Actions -->
-    <UCard v-if="paidUsersCount > 0" class="glass border-2 border-emerald-500/30">
-      <div class="flex items-center justify-between flex-wrap gap-4">
-        <div class="flex items-center gap-3">
-          <UIcon name="i-heroicons-check-badge" class="text-2xl text-emerald-400" />
-          <div>
-            <p class="font-semibold text-slate-900 dark:text-white">{{ paidUsersCount }} user{{ paidUsersCount === 1 ? '' : 's' }} paid for next year</p>
-            <p class="text-sm text-slate-600 dark:text-white/60">Reset all when starting a new year cycle</p>
-          </div>
-        </div>
-        <UButton
-          color="amber"
-          variant="soft"
-          :loading="resettingAllPaid"
-          icon="i-heroicons-arrow-path"
-          @click="confirmResetAllPaid"
-        >
-          Reset All Paid Status
-        </UButton>
-      </div>
-    </UCard>
+
 
     <!-- Bulk Import to Apple -->
     <UCard v-if="appleConnected && notRegisteredInApple > 0" class="glass border-2 border-orange-500/50">

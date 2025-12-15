@@ -50,6 +50,7 @@
             <UDropdown
               v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"
               :items="appleMenu"
+              :ui="{ item: { disabled: 'cursor-text select-text' } }"
               :popper="{ placement: 'bottom-start' }"
             >
               <button class="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition-colors">
@@ -61,6 +62,23 @@
                 />
                 <UIcon name="i-heroicons-chevron-down" class="w-3 h-3" />
               </button>
+
+              <template #account-status="{ item }">
+                <div class="flex items-center justify-between w-full gap-2">
+                  <div class="flex items-center gap-2 text-green-500">
+                    <UIcon :name="item.icon" class="w-4 h-4 flex-shrink-0" />
+                    <span class="truncate">{{ item.label }}</span>
+                  </div>
+                  <UButton
+                    icon="i-heroicons-pencil-square"
+                    size="2xs"
+                    color="gray"
+                    variant="ghost"
+                    to="/profile/apple-developer"
+                    class="-mr-1"
+                  />
+                </div>
+              </template>
             </UDropdown>
           </ClientOnly>
         </nav>
@@ -322,12 +340,11 @@ const appleMenu = computed(() => {
       { 
         label: 'Connected', 
         icon: 'i-heroicons-check-circle', 
-        disabled: true,
-        class: 'text-green-500 opacity-70'
+        slot: 'account-status',
+        disabled: true
       }
     ],
     [
-      { label: 'API Credentials', icon: 'i-heroicons-key', to: '/profile/apple-developer' },
       { label: 'Certificates', icon: 'i-heroicons-identification', to: '/profile/certificates' },
       { label: 'Devices', icon: 'i-heroicons-device-phone-mobile', to: '/profile/devices' },
       { label: 'Profiles', icon: 'i-heroicons-document-text', to: '/profile/apple-profiles' }
