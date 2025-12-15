@@ -7,7 +7,8 @@ import { execa } from 'execa'
 import { z } from 'zod'
 
 const schema = z.object({
-  activateAfter: z.boolean().default(false) // Whether to set as active profile after regeneration
+  activateAfter: z.boolean().default(false), // Whether to set as active profile after regeneration
+  certificateIds: z.array(z.string()).optional() // Optional list of certificates to assign
 })
 
 async function parseMobileProvision(buf: Buffer): Promise<{ uuid?: string; teamId?: string; expiresAt?: Date; name?: string }> {
@@ -31,6 +32,7 @@ export default defineEventHandler(async (event) => {
 
   const parsed = schema.safeParse(body)
   const activateAfter = parsed.success ? parsed.data.activateAfter : false
+  const newCertificateIds = parsed.success ? parsed.data.certificateIds : undefined
 
   if (!profileId) {
     throw createError({ statusCode: 400, message: 'Profile ID is required' })
@@ -88,7 +90,50 @@ export default defineEventHandler(async (event) => {
 
     // Get bundle ID and certificates for the profile
     // We need to fetch with includes to get relationships
-    const profileWithRelations = await fetchProfileWithRelations(api, profileId)
+    // Get bundle ID and certificates for the profile
+    // We need to fetch with includes to get relationships
+    let bundleIdId: string
+    let currentCertificateIds: string[] = []
+
+    try {
+      const relations = await fetchProfileWithRelations(api, profileId)
+      bundleIdId = relations.bundleIdId
+      currentCertificateIds = relations.certificateIds
+    } catch (e) {
+      // If we provided new certificate IDs, we might be able to recover even if fetching relations failed partially
+      // But we strictly need bundle ID.
+      // Let's try to minimal fetch if the full fetch failed? 
+      // Current implementation of fetchProfileWithRelations throws if anything fails.
+      // If we are ASSIGNING a certificate, maybe the profile was broken because it had NO certificates?
+      // fetchProfileWithRelations throws if certificateIds.length === 0.
+      if (newCertificateIds && newCertificateIds.length > 0) {
+        // Retry fetching just bundle ID if we can... 
+        // But fetchProfileWithRelations is a helper.
+        // Let's rely on the error message or modify the helper. 
+        // Actually, let's catch the specific error "Could not retrieve certificates" if we are replacing them.
+        const msg = (e as any).message || ''
+        if (msg.includes('Could not retrieve certificates') || msg.includes('headers already sent') /* unlikely */) {
+          // We need bundleID though. 
+          // Let's duplicate the logic to get bundleID safely here or assume the helper failed late.
+          // Ideally we refactor the helper but for now:
+          throw e // Let's stick to modifying the helper or being robust here.
+        }
+        throw e
+      }
+      throw e
+    }
+
+    // Determine which certificates to use
+    const certificateIdsToUse = newCertificateIds && newCertificateIds.length > 0
+      ? newCertificateIds
+      : currentCertificateIds
+
+    if (certificateIdsToUse.length === 0) {
+      throw createError({
+        statusCode: 400,
+        message: 'No certificates available for this profile. Please select a certificate.'
+      })
+    }
 
     // IMPORTANT: Create new profile FIRST before deleting the old one
     // This way if creation fails, the old profile is still intact
@@ -99,8 +144,8 @@ export default defineEventHandler(async (event) => {
     // Create new profile with ALL enabled devices
     const newProfile = await api.createProfile(
       newProfileName,
-      profileWithRelations.bundleIdId,
-      profileWithRelations.certificateIds,
+      bundleIdId,
+      certificateIdsToUse,
       enabledDeviceIds,
       existingProfile.attributes.profileType as any
     )
@@ -240,7 +285,9 @@ async function fetchProfileWithRelations(api: AppleDeveloperAPI, profileId: stri
   const certificateIds = (certsData.data || []).map((c: any) => c.id)
 
   if (certificateIds.length === 0) {
-    throw new Error(`Could not retrieve certificates for profile. Response: ${JSON.stringify(certsData).slice(0, 200)}`)
+    // It's okay to return empty certificates here, the caller will decide if that's fatal
+    // For example, if we are replacing certificates, we don't care if current ones are missing.
+    // console.warn(`Could not retrieve certificates for profile.`)
   }
 
   return { bundleIdId, certificateIds }

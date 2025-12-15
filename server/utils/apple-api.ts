@@ -44,6 +44,14 @@ interface AppleProfile {
     createdDate: string
     expirationDate: string
   }
+  relationships?: {
+    certificates?: {
+      data: { type: string; id: string }[]
+    }
+    bundleId?: {
+      data: { type: string; id: string }
+    }
+  }
 }
 
 interface AppleCertificate {

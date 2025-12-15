@@ -160,6 +160,16 @@
               </p>
             </div>
             <div class="flex gap-2 flex-shrink-0">
+              <UButton
+                v-if="profile.certificateCount === 0"
+                color="red"
+                variant="soft"
+                icon="i-heroicons-exclamation-triangle"
+                size="sm"
+                @click="openAssignCertificate(profile)"
+              >
+                Assign Cert
+              </UButton>
               <!-- Regenerate button only for Ad Hoc and Development profiles -->
               <UButton
                 v-if="canRegenerate(profile.profileType)"
@@ -247,6 +257,67 @@
         <p v-if="!localRows?.length" class="text-center text-slate-500 dark:text-white/50 py-4">No profiles uploaded yet</p>
       </div>
     </UCard>
+    <!-- Assign Certificate Modal -->
+    <UModal v-model="showAssignCertModal">
+      <UCard>
+        <template #header>
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
+              Assign Certificate
+            </h3>
+            <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark" @click="showAssignCertModal = false" />
+          </div>
+        </template>
+        
+        <div class="space-y-4">
+          <p class="text-sm text-gray-500">
+            Select a certificate to assign to profile <strong>{{ assignCertProfile?.name }}</strong>.
+            This will regenerate the profile.
+          </p>
+
+          <div v-if="loadingCerts" class="py-2">
+            <UIcon name="i-heroicons-arrow-path" class="animate-spin" /> Loading certificates...
+          </div>
+          <div v-else class="space-y-2 max-h-60 overflow-y-auto">
+            <label
+              v-for="cert in appleCertificates"
+              :key="cert.id"
+              class="flex items-center gap-2 p-2 rounded hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer"
+            >
+              <input type="radio" :value="cert.id" v-model="assignCertSelectedId" class="rounded-full" />
+              <div class="flex flex-col">
+                <span class="text-sm font-medium">
+                  {{ cert.displayName || cert.name }}
+                </span>
+                <span class="text-xs text-gray-500">
+                  {{ cert.certificateType }}
+                  <span v-if="cert.expirationDate">
+                    • Expires {{ new Date(cert.expirationDate).toLocaleDateString() }}
+                  </span>
+                </span>
+              </div>
+            </label>
+            <p v-if="appleCertificates.length === 0" class="text-sm text-slate-500">No available certificates found.</p>
+          </div>
+
+          <p v-if="assignCertError" class="text-sm text-red-500">{{ assignCertError }}</p>
+        </div>
+
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton color="gray" variant="soft" @click="showAssignCertModal = false">Cancel</UButton>
+            <UButton 
+              color="primary" 
+              :loading="assigningCert" 
+              :disabled="!assignCertSelectedId"
+              @click="handleAssignCertificate"
+            >
+              Assign & Regenerate
+            </UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
   </div>
 </template>
 
@@ -262,13 +333,16 @@ interface AppleProfile {
   uuid: string
   createdDate: string
   expirationDate: string
+  certificateCount: number
 }
 
 interface AppleCert {
   id: string
   name: string
-  displayName: string
+  displayName: string | null
   certificateType: string
+  platform?: string | null
+  expirationDate?: string | null
 }
 
 interface AppleDevice {
@@ -580,6 +654,49 @@ async function localRemove(id: string) {
   if (!confirm('Are you sure you want to delete this profile?')) return
   await $fetch(`/api/profile/profiles/${id}`, { method: 'DELETE' })
   await refreshLocal()
+}
+
+const showAssignCertModal = ref(false)
+const assignCertProfile = ref<AppleProfile | null>(null)
+const assignCertSelectedId = ref<string>('')
+const assigningCert = ref(false)
+const assignCertError = ref('')
+
+function openAssignCertificate(profile: AppleProfile) {
+  assignCertProfile.value = profile
+  assignCertSelectedId.value = ''
+  assignCertError.value = ''
+  showAssignCertModal.value = true
+  
+  if (appleCertificates.value.length === 0) {
+    loadCreateFormData() // Re-use this to fetch certs if not already loaded
+  }
+}
+
+async function handleAssignCertificate() {
+  if (!assignCertProfile.value || !assignCertSelectedId.value) return
+  
+  assigningCert.value = true
+  assignCertError.value = ''
+  
+  try {
+    const result = await $fetch<{ success: boolean; devicesIncluded: number }>(`/api/apple/profiles/${assignCertProfile.value.id}/regenerate`, {
+      method: 'POST',
+      body: { 
+        activateAfter: true,
+        certificateIds: [assignCertSelectedId.value]
+      }
+    })
+    
+    showAssignCertModal.value = false
+    alert(`Profile updated successfully! Associated with new certificate.`)
+    await refreshProfiles()
+    await refreshLocal()
+  } catch (e: any) {
+    assignCertError.value = e?.data?.message || 'Failed to assign certificate'
+  } finally {
+    assigningCert.value = false
+  }
 }
 </script>
 

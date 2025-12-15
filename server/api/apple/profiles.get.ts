@@ -38,7 +38,8 @@ export default defineEventHandler(async (event) => {
       profileState: p.attributes.profileState,
       uuid: p.attributes.uuid,
       createdDate: p.attributes.createdDate,
-      expirationDate: p.attributes.expirationDate
+      expirationDate: p.attributes.expirationDate,
+      certificateCount: p.relationships?.certificates?.data?.length || 0
     }))
   } catch (e: any) {
     throw createError({

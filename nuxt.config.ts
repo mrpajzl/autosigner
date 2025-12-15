@@ -19,6 +19,12 @@ const httpsOptions = (() => {
 })()
 
 export default defineNuxtConfig({
+  ignore: [
+    '**/prisma/**',
+    '**/logs/**',
+    '**/.workdirs/**',
+    '**/.git/**',
+  ],
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   pages: true,
