@@ -104,13 +104,11 @@ export default defineEventHandler(async () => {
           include: {
             app: true
           },
-          orderBy: { signedAt: 'desc' },
-          take: 6
+          orderBy: { signedAt: 'desc' }
         },
         // Also get apps they uploaded (for backwards compatibility)
         apps: {
-          orderBy: { uploadedAt: 'desc' },
-          take: 6
+          orderBy: { uploadedAt: 'desc' }
         }
       },
       orderBy: { createdAt: 'asc' }

@@ -175,10 +175,16 @@
             <UIcon name="i-heroicons-rectangle-stack" />
             <span class="card-title">All Uploaded Apps</span>
             <UBadge color="gray" variant="soft" size="xs">
-              {{ filteredApps.length }}{{ searchQuery ? ` / ${apps?.length || 0}` : '' }}
+              {{ filteredApps.length }}{{ searchQuery || platformFilter !== 'ALL' ? ` / ${apps?.length || 0}` : '' }}
             </UBadge>
           </div>
-          <div class="flex items-center gap-2 flex-1">
+          <div class="flex items-center gap-2 flex-1 flex-wrap">
+            <USelect
+              v-model="platformFilter"
+              :options="platformFilterOptions"
+              size="sm"
+              class="w-auto min-w-[140px]"
+            />
             <UInput
               v-model="searchQuery"
               icon="i-heroicons-magnifying-glass"
@@ -219,8 +225,22 @@
 
       <div v-else-if="filteredApps.length === 0" class="text-center py-8 text-slate-500 dark:text-white/60">
         <UIcon name="i-heroicons-magnifying-glass" class="w-12 h-12 mx-auto mb-3 opacity-50" />
-        <p>No apps match "{{ searchQuery }}"</p>
-        <p class="text-sm mt-1">Try a different search term.</p>
+        <p v-if="searchQuery && platformFilter !== 'ALL'">
+          No {{ platformFilterOptions.find(o => o.value === platformFilter)?.label }} apps match "{{ searchQuery }}"
+        </p>
+        <p v-else-if="searchQuery">
+          No apps match "{{ searchQuery }}"
+        </p>
+        <p v-else-if="platformFilter !== 'ALL'">
+          No {{ platformFilterOptions.find(o => o.value === platformFilter)?.label }} apps found
+        </p>
+        <p v-else>
+          No apps found
+        </p>
+        <p class="text-sm mt-1">
+          <span v-if="searchQuery || platformFilter !== 'ALL'">Try a different search term or filter.</span>
+          <span v-else>Upload your first IPA using the form above.</span>
+        </p>
       </div>
 
       <div v-else class="space-y-3">
@@ -678,25 +698,42 @@ const platformOptions = [
   { label: 'tvOS', value: 'TVOS' }
 ]
 
+const platformFilterOptions = [
+  { label: 'All Platforms', value: 'ALL' },
+  { label: 'iOS', value: 'IOS' },
+  { label: 'tvOS', value: 'TVOS' }
+]
+
 const { user: me } = useAuth()
 
 const { data: apps, refresh } = await useFetch<AppRow[]>('/api/admin/apps')
 
 // Search state
 const searchQuery = ref('')
+const platformFilter = ref('ALL')
 
-// Filtered apps based on search query
+// Filtered apps based on search query and platform filter
 const filteredApps = computed(() => {
   if (!apps.value) return []
-  if (!searchQuery.value.trim()) return apps.value
   
-  const query = searchQuery.value.toLowerCase().trim()
-  return apps.value.filter(app => 
-    app.name.toLowerCase().includes(query) ||
-    app.bundleId?.toLowerCase().includes(query) ||
-    app.owner.nickname.toLowerCase().includes(query) ||
-    app.platform.toLowerCase().includes(query)
-  )
+  let filtered = apps.value
+  
+  // Apply platform filter
+  if (platformFilter.value !== 'ALL') {
+    filtered = filtered.filter(app => app.platform === platformFilter.value)
+  }
+  
+  // Apply search query
+  if (searchQuery.value.trim()) {
+    const query = searchQuery.value.toLowerCase().trim()
+    filtered = filtered.filter(app => 
+      app.name.toLowerCase().includes(query) ||
+      app.bundleId?.toLowerCase().includes(query) ||
+      app.owner.nickname.toLowerCase().includes(query)
+    )
+  }
+  
+  return filtered
 })
 
 // Upload section collapsed state

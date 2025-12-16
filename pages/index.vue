@@ -1,16 +1,51 @@
 <template>
   <div class="mt-10 px-5 max-w-7xl mx-auto space-y-10">
-    <!-- Welcome Section -->
-    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-500/10 via-violet-500/10 to-red-500/10 dark:from-red-500/20 dark:via-violet-500/20 dark:to-red-500/20 p-5 md:p-8 border border-white/10">
+    <!-- Welcome Section - Collapsible when moderator is selected -->
+    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-500/10 via-violet-500/10 to-red-500/10 dark:from-red-500/20 dark:via-violet-500/20 dark:to-red-500/20 border border-white/10 transition-all">
       <div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-red-500/5 via-transparent to-transparent"></div>
-      <div class="relative space-y-4 md:space-y-6">
-        <div class="text-center space-y-2 md:space-y-3">
-          <h1 class="page-title-gradient">
-            Vítejte ve FastSigner
-          </h1>
-          <p class="text-sm md:text-lg text-slate-600 dark:text-white/70 max-w-2xl mx-auto">
-            Vaše místo pro sideloading aplikací na Apple zařízení
-          </p>
+      
+      <!-- Collapsed View (when moderator is selected) -->
+      <div v-if="selectedModeratorId && !welcomeExpanded" class="relative p-5 md:p-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h1 class="text-2xl md:text-3xl font-bold bg-gradient-to-r from-red-500 to-violet-500 bg-clip-text text-transparent">
+              Vítejte ve FastSigner
+            </h1>
+            <p class="text-sm text-slate-600 dark:text-white/70 mt-1">
+              Vaše místo pro sideloading aplikací na Apple zařízení
+            </p>
+          </div>
+          <UButton
+            icon="i-heroicons-chevron-down"
+            color="gray"
+            variant="ghost"
+            size="sm"
+            @click="welcomeExpanded = true"
+            class="flex-shrink-0"
+          />
+        </div>
+      </div>
+
+      <!-- Expanded View (default or when clicked) -->
+      <div v-else class="relative p-5 md:p-8 space-y-4 md:space-y-6">
+        <div class="flex items-start justify-between gap-4">
+          <div class="text-center flex-1 space-y-2 md:space-y-3">
+            <h1 class="page-title-gradient">
+              Vítejte ve FastSigner
+            </h1>
+            <p class="text-sm md:text-lg text-slate-600 dark:text-white/70 max-w-2xl mx-auto">
+              Vaše místo pro sideloading aplikací na Apple zařízení
+            </p>
+          </div>
+          <UButton
+            v-if="selectedModeratorId"
+            icon="i-heroicons-chevron-up"
+            color="gray"
+            variant="ghost"
+            size="sm"
+            @click="welcomeExpanded = false"
+            class="flex-shrink-0"
+          />
         </div>
 
         <!-- Mobile: compact horizontal layout -->
@@ -85,212 +120,214 @@
 
     <!-- Skeleton Loading State -->
     <template v-if="pending">
-      <!-- Skeleton moderator buttons -->
-      <div class="flex flex-wrap justify-center gap-2">
-        <USkeleton class="h-8 w-24 rounded-md" />
-        <USkeleton class="h-8 w-28 rounded-md" />
-        <USkeleton class="h-8 w-20 rounded-md" />
-      </div>
-
-      <!-- Skeleton moderator section -->
-      <div v-for="i in 2" :key="i" class="space-y-6 md:space-y-8 mt-8">
-        <div class="flex items-center gap-3">
-          <USkeleton class="w-5 h-5 rounded" />
-          <USkeleton class="h-6 w-32" />
-        </div>
-        
-        <!-- Skeleton iOS App Store style list - Grid layout -->
-        <div class="grid gap-6 md:grid-cols-3">
-          <div v-for="j in 3" :key="j" class="space-y-1">
-            <div class="flex items-center gap-2 mb-3">
-              <USkeleton class="w-5 h-5 rounded" />
-              <USkeleton class="h-5 w-32" />
-            </div>
-            <div class="rounded-2xl bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-white/10 overflow-hidden">
-              <div v-for="k in 2" :key="k" class="flex items-center gap-4 px-4 py-3 border-b border-white/5 last:border-b-0">
-                <USkeleton class="w-14 h-14 rounded-2xl flex-shrink-0" />
-                <div class="flex-1 min-w-0 space-y-2">
-                  <USkeleton class="h-4 w-32" />
-                  <USkeleton class="h-3 w-24" />
-                </div>
-                <USkeleton class="h-8 w-16 rounded-md flex-shrink-0" />
-              </div>
-            </div>
-          </div>
+      <div class="space-y-6">
+        <USkeleton class="h-12 w-64 mx-auto rounded-xl" />
+        <div class="flex gap-2 justify-center">
+          <USkeleton class="h-10 w-32 rounded-lg" />
+          <USkeleton class="h-10 w-32 rounded-lg" />
         </div>
       </div>
     </template>
 
-    <!-- Quick scroll buttons -->
-    <div v-else-if="moderators && moderators.length > 0" class="flex flex-wrap justify-center gap-2">
-      <UButton
-        v-for="mod in moderators"
-        :key="mod.id"
-        color="red"
-        variant="soft"
-        size="sm"
-        @click="scrollToModerator(mod.id)"
-      >
-        <UIcon name="i-heroicons-user-circle" class="mr-1" />
-        {{ mod.name }}
-      </UButton>
-    </div>
+    <!-- Moderator Selection -->
+    <template v-else-if="moderators && moderators.length > 0">
+      <div class="space-y-4">
+        <!-- Combined Moderator Selection & Info -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 p-4 rounded-xl bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-white/10">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+            <div class="flex items-center gap-2 md:flex-shrink-0">
+              <div class="p-1.5 rounded-full bg-red-500/10 dark:bg-red-500/20 flex items-center justify-center">
+                <UIcon name="i-heroicons-user-circle" class="text-red-500 dark:text-red-400 w-5 h-5" />
+              </div>
+              <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Moderátor</h2>
+            </div>
+            
+            <div class="flex-1 sm:max-w-sm">
+              <USelectMenu
+                v-model="selectedModeratorId"
+                :options="moderators"
+                value-attribute="id"
+                option-attribute="name"
+                searchable
+                searchable-placeholder="Hledat moderátora..."
+                placeholder="Vyberte moderátora..."
+                size="lg"
+                :ui="{
+                  width: 'w-full',
+                  height: 'max-h-60',
+                  base: 'cursor-pointer',
+                  option: {
+                    base: 'cursor-pointer',
+                    active: 'bg-red-500/10 dark:bg-red-500/20',
+                    selected: 'bg-red-500/20 dark:bg-red-500/30'
+                  }
+                }"
+                :uiMenu="{ 
+                  width: 'w-full',
+                  height: 'max-h-60'
+                }"
+                @update:model-value="onModeratorChange"
+              >
+                <template #leading>
+                  <UIcon name="i-heroicons-user-circle" class="w-5 h-5 text-red-500" />
+                </template>
+                <template #option="{ option }">
+                  <div class="flex items-center justify-between w-full">
+                    <span class="truncate">{{ option.name }}</span>
+                    <span class="text-xs text-slate-500 dark:text-white/50 ml-2 flex-shrink-0">
+                      {{ option.iosApps.length + option.tvosApps.length }} apps
+                    </span>
+                  </div>
+                </template>
+                <template #label>
+                  <span v-if="selectedModerator" class="flex items-center gap-2">
+                    {{ selectedModerator.name }}
+                    <span class="text-xs text-slate-500 dark:text-white/50">
+                      ({{ selectedModerator.iosApps.length + selectedModerator.tvosApps.length }} apps)
+                    </span>
+                  </span>
+                  <span v-else class="text-slate-500 dark:text-white/60">Vyberte moderátora...</span>
+                </template>
+              </USelectMenu>
+            </div>
+          </div>
 
-    <div v-else-if="!moderators || moderators.length === 0" class="text-center text-slate-500 dark:text-white/70">
+          <!-- Selected Moderator Info - Only show when selected -->
+          <div v-if="selectedModerator" class="flex items-center gap-3 pt-3 sm:pt-0 border-t sm:border-t-0 sm:border-l border-white/10 sm:pl-4">
+            <div class="flex items-center gap-2">
+              <UIcon name="i-heroicons-device-phone-mobile" class="w-4 h-4 text-blue-500" />
+              <span class="text-sm text-slate-600 dark:text-white/70">{{ selectedModerator.iosApps.length }} iOS</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <UIcon name="i-heroicons-tv" class="w-4 h-4 text-orange-500" />
+              <span class="text-sm text-slate-600 dark:text-white/70">{{ selectedModerator.tvosApps.length }} Apple TV</span>
+            </div>
+            <UButton 
+              icon="i-heroicons-information-circle" 
+              variant="ghost" 
+              color="gray" 
+              size="sm"
+              @click="openModeratorModal(selectedModerator)"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Selected Moderator Apps - Only show after selection -->
+      <div v-if="selectedModerator" class="space-y-6">
+
+        <!-- Search Bar -->
+        <div class="max-w-2xl mx-auto">
+          <UInput
+            v-model="searchQuery"
+            icon="i-heroicons-magnifying-glass"
+            size="lg"
+            placeholder="Hledat aplikace..."
+            :ui="{ icon: { trailing: { pointer: '' } } }"
+          >
+            <template #trailing>
+              <UButton
+                v-show="searchQuery !== ''"
+                color="gray"
+                variant="link"
+                icon="i-heroicons-x-mark-20-solid"
+                :padded="false"
+                @click="searchQuery = ''"
+              />
+            </template>
+          </UInput>
+        </div>
+
+        <!-- Platform Tabs -->
+        <UTabs v-model="selectedTab" :items="tabItems" class="w-full">
+          <template #item="{ item }">
+            <div class="space-y-4 pt-6">
+              <div v-if="item.apps.length === 0" class="text-center py-12 text-slate-500 dark:text-white/60">
+                <UIcon name="i-heroicons-magnifying-glass" class="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>{{ searchQuery ? 'Žádné aplikace nenalezeny' : `Žádné ${item.label} aplikace` }}</p>
+              </div>
+              
+              <div v-else class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <div
+                  v-for="app in item.apps"
+                  :key="app.id"
+                  class="rounded-2xl bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-white/10 overflow-hidden transition-all"
+                  :class="item.key === 'ios' ? 'hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10' : 'hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10'"
+                >
+                  <div class="flex items-center gap-3 p-4">
+                    <!-- App Icon -->
+                    <div class="flex-shrink-0">
+                      <img
+                        v-if="app.iconPath"
+                        :src="`/api/download${app.iconPath}`"
+                        :alt="app.name"
+                        class="w-14 h-14 rounded-2xl shadow-sm object-cover"
+                      />
+                      <div v-else class="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-sm">
+                        <UIcon :name="item.key === 'ios' ? 'i-heroicons-device-phone-mobile' : 'i-heroicons-tv'" class="w-7 h-7 text-slate-400 dark:text-white/40" />
+                      </div>
+                    </div>
+                    
+                    <!-- App Info -->
+                    <div class="flex-1 min-w-0">
+                      <h4 class="font-semibold text-sm text-slate-900 dark:text-white truncate">{{ app.name }}</h4>
+                      <p class="text-xs text-slate-500 dark:text-white/60 mt-0.5 truncate">
+                        {{ displayVersion(app) || (item.key === 'ios' ? 'iOS App' : 'Apple TV App') }}
+                      </p>
+                    </div>
+                    
+                    <!-- Install/Download Button -->
+                    <div class="flex-shrink-0">
+                      <a
+                        v-if="item.key === 'ios' && app.status === 'SIGNED' && installLink(app)"
+                        :href="installLink(app)"
+                        class="inline-flex items-center justify-center min-w-[70px] h-8 px-3 rounded-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 transition-colors"
+                        title="Install on device"
+                      >
+                        <span class="text-sm font-semibold text-white">GET</span>
+                      </a>
+                      <a
+                        v-else-if="item.key === 'appletv' && app.status === 'SIGNED' && tvosLink(app)"
+                        :href="tvosLink(app)"
+                        target="_blank"
+                        class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 transition-colors"
+                        title="Download IPA"
+                      >
+                        <UIcon name="i-heroicons-cloud-arrow-down" class="w-4 h-4 text-white" />
+                      </a>
+                      <div
+                        v-else
+                        class="inline-flex items-center justify-center min-w-[70px] h-8 px-3 rounded-full bg-slate-300/50 dark:bg-slate-700/50 cursor-not-allowed"
+                      >
+                        <span class="text-xs text-slate-400 dark:text-slate-500">—</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </UTabs>
+      </div>
+    </template>
+
+    <div v-else class="text-center text-slate-500 dark:text-white/70 py-12">
       No moderators or apps available yet.
-    </div>
-
-    <div v-if="!pending" v-for="mod in moderators || []" :key="mod.id" :id="`moderator-${mod.id}`" class="space-y-6 md:space-y-8 scroll-mt-24">
-      <!-- Moderator Header -->
-      <div class="md:col-span-3">
-        <div class="flex items-center justify-between gap-3 mb-4 mt-8 first:mt-0 border-b border-slate-200 dark:border-white/10 pb-2">
-          <h2 class="section-title flex-1 border-0 mb-0 mt-0 pb-0">
-            <div class="p-1.5 rounded-full bg-red-500/10 dark:bg-red-500/20 flex items-center justify-center">
-              <UIcon name="i-heroicons-user-circle" class="text-red-500 dark:text-red-400 w-5 h-5" />
-            </div>
-            <span>{{ mod.name }}</span>
-          </h2>
-          <UButton 
-            icon="i-heroicons-information-circle" 
-            variant="ghost" 
-            color="gray" 
-            size="sm"
-            @click="openModeratorModal(mod)"
-          />
-        </div>
-      </div>
-
-      <!-- Grid Layout: Side by side on desktop, stacked on mobile -->
-      <div class="grid gap-6 md:grid-cols-2">
-        <!-- Apple TV Apps Section - iOS App Store Style -->
-        <div v-if="mod.tvosApps.length > 0" class="space-y-1">
-          <h3 class="subsection-title">
-            <div class="w-8 h-8 rounded-lg bg-orange-500/10 dark:bg-orange-500/20 flex items-center justify-center">
-              <UIcon name="i-heroicons-tv" class="text-orange-500 dark:text-orange-400 w-5 h-5" />
-            </div>
-            <span>Apple TV</span>
-          </h3>
-          <div class="rounded-2xl bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-white/10 overflow-hidden">
-            <div
-              v-for="app in mod.tvosApps"
-              :key="app.id"
-              class="flex items-center gap-4 px-4 py-3 hover:bg-white/10 dark:hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
-            >
-              <!-- App Icon -->
-              <div class="flex-shrink-0">
-                <img
-                  v-if="app.iconPath"
-                  :src="`/api/download${app.iconPath}`"
-                  :alt="app.name"
-                  class="w-14 h-14 rounded-2xl shadow-sm object-cover"
-                />
-                <div v-else class="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-sm">
-                  <UIcon name="i-heroicons-tv" class="w-7 h-7 text-slate-400 dark:text-white/40" />
-                </div>
-              </div>
-              
-              <!-- App Info -->
-              <div class="flex-1 min-w-0">
-                <h4 class="font-semibold text-base text-slate-900 dark:text-white truncate">{{ app.name }}</h4>
-                <p class="text-sm text-slate-500 dark:text-white/60 mt-0.5">
-                  {{ displayVersion(app) || 'Apple TV App' }}
-                </p>
-              </div>
-              
-              <!-- Download Button (tvOS downloads IPA) -->
-              <div class="flex-shrink-0 flex flex-col items-end">
-                <a
-                  v-if="app.status === 'SIGNED' && tvosLink(app)"
-                  :href="tvosLink(app)"
-                  target="_blank"
-                  class="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-transparent hover:bg-white/5 active:bg-white/10 transition-colors"
-                  title="Download IPA"
-                >
-                  <UIcon name="i-heroicons-cloud-arrow-down" class="w-6 h-6 text-blue-500" />
-                </a>
-                <div
-                  v-else
-                  class="inline-flex items-center justify-center w-10 h-10 rounded-xl cursor-not-allowed"
-                >
-                  <span class="text-xs text-slate-400 dark:text-slate-500">—</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- iOS Apps Section - iOS App Store Style -->
-        <div v-if="mod.iosApps.length > 0" class="space-y-1">
-          <h3 class="subsection-title">
-            <div class="w-8 h-8 rounded-lg bg-blue-500/10 dark:bg-blue-500/20 flex items-center justify-center">
-              <UIcon name="i-heroicons-device-phone-mobile" class="text-blue-500 dark:text-blue-400 w-5 h-5" />
-            </div>
-            <span>iPhone, iPad, Mac M1</span>
-          </h3>
-          <div class="rounded-2xl bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-white/10 overflow-hidden">
-            <div
-              v-for="app in mod.iosApps"
-              :key="app.id"
-              class="flex items-center gap-4 px-4 py-3 hover:bg-white/10 dark:hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
-            >
-              <!-- App Icon -->
-              <div class="flex-shrink-0">
-                <img
-                  v-if="app.iconPath"
-                  :src="`/api/download${app.iconPath}`"
-                  :alt="app.name"
-                  class="w-14 h-14 rounded-2xl shadow-sm object-cover"
-                />
-                <div v-else class="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-sm">
-                  <UIcon name="i-heroicons-device-phone-mobile" class="w-7 h-7 text-slate-400 dark:text-white/40" />
-                </div>
-              </div>
-              
-              <!-- App Info -->
-              <div class="flex-1 min-w-0">
-                <h4 class="font-semibold text-base text-slate-900 dark:text-white truncate">{{ app.name }}</h4>
-                <p class="text-sm text-slate-500 dark:text-white/60 mt-0.5">
-                  {{ displayVersion(app) || 'iOS App' }}
-                </p>
-              </div>
-              
-              <!-- Install Button (iOS installs directly) -->
-              <div class="flex-shrink-0 flex flex-col items-end">
-                <a
-                  v-if="app.status === 'SIGNED' && installLink(app)"
-                  :href="installLink(app)"
-                  class="inline-flex items-center justify-center min-w-[70px] h-8 px-4 rounded-xl bg-slate-800 dark:bg-slate-700 hover:bg-slate-700 dark:hover:bg-slate-600 active:bg-slate-600 dark:active:bg-slate-500 transition-colors"
-                  title="Install on device"
-                >
-                  <span class="text-sm font-medium text-blue-500">Install</span>
-                </a>
-                <div
-                  v-else
-                  class="inline-flex items-center justify-center min-w-[70px] h-8 px-4 rounded-xl bg-slate-800/50 dark:bg-slate-700/50 cursor-not-allowed"
-                >
-                  <span class="text-sm text-slate-400 dark:text-slate-500">—</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
     </div>
 
     <!-- Moderator Info Modal -->
     <UModal v-model="showModeratorModal" :ui="{ width: 'max-w-2xl' }">
-      <UCard class="glass" v-if="selectedModerator">
+      <UCard class="glass" v-if="modalModerator">
         <template #header>
           <div class="flex items-center gap-2">
             <UIcon name="i-heroicons-information-circle" />
-            <span class="card-title">{{ selectedModerator.name }}</span>
+            <span class="card-title">{{ modalModerator.name }}</span>
           </div>
         </template>
 
         <div class="space-y-6">
           <!-- Device Counts Section -->
-          <div v-if="selectedModerator.deviceCounts" class="space-y-3">
+          <div v-if="modalModerator.deviceCounts" class="space-y-3">
             <div class="pb-2 border-b border-slate-200 dark:border-white/10">
               <span class="subsection-title text-base mb-0 mt-0 pb-0 border-0">Registrovaná zařízení</span>
             </div>
@@ -298,17 +335,17 @@
               <div class="flex items-center gap-2">
                 <UIcon name="i-heroicons-device-phone-mobile" class="text-blue-500 dark:text-blue-400 w-5 h-5" />
                 <span class="text-sm">iOS</span>
-                <UBadge color="blue" variant="soft" size="sm">{{ selectedModerator.deviceCounts.iOS }}/100</UBadge>
+                <UBadge color="blue" variant="soft" size="sm">{{ modalModerator.deviceCounts.iOS }}/100</UBadge>
               </div>
               <div class="flex items-center gap-2">
                 <UIcon name="i-heroicons-tv" class="text-slate-500 dark:text-gray-400 w-5 h-5" />
                 <span class="text-sm">Apple TV</span>
-                <UBadge color="gray" variant="soft" size="sm">{{ selectedModerator.deviceCounts.APPLE_TV }}/100</UBadge>
+                <UBadge color="gray" variant="soft" size="sm">{{ modalModerator.deviceCounts.APPLE_TV }}/100</UBadge>
               </div>
               <div class="flex items-center gap-2">
                 <UIcon name="i-heroicons-computer-desktop" class="text-emerald-500 dark:text-green-400 w-5 h-5" />
                 <span class="text-sm">Mac</span>
-                <UBadge color="emerald" variant="soft" size="sm">{{ selectedModerator.deviceCounts.MAC }}/100</UBadge>
+                <UBadge color="emerald" variant="soft" size="sm">{{ modalModerator.deviceCounts.MAC }}/100</UBadge>
               </div>
             </div>
           </div>
@@ -319,12 +356,12 @@
               <UIcon name="i-heroicons-identification" class="text-red-500 w-5 h-5" />
               <span class="subsection-title text-base mb-0 mt-0 pb-0 border-0">Certifikáty</span>
             </div>
-            <div v-if="(!selectedModerator.certificates || selectedModerator.certificates.length === 0) && !selectedModerator.hasManagerProfileCertificate" class="text-sm text-slate-500 dark:text-white/60">
+            <div v-if="(!modalModerator.certificates || modalModerator.certificates.length === 0) && !modalModerator.hasManagerProfileCertificate" class="text-sm text-slate-500 dark:text-white/60">
               Žádné certifikáty
             </div>
             <div v-else class="space-y-3">
               <div 
-                v-for="cert in selectedModerator.certificates" 
+                v-for="cert in modalModerator.certificates" 
                 :key="cert.id"
                 class="flex items-center justify-between gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
               >
@@ -339,20 +376,20 @@
                   color="red" 
                   variant="solid"
                   icon="i-heroicons-arrow-down-tray"
-                  @click="downloadModeratorCertificate(selectedModerator.id, cert.displayName || 'certificate')"
+                  @click="downloadModeratorCertificate(modalModerator.id, cert.displayName || 'certificate')"
                 >
                   Stáhnout
                 </UButton>
               </div>
               <!-- Legacy managerProfile certificate -->
               <div 
-                v-if="selectedModerator.hasManagerProfileCertificate && (!selectedModerator.certificates || selectedModerator.certificates.length === 0)"
+                v-if="modalModerator.hasManagerProfileCertificate && (!modalModerator.certificates || modalModerator.certificates.length === 0)"
                 class="flex items-center justify-between gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
               >
                 <div class="flex-1 min-w-0">
                   <div class="text-base font-medium truncate">Certifikát</div>
-                  <div v-if="selectedModerator.certificateExpiresAt" class="text-sm mt-1" :class="isCertExpiringSoon(selectedModerator.certificateExpiresAt) ? 'text-orange-400' : 'text-slate-500 dark:text-white/60'">
-                    Platnost do {{ formatDateShort(selectedModerator.certificateExpiresAt) }}
+                  <div v-if="modalModerator.certificateExpiresAt" class="text-sm mt-1" :class="isCertExpiringSoon(modalModerator.certificateExpiresAt) ? 'text-orange-400' : 'text-slate-500 dark:text-white/60'">
+                    Platnost do {{ formatDateShort(modalModerator.certificateExpiresAt) }}
                   </div>
                 </div>
                 <UButton 
@@ -360,7 +397,7 @@
                   color="red" 
                   variant="solid"
                   icon="i-heroicons-arrow-down-tray"
-                  @click="downloadModeratorCertificate(selectedModerator.id, selectedModerator.name || 'certificate')"
+                  @click="downloadModeratorCertificate(modalModerator.id, modalModerator.name || 'certificate')"
                 >
                   Stáhnout
                 </UButton>
@@ -374,66 +411,186 @@
               <UIcon name="i-heroicons-document-text" class="text-red-500 w-5 h-5" />
               <span class="subsection-title text-base mb-0 mt-0 pb-0 border-0">Profily</span>
             </div>
-            <div v-if="(!selectedModerator.profiles || selectedModerator.profiles.length === 0) && !selectedModerator.hasManagerProfileIos && !selectedModerator.hasManagerProfileTvos" class="text-sm text-slate-500 dark:text-white/60">
+            <div v-if="(!modalModerator.profiles || modalModerator.profiles.length === 0) && !modalModerator.hasManagerProfileIos && !modalModerator.hasManagerProfileTvos" class="text-sm text-slate-500 dark:text-white/60">
               Žádné profily
             </div>
             <div v-else class="space-y-3">
               <div 
-                v-for="profile in selectedModerator.profiles" 
+                v-for="profile in modalModerator.profiles" 
                 :key="profile.id"
-                class="flex items-center justify-between gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                class="p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors space-y-3"
               >
-                <div class="flex-1 min-w-0">
-                  <div class="text-base font-medium truncate">{{ profile.name || 'Profil' }}</div>
-                  <div class="text-sm mt-1 text-slate-500 dark:text-white/60">
-                    {{ profile.platform === 'IOS' ? 'iOS' : 'tvOS' }}
-                    <span v-if="profile.expiresAt"> • {{ formatDateShort(profile.expiresAt) }}</span>
+                <div class="flex items-center justify-between gap-3">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-base font-medium truncate">{{ profile.name || 'Profil' }}</div>
+                    <div class="text-sm mt-1 text-slate-500 dark:text-white/60">
+                      {{ profile.platform === 'IOS' ? 'iOS' : 'tvOS' }}
+                      <span v-if="profile.expiresAt"> • {{ formatDateShort(profile.expiresAt) }}</span>
+                    </div>
+                  </div>
+                  <UButton 
+                    size="sm" 
+                    color="red" 
+                    variant="solid"
+                    icon="i-heroicons-arrow-down-tray"
+                    @click="downloadModeratorProfile(modalModerator.id, profile.platform, profile.name || 'profile')"
+                  >
+                    Stáhnout
+                  </UButton>
+                </div>
+                
+                <!-- UDID Check Section -->
+                <div class="border-t border-white/5 pt-3">
+                  <div class="flex flex-col gap-2">
+                    <label class="text-xs text-slate-500 dark:text-white/50">Zkontrolujte, zda je vaše UDID v profilu:</label>
+                    <div class="flex gap-2">
+                      <UInput 
+                        v-model="udidChecks[getProfileKey(modalModerator.id, profile.platform)]" 
+                        placeholder="Zadejte UDID" 
+                        size="sm" 
+                        class="flex-1 font-mono text-xs"
+                      />
+                      <UButton 
+                        size="sm" 
+                        color="blue" 
+                        variant="soft" 
+                        :loading="checkingUdid[getProfileKey(modalModerator.id, profile.platform)]"
+                        @click="checkUdidInProfile(modalModerator.id, profile.platform)"
+                        :disabled="!udidChecks[getProfileKey(modalModerator.id, profile.platform)]?.trim()"
+                      >
+                        Zkontrolovat
+                      </UButton>
+                    </div>
+                    <div v-if="udidResults[getProfileKey(modalModerator.id, profile.platform)]?.checked" class="flex items-center gap-2">
+                      <UIcon 
+                        :name="udidResults[getProfileKey(modalModerator.id, profile.platform)].found ? 'i-heroicons-check-circle' : 'i-heroicons-x-circle'" 
+                        :class="udidResults[getProfileKey(modalModerator.id, profile.platform)].found ? 'text-green-400' : 'text-red-400'"
+                        class="w-4 h-4"
+                      />
+                      <span 
+                        :class="udidResults[getProfileKey(modalModerator.id, profile.platform)].found ? 'text-green-400' : 'text-red-400'" 
+                        class="text-sm"
+                      >
+                        {{ udidResults[getProfileKey(modalModerator.id, profile.platform)].message }}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <UButton 
-                  size="sm" 
-                  color="red" 
-                  variant="solid"
-                  icon="i-heroicons-arrow-down-tray"
-                  @click="downloadModeratorProfile(selectedModerator.id, profile.platform, profile.name || 'profile')"
-                >
-                  Stáhnout
-                </UButton>
               </div>
               <!-- Legacy managerProfile profiles -->
               <div 
-                v-if="selectedModerator.hasManagerProfileIos && (!selectedModerator.profiles || !selectedModerator.profiles.some(p => p.platform === 'IOS'))"
-                class="flex items-center justify-between gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                v-if="modalModerator.hasManagerProfileIos && (!modalModerator.profiles || !modalModerator.profiles.some(p => p.platform === 'IOS'))"
+                class="p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors space-y-3"
               >
-                <div class="flex-1 min-w-0">
-                  <div class="text-base font-medium truncate">iOS Profil</div>
+                <div class="flex items-center justify-between gap-3">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-base font-medium truncate">iOS Profil</div>
+                  </div>
+                  <UButton 
+                    size="sm" 
+                    color="red" 
+                    variant="solid"
+                    icon="i-heroicons-arrow-down-tray"
+                    @click="downloadModeratorProfile(modalModerator.id, 'IOS', 'ios_profile')"
+                  >
+                    Stáhnout
+                  </UButton>
                 </div>
-                <UButton 
-                  size="sm" 
-                  color="red" 
-                  variant="solid"
-                  icon="i-heroicons-arrow-down-tray"
-                  @click="downloadModeratorProfile(selectedModerator.id, 'IOS', 'ios_profile')"
-                >
-                  Stáhnout
-                </UButton>
+                
+                <!-- UDID Check Section -->
+                <div class="border-t border-white/5 pt-3">
+                  <div class="flex flex-col gap-2">
+                    <label class="text-xs text-slate-500 dark:text-white/50">Zkontrolujte, zda je vaše UDID v profilu:</label>
+                    <div class="flex gap-2">
+                      <UInput 
+                        v-model="udidChecks[getProfileKey(modalModerator.id, 'IOS')]" 
+                        placeholder="Zadejte UDID" 
+                        size="sm" 
+                        class="flex-1 font-mono text-xs"
+                      />
+                      <UButton 
+                        size="sm" 
+                        color="blue" 
+                        variant="soft" 
+                        :loading="checkingUdid[getProfileKey(modalModerator.id, 'IOS')]"
+                        @click="checkUdidInProfile(modalModerator.id, 'IOS')"
+                        :disabled="!udidChecks[getProfileKey(modalModerator.id, 'IOS')]?.trim()"
+                      >
+                        Zkontrolovat
+                      </UButton>
+                    </div>
+                    <div v-if="udidResults[getProfileKey(modalModerator.id, 'IOS')]?.checked" class="flex items-center gap-2">
+                      <UIcon 
+                        :name="udidResults[getProfileKey(modalModerator.id, 'IOS')].found ? 'i-heroicons-check-circle' : 'i-heroicons-x-circle'" 
+                        :class="udidResults[getProfileKey(modalModerator.id, 'IOS')].found ? 'text-green-400' : 'text-red-400'"
+                        class="w-4 h-4"
+                      />
+                      <span 
+                        :class="udidResults[getProfileKey(modalModerator.id, 'IOS')].found ? 'text-green-400' : 'text-red-400'" 
+                        class="text-sm"
+                      >
+                        {{ udidResults[getProfileKey(modalModerator.id, 'IOS')].message }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div 
-                v-if="selectedModerator.hasManagerProfileTvos && (!selectedModerator.profiles || !selectedModerator.profiles.some(p => p.platform === 'TVOS'))"
-                class="flex items-center justify-between gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                v-if="modalModerator.hasManagerProfileTvos && (!modalModerator.profiles || !modalModerator.profiles.some(p => p.platform === 'TVOS'))"
+                class="p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors space-y-3"
               >
-                <div class="flex-1 min-w-0">
-                  <div class="text-base font-medium truncate">tvOS Profil</div>
+                <div class="flex items-center justify-between gap-3">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-base font-medium truncate">tvOS Profil</div>
+                  </div>
+                  <UButton 
+                    size="sm" 
+                    color="red" 
+                    variant="solid"
+                    icon="i-heroicons-arrow-down-tray"
+                    @click="downloadModeratorProfile(modalModerator.id, 'TVOS', 'tvos_profile')"
+                  >
+                    Stáhnout
+                  </UButton>
                 </div>
-                <UButton 
-                  size="sm" 
-                  color="red" 
-                  variant="solid"
-                  icon="i-heroicons-arrow-down-tray"
-                  @click="downloadModeratorProfile(selectedModerator.id, 'TVOS', 'tvos_profile')"
-                >
-                  Stáhnout
-                </UButton>
+                
+                <!-- UDID Check Section -->
+                <div class="border-t border-white/5 pt-3">
+                  <div class="flex flex-col gap-2">
+                    <label class="text-xs text-slate-500 dark:text-white/50">Zkontrolujte, zda je vaše UDID v profilu:</label>
+                    <div class="flex gap-2">
+                      <UInput 
+                        v-model="udidChecks[getProfileKey(modalModerator.id, 'TVOS')]" 
+                        placeholder="Zadejte UDID" 
+                        size="sm" 
+                        class="flex-1 font-mono text-xs"
+                      />
+                      <UButton 
+                        size="sm" 
+                        color="blue" 
+                        variant="soft" 
+                        :loading="checkingUdid[getProfileKey(modalModerator.id, 'TVOS')]"
+                        @click="checkUdidInProfile(modalModerator.id, 'TVOS')"
+                        :disabled="!udidChecks[getProfileKey(modalModerator.id, 'TVOS')]?.trim()"
+                      >
+                        Zkontrolovat
+                      </UButton>
+                    </div>
+                    <div v-if="udidResults[getProfileKey(modalModerator.id, 'TVOS')]?.checked" class="flex items-center gap-2">
+                      <UIcon 
+                        :name="udidResults[getProfileKey(modalModerator.id, 'TVOS')].found ? 'i-heroicons-check-circle' : 'i-heroicons-x-circle'" 
+                        :class="udidResults[getProfileKey(modalModerator.id, 'TVOS')].found ? 'text-green-400' : 'text-red-400'"
+                        class="w-4 h-4"
+                      />
+                      <span 
+                        :class="udidResults[getProfileKey(modalModerator.id, 'TVOS')].found ? 'text-green-400' : 'text-red-400'" 
+                        class="text-sm"
+                      >
+                        {{ udidResults[getProfileKey(modalModerator.id, 'TVOS')].message }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -496,12 +653,111 @@ const { data: moderators, status } = useFetch<PublicModerator[]>('/api/public/mo
 const pending = computed(() => status.value === 'pending')
 const { public: publicConfig } = useRuntimeConfig()
 
+// Welcome section state
+const welcomeExpanded = ref(false)
+
+// Moderator selection (saved in cookie for SSR support)
+const selectedModeratorId = useCookie<string | null>('fastsigner-selected-moderator', {
+  maxAge: 60 * 60 * 24 * 365, // 1 year
+  sameSite: 'lax',
+  default: () => null
+})
+
+// Migrate from old localStorage to cookie (client-side only)
+onMounted(() => {
+  if (process.client && typeof window !== 'undefined') {
+    const oldStorageKey = 'fastsigner-selected-moderator'
+    const oldValue = localStorage.getItem(oldStorageKey)
+    if (oldValue && !selectedModeratorId.value) {
+      selectedModeratorId.value = oldValue
+      localStorage.removeItem(oldStorageKey) // Clean up old storage
+    }
+  }
+})
+
+// Validate saved moderator when data loads
+watch(moderators, (newModerators) => {
+  if (newModerators && newModerators.length > 0) {
+    // Validate that saved moderator exists
+    if (selectedModeratorId.value && !newModerators.some(m => m.id === selectedModeratorId.value)) {
+      selectedModeratorId.value = null
+    }
+  }
+}, { immediate: true })
+
+const selectedModerator = computed(() => {
+  if (!selectedModeratorId.value || !moderators.value) return null
+  return moderators.value.find(m => m.id === selectedModeratorId.value) || null
+})
+
+function onModeratorChange(id: string) {
+  selectedModeratorId.value = id
+  // Reset search when switching moderators
+  searchQuery.value = ''
+  // Collapse welcome section
+  welcomeExpanded.value = false
+}
+
+// Search functionality
+const searchQuery = ref('')
+
+const filteredIosApps = computed(() => {
+  if (!selectedModerator.value) return []
+  if (!searchQuery.value.trim()) return selectedModerator.value.iosApps
+  
+  const query = searchQuery.value.toLowerCase()
+  return selectedModerator.value.iosApps.filter(app => 
+    app.name.toLowerCase().includes(query) || 
+    app.version.toLowerCase().includes(query) ||
+    (app.buildNumber && app.buildNumber.toLowerCase().includes(query))
+  )
+})
+
+const filteredTvosApps = computed(() => {
+  if (!selectedModerator.value) return []
+  if (!searchQuery.value.trim()) return selectedModerator.value.tvosApps
+  
+  const query = searchQuery.value.toLowerCase()
+  return selectedModerator.value.tvosApps.filter(app => 
+    app.name.toLowerCase().includes(query) || 
+    app.version.toLowerCase().includes(query) ||
+    (app.buildNumber && app.buildNumber.toLowerCase().includes(query))
+  )
+})
+
+// Tabs with dynamic items
+const selectedTab = ref(0)
+const tabItems = computed(() => [
+  {
+    key: 'ios',
+    label: 'iOS',
+    icon: 'i-heroicons-device-phone-mobile',
+    apps: filteredIosApps.value
+  },
+  {
+    key: 'appletv',
+    label: 'Apple TV',
+    icon: 'i-heroicons-tv',
+    apps: filteredTvosApps.value
+  }
+])
+
+// Modal
 const showModeratorModal = ref(false)
-const selectedModerator = ref<PublicModerator | null>(null)
+const modalModerator = ref<PublicModerator | null>(null)
+
+// UDID checking state
+const udidChecks = ref<Record<string, string>>({})
+const checkingUdid = ref<Record<string, boolean>>({})
+const udidResults = ref<Record<string, { checked: boolean; found: boolean; message?: string }>>({})
 
 function openModeratorModal(mod: PublicModerator) {
-  selectedModerator.value = mod
+  modalModerator.value = mod
   showModeratorModal.value = true
+}
+
+function getProfileKey(moderatorId: string, platform: 'IOS' | 'TVOS'): string {
+  return `${moderatorId}-${platform}`
 }
 
 function installLink(app: PublicApp) {
@@ -522,13 +778,6 @@ function tvosLink(app: PublicApp) {
   return `${origin}/api/download${path}`
 }
 
-function formatDate(iso: string | null) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  const pad = (n: number) => `${n}`.padStart(2, '0')
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-}
-
 function formatDateShort(iso: string | null) {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -542,13 +791,6 @@ function isCertExpiringSoon(iso: string | null) {
   const now = new Date()
   const daysUntilExpiry = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
   return daysUntilExpiry <= 30 // Warn if expiring within 30 days
-}
-
-function scrollToModerator(id: string) {
-  const el = document.getElementById(`moderator-${id}`)
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
 }
 
 function displayVersion(app: PublicApp) {
@@ -610,5 +852,36 @@ async function downloadModeratorProfile(moderatorId: string, platform: 'IOS' | '
     })
   }
 }
-</script>
 
+async function checkUdidInProfile(moderatorId: string, platform: 'IOS' | 'TVOS') {
+  const key = getProfileKey(moderatorId, platform)
+  const udid = udidChecks.value[key]?.trim()
+  if (!udid) return
+
+  checkingUdid.value[key] = true
+  udidResults.value[key] = { checked: false, found: false }
+
+  try {
+    const result = await $fetch<{ found: boolean; totalDevices: number; profileName: string | null }>(`/api/public/moderators/${moderatorId}/check-udid`, {
+      method: 'POST',
+      body: { udid, platform }
+    })
+    
+    udidResults.value[key] = {
+      checked: true,
+      found: result.found,
+      message: result.found 
+        ? `UDID nalezeno v profilu (${result.totalDevices} zařízení celkem)` 
+        : `UDID nebylo nalezeno v profilu (${result.totalDevices} zařízení celkem)`
+    }
+  } catch (e: any) {
+    udidResults.value[key] = {
+      checked: true,
+      found: false,
+      message: e?.data?.message || 'Nepodařilo se zkontrolovat UDID'
+    }
+  } finally {
+    checkingUdid.value[key] = false
+  }
+}
+</script>
