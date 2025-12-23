@@ -286,13 +286,13 @@
                           <p class="text-xs text-slate-500 dark:text-white/60 mt-0.5 truncate">
                             {{ displayVersion(app) || (item.key === 'ios' ? 'iOS App' : 'Apple TV App') }}
                           </p>
-                          <!-- Logged-in only badge (only visible to logged-in users) -->
+                          <!-- Premium badge (only for apps marked as loggedInOnly) -->
                           <div
-                            v-if="user && app.loggedInOnly"
+                            v-if="app.loggedInOnly && selectedModerator && (isUserRegisteredWith(selectedModerator.id) || (user && (user.role === 'MANAGER' || user.role === 'SUPERADMIN') && user.id === selectedModerator.id))"
                             class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200 px-2 py-0.5 text-[10px] font-medium"
                           >
-                            <UIcon name="i-heroicons-lock-closed" class="w-3 h-3" />
-                            <span>Pouze pro přihlášené uživatele</span>
+                            <UIcon name="i-heroicons-star" class="w-3 h-3" />
+                            <span>Premium</span>
                           </div>
                         </div>
                         
@@ -788,8 +788,14 @@ const searchQuery = ref('')
 const filteredIosApps = computed(() => {
   if (!selectedModerator.value) return []
 
-  // Hide apps marked as logged-in only for anonymous users
-  const baseApps = selectedModerator.value.iosApps.filter(app => !app.loggedInOnly || !!user.value)
+  // Check if user is a moderator viewing their own profile, or if user is registered
+  const isModerator = user.value && (user.value.role === 'MANAGER' || user.value.role === 'SUPERADMIN')
+  const isOwnProfile = isModerator && user.value && selectedModerator.value && user.value.id === selectedModerator.value.id
+  const isRegistered = selectedModerator.value ? isUserRegisteredWith(selectedModerator.value.id) : false
+  
+  // Show all apps if user is viewing their own moderator profile, or show public apps + premium apps if registered
+  const canSeePremiumApps = isOwnProfile || isRegistered
+  const baseApps = selectedModerator.value.iosApps.filter(app => !app.loggedInOnly || canSeePremiumApps)
 
   if (!searchQuery.value.trim()) return baseApps
   
@@ -804,8 +810,14 @@ const filteredIosApps = computed(() => {
 const filteredTvosApps = computed(() => {
   if (!selectedModerator.value) return []
 
-  // Hide apps marked as logged-in only for anonymous users
-  const baseApps = selectedModerator.value.tvosApps.filter(app => !app.loggedInOnly || !!user.value)
+  // Check if user is a moderator viewing their own profile, or if user is registered
+  const isModerator = user.value && (user.value.role === 'MANAGER' || user.value.role === 'SUPERADMIN')
+  const isOwnProfile = isModerator && user.value && selectedModerator.value && user.value.id === selectedModerator.value.id
+  const isRegistered = selectedModerator.value ? isUserRegisteredWith(selectedModerator.value.id) : false
+  
+  // Show all apps if user is viewing their own moderator profile, or show public apps + premium apps if registered
+  const canSeePremiumApps = isOwnProfile || isRegistered
+  const baseApps = selectedModerator.value.tvosApps.filter(app => !app.loggedInOnly || canSeePremiumApps)
 
   if (!searchQuery.value.trim()) return baseApps
   

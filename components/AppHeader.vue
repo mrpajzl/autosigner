@@ -123,7 +123,7 @@
           <template v-if="me">
             <UDropdown :items="userMenu">
               <button
-                class="flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                class="flex items-center gap-2 rounded-full border border-amber-500 dark:border-amber-500/60 px-1.5 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <UAvatar
                   v-if="me.discordAvatar"
@@ -441,8 +441,38 @@ const appleMenu = computed(() => {
   ]
 })
 
+// Fetch user registrations to check premium status
+const { data: userRegistrations } = await useFetch('/api/my-registrations', {
+  lazy: true,
+  server: false, // Client-side only
+  // Only fetch if user is logged in with Discord
+  immediate: computed(() => me.value?.authProvider === 'discord')
+})
+
+const hasActiveRegistration = computed(() => {
+  if (!userRegistrations.value?.moderators) return false
+  return userRegistrations.value.moderators.length > 0
+})
+
 const userMenu = computed(() => {
   const items = []
+
+  // Add premium label if user has active registration
+  if (hasActiveRegistration.value) {
+    items.push([
+      { 
+        label: '⭐ Prémiový člen', 
+        icon: 'i-heroicons-star',
+        disabled: true,
+        class: 'text-amber-600 dark:text-amber-400 font-medium cursor-default'
+      },
+      { 
+        label: 'Aktivní registrace', 
+        disabled: true,
+        class: 'text-xs text-slate-500 dark:text-slate-400 cursor-default -mt-2 mb-1'
+      }
+    ])
+  }
 
   // Add Profile and Sign out
   items.push([

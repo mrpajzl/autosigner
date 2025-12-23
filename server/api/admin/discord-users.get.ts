@@ -19,7 +19,18 @@ export default defineEventHandler(async (event) => {
       authProvider: true,
       discordId: true,
       discordUsername: true,
-      discordAvatar: true
+      discordAvatar: true,
+      linkedRegistrations: {
+        select: {
+          id: true,
+          owner: {
+            select: {
+              id: true,
+              nickname: true
+            }
+          }
+        }
+      }
     }
   })
 
