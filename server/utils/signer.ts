@@ -802,16 +802,41 @@ export async function triggerResignForUser(userId: string, platform?: 'IOS' | 'T
   // Import signing queue lazily to avoid circular dependencies
   const { signingQueue } = await import('./signing-queue')
   
-  const where: any = { ownerId: userId }
-  if (platform) where.platform = platform
-  const apps = await prisma.app.findMany({ where, orderBy: { uploadedAt: 'desc' } })
-  for (const a of apps) {
+  // Re-sign apps the user has uploaded (owner signing)
+  const ownerWhere: any = { ownerId: userId }
+  if (platform) ownerWhere.platform = platform
+  const ownerApps = await prisma.app.findMany({ where: ownerWhere, orderBy: { uploadedAt: 'desc' } })
+  for (const a of ownerApps) {
     try {
       await prisma.app.update({ where: { id: a.id }, data: { status: 'SIGNING', signedAt: null } })
-      // Use the signing queue instead of direct signing
       await signingQueue.enqueueOwnerSigning(a.id, userId)
     } catch (e) {
-      console.error(`Failed to queue re-signing for app ${a.id}:`, e)
+      console.error(`Failed to queue re-signing for owned app ${a.id}:`, e)
+    }
+  }
+  
+  // Re-sign apps the user has signed as a moderator (SignedVersion signing)
+  const signedVersionWhere: any = { signerId: userId }
+  if (platform) {
+    signedVersionWhere.app = { platform }
+  }
+  const signedVersions = await prisma.signedVersion.findMany({
+    where: signedVersionWhere,
+    include: { app: true },
+    orderBy: { createdAt: 'desc' }
+  })
+  for (const sv of signedVersions) {
+    // Only re-sign if the app's platform matches (if platform filter is specified)
+    if (!platform || sv.app.platform === platform) {
+      try {
+        await prisma.signedVersion.update({
+          where: { id: sv.id },
+          data: { status: 'SIGNING', signedAt: null, signedIpaPath: null, manifestPath: null }
+        })
+        await signingQueue.enqueue(sv.appId, userId, sv.id)
+      } catch (e) {
+        console.error(`Failed to queue re-signing for SignedVersion ${sv.id}:`, e)
+      }
     }
   }
 }

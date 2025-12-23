@@ -17,6 +17,8 @@
     "db:migrate": "prisma migrate dev"
   },
   "dependencies": {
+    "@auth/core": "^0.41.1",
+    "@auth/prisma-adapter": "^2.11.1",
     "@aws-sdk/client-s3": "^3.943.0",
     "@nuxt/content": "^3.6.3",
     "@nuxt/eslint": "^1.8.0",
@@ -30,6 +32,7 @@
     "bcryptjs": "^3.0.2",
     "better-sqlite3": "^12.2.0",
     "bplist-parser": "^0.3.2",
+    "discord-oauth2": "^2.12.1",
     "eslint": "^9.33.0",
     "execa": "^9.6.0",
     "formidable": "^3.5.4",

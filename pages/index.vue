@@ -172,9 +172,19 @@
                   <UIcon name="i-heroicons-user-circle" class="w-5 h-5 text-red-500" />
                 </template>
                 <template #option="{ option }">
-                  <div class="flex items-center justify-between w-full">
-                    <span class="truncate">{{ option.name }}</span>
-                    <span class="text-xs text-slate-500 dark:text-white/50 ml-2 flex-shrink-0">
+                  <div class="flex items-center justify-between w-full gap-2">
+                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                      <span class="truncate">{{ option.name }}</span>
+                      <UBadge 
+                        v-if="isUserRegisteredWith(option.id)" 
+                        color="green" 
+                        variant="subtle" 
+                        size="xs"
+                      >
+                        Registered
+                      </UBadge>
+                    </div>
+                    <span class="text-xs text-slate-500 dark:text-white/50 flex-shrink-0">
                       {{ option.iosApps.length + option.tvosApps.length }} apps
                     </span>
                   </div>
@@ -216,98 +226,139 @@
       <!-- Selected Moderator Apps - Only show after selection -->
       <div v-if="selectedModerator" class="space-y-6">
 
-        <!-- Search Bar -->
-        <div class="max-w-2xl mx-auto">
-          <UInput
-            v-model="searchQuery"
-            icon="i-heroicons-magnifying-glass"
-            size="lg"
-            placeholder="Hledat aplikace..."
-            :ui="{ icon: { trailing: { pointer: '' } } }"
-          >
-            <template #trailing>
-              <UButton
-                v-show="searchQuery !== ''"
-                color="gray"
-                variant="link"
-                icon="i-heroicons-x-mark-20-solid"
-                :padded="false"
-                @click="searchQuery = ''"
-              />
-            </template>
-          </UInput>
-        </div>
-
-        <!-- Platform Tabs -->
-        <UTabs v-model="selectedTab" :items="tabItems" class="w-full">
-          <template #item="{ item }">
-            <div class="space-y-4 pt-6">
-              <div v-if="item.apps.length === 0" class="text-center py-12 text-slate-500 dark:text-white/60">
-                <UIcon name="i-heroicons-magnifying-glass" class="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>{{ searchQuery ? 'Žádné aplikace nenalezeny' : `Žádné ${item.label} aplikace` }}</p>
-              </div>
-              
-              <div v-else class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                <div
-                  v-for="app in item.apps"
-                  :key="app.id"
-                  class="rounded-2xl bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-white/10 overflow-hidden transition-all"
-                  :class="item.key === 'ios' ? 'hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10' : 'hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10'"
-                >
-                  <div class="flex items-center gap-3 p-4">
-                    <!-- App Icon -->
-                    <div class="flex-shrink-0">
-                      <img
-                        v-if="app.iconPath"
-                        :src="`/api/download${app.iconPath}`"
-                        :alt="app.name"
-                        class="w-14 h-14 rounded-2xl shadow-sm object-cover"
-                      />
-                      <div v-else class="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-sm">
-                        <UIcon :name="item.key === 'ios' ? 'i-heroicons-device-phone-mobile' : 'i-heroicons-tv'" class="w-7 h-7 text-slate-400 dark:text-white/40" />
-                      </div>
-                    </div>
-                    
-                    <!-- App Info -->
-                    <div class="flex-1 min-w-0">
-                      <h4 class="font-semibold text-sm text-slate-900 dark:text-white truncate">{{ app.name }}</h4>
-                      <p class="text-xs text-slate-500 dark:text-white/60 mt-0.5 truncate">
-                        {{ displayVersion(app) || (item.key === 'ios' ? 'iOS App' : 'Apple TV App') }}
-                      </p>
-                    </div>
-                    
-                    <!-- Install/Download Button -->
-                    <div class="flex-shrink-0">
-                      <a
-                        v-if="item.key === 'ios' && app.status === 'SIGNED' && installLink(app)"
-                        :href="installLink(app)"
-                        class="inline-flex items-center justify-center min-w-[70px] h-8 px-3 rounded-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 transition-colors"
-                        title="Install on device"
-                      >
-                        <span class="text-sm font-semibold text-white">GET</span>
-                      </a>
-                      <a
-                        v-else-if="item.key === 'appletv' && app.status === 'SIGNED' && tvosLink(app)"
-                        :href="tvosLink(app)"
-                        target="_blank"
-                        class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 transition-colors"
-                        title="Download IPA"
-                      >
-                        <UIcon name="i-heroicons-cloud-arrow-down" class="w-4 h-4 text-white" />
-                      </a>
-                      <div
-                        v-else
-                        class="inline-flex items-center justify-center min-w-[70px] h-8 px-3 rounded-full bg-slate-300/50 dark:bg-slate-700/50 cursor-not-allowed"
-                      >
-                        <span class="text-xs text-slate-400 dark:text-slate-500">—</span>
+        <!-- Search Bar + Platform Tabs -->
+        <div class="space-y-3">
+          <!-- Tabs with desktop search integrated -->
+          <div class="relative space-y-2 w-full lg:pr-1">
+            <!-- Desktop search integrated in tablist -->
+            <div class="relative hidden lg:block">
+              <UInput
+                v-model="searchQuery"
+                icon="i-heroicons-magnifying-glass"
+                size="lg"
+                placeholder="Hledat aplikace..."
+                :ui="{ icon: { trailing: { pointer: '' } } }"
+              >
+                <template #trailing>
+                  <UButton
+                    v-show="searchQuery !== ''"
+                    color="gray"
+                    variant="link"
+                    icon="i-heroicons-x-mark-20-solid"
+                    :padded="false"
+                    @click="searchQuery = ''"
+                  />
+                </template>
+              </UInput>
+            </div>
+            <UTabs v-model="selectedTab" :items="tabItems" class="w-full">
+              <template #item="{ item }">
+                <div class="space-y-4 pt-6">
+                  <div v-if="item.apps.length === 0" class="text-center py-12 text-slate-500 dark:text-white/60">
+                    <UIcon name="i-heroicons-magnifying-glass" class="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>{{ searchQuery ? 'Žádné aplikace nenalezeny' : `Žádné ${item.label} aplikace` }}</p>
+                  </div>
+                  
+                  <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                    <div
+                      v-for="app in item.apps"
+                      :key="app.id"
+                      class="rounded-2xl bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-white/10 overflow-hidden transition-all"
+                      :class="item.key === 'ios' ? 'hover:border-blue-500/30 hover:shadow-lg hover:shadow-blue-500/10' : 'hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/10'"
+                    >
+                      <div class="flex items-center gap-3 p-4">
+                        <!-- App Icon -->
+                        <div class="flex-shrink-0">
+                          <img
+                            v-if="app.iconPath"
+                            :src="`/api/download${app.iconPath}`"
+                            :alt="app.name"
+                            class="w-14 h-14 rounded-2xl shadow-sm object-cover"
+                          />
+                          <div v-else class="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-200 to-slate-300 dark:from-white/10 dark:to-white/5 flex items-center justify-center shadow-sm">
+                            <UIcon :name="item.key === 'ios' ? 'i-heroicons-device-phone-mobile' : 'i-heroicons-tv'" class="w-7 h-7 text-slate-400 dark:text-white/40" />
+                          </div>
+                        </div>
+                        
+                        <!-- App Info -->
+                        <div class="flex-1 min-w-0">
+                          <h4 class="font-semibold text-sm text-slate-900 dark:text-white truncate">{{ app.name }}</h4>
+                          <p class="text-xs text-slate-500 dark:text-white/60 mt-0.5 truncate">
+                            {{ displayVersion(app) || (item.key === 'ios' ? 'iOS App' : 'Apple TV App') }}
+                          </p>
+                          <!-- Logged-in only badge (only visible to logged-in users) -->
+                          <div
+                            v-if="user && app.loggedInOnly"
+                            class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200 px-2 py-0.5 text-[10px] font-medium"
+                          >
+                            <UIcon name="i-heroicons-lock-closed" class="w-3 h-3" />
+                            <span>Pouze pro přihlášené uživatele</span>
+                          </div>
+                        </div>
+                        
+                        <!-- Install/Download Button -->
+                        <div class="flex-shrink-0">
+                          <a
+                            v-if="item.key === 'ios' && app.status === 'SIGNED' && installLink(app)"
+                            :href="installLink(app)"
+                            class="inline-flex items-center justify-center min-w-[70px] h-8 px-3 rounded-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 transition-colors"
+                            title="Install on device"
+                          >
+                            <span class="text-sm font-semibold text-white">GET</span>
+                          </a>
+                          <a
+                            v-else-if="item.key === 'appletv' && app.status === 'SIGNED' && tvosLink(app)"
+                            :href="tvosLink(app)"
+                            target="_blank"
+                            class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-500 hover:bg-blue-600 active:bg-blue-700 transition-colors"
+                            title="Download IPA"
+                          >
+                            <UIcon name="i-heroicons-cloud-arrow-down" class="w-4 h-4 text-white" />
+                          </a>
+                          <div
+                            v-else
+                            class="inline-flex items-center justify-center min-w-[70px] h-8 px-3 rounded-full bg-slate-300/50 dark:bg-slate-700/50 cursor-not-allowed"
+                          >
+                            <span class="text-xs text-slate-400 dark:text-slate-500">—</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          </template>
-        </UTabs>
+              </template>
+            </UTabs>
+          </div>
+
+          <!-- Mobile search: separate row below tabs -->
+          <div class="lg:hidden">
+            <UInput
+              v-model="searchQuery"
+              icon="i-heroicons-magnifying-glass"
+              size="lg"
+              placeholder="Hledat aplikace..."
+              :ui="{ icon: { trailing: { pointer: '' } } }"
+            >
+              <template #trailing>
+                <UButton
+                  v-show="searchQuery !== ''"
+                  color="gray"
+                  variant="link"
+                  icon="i-heroicons-x-mark-20-solid"
+                  :padded="false"
+                  @click="searchQuery = ''"
+                />
+              </template>
+            </UInput>
+          </div>
+        </div>
+
+        <!-- Platform Tabs Content -->
+        <!-- (content is rendered inside UTabs above) -->
+        <!-- Keeping outer container spacing for consistency -->
+        <!-- End Search + Tabs section -->
+
+        <!-- (rest of the content inside the selected tab remains unchanged) -->
       </div>
     </template>
 
@@ -626,7 +677,7 @@
 </template>
 
 <script setup lang="ts">
-type PublicApp = { id: string; name: string; version: string; buildNumber?: string | null; showBuildNumber: boolean; platform: 'IOS' | 'TVOS'; uploadedAt: string; manifestPath?: string | null; downloadPath?: string | null; status: string; iconPath?: string | null }
+type PublicApp = { id: string; name: string; version: string; buildNumber?: string | null; showBuildNumber: boolean; loggedInOnly: boolean; platform: 'IOS' | 'TVOS'; uploadedAt: string; manifestPath?: string | null; downloadPath?: string | null; status: string; iconPath?: string | null }
 type DeviceCounts = {
   iOS: number      // iPhone + iPad
   APPLE_TV: number
@@ -652,6 +703,7 @@ type PublicModerator = {
 const { data: moderators, status } = useFetch<PublicModerator[]>('/api/public/moderators', { lazy: true })
 const pending = computed(() => status.value === 'pending')
 const { public: publicConfig } = useRuntimeConfig()
+const { user } = useAuth()
 
 // Welcome section state
 const welcomeExpanded = ref(false)
@@ -661,6 +713,14 @@ const selectedModeratorId = useCookie<string | null>('fastsigner-selected-modera
   maxAge: 60 * 60 * 24 * 365, // 1 year
   sameSite: 'lax',
   default: () => null
+})
+
+// Fetch Discord user's registrations for auto-selection
+const { data: userRegistrations } = await useFetch('/api/my-registrations', {
+  lazy: true,
+  server: false, // Client-side only
+  // Only fetch if user is logged in with Discord
+  immediate: computed(() => user.value?.authProvider === 'discord')
 })
 
 // Migrate from old localStorage to cookie (client-side only)
@@ -685,6 +745,30 @@ watch(moderators, (newModerators) => {
   }
 }, { immediate: true })
 
+// Auto-select moderator for Discord users
+watch([moderators, userRegistrations], ([newModerators, newRegistrations]) => {
+  // Only auto-select if:
+  // 1. No moderator is currently selected
+  // 2. User has registrations
+  // 3. Moderators list is loaded
+  if (!selectedModeratorId.value && newRegistrations?.moderators && newModerators) {
+    const userModeratorIds = newRegistrations.moderators.map((m: any) => m.moderatorId)
+    
+    if (userModeratorIds.length === 1) {
+      // If user is registered with only one moderator, auto-select it
+      selectedModeratorId.value = userModeratorIds[0]
+    } else if (userModeratorIds.length > 1) {
+      // If user is registered with multiple moderators, select the first available one
+      const firstAvailable = userModeratorIds.find((id: string) => 
+        newModerators.some(m => m.id === id)
+      )
+      if (firstAvailable) {
+        selectedModeratorId.value = firstAvailable
+      }
+    }
+  }
+}, { immediate: true })
+
 const selectedModerator = computed(() => {
   if (!selectedModeratorId.value || !moderators.value) return null
   return moderators.value.find(m => m.id === selectedModeratorId.value) || null
@@ -703,10 +787,14 @@ const searchQuery = ref('')
 
 const filteredIosApps = computed(() => {
   if (!selectedModerator.value) return []
-  if (!searchQuery.value.trim()) return selectedModerator.value.iosApps
+
+  // Hide apps marked as logged-in only for anonymous users
+  const baseApps = selectedModerator.value.iosApps.filter(app => !app.loggedInOnly || !!user.value)
+
+  if (!searchQuery.value.trim()) return baseApps
   
   const query = searchQuery.value.toLowerCase()
-  return selectedModerator.value.iosApps.filter(app => 
+  return baseApps.filter(app => 
     app.name.toLowerCase().includes(query) || 
     app.version.toLowerCase().includes(query) ||
     (app.buildNumber && app.buildNumber.toLowerCase().includes(query))
@@ -715,10 +803,14 @@ const filteredIosApps = computed(() => {
 
 const filteredTvosApps = computed(() => {
   if (!selectedModerator.value) return []
-  if (!searchQuery.value.trim()) return selectedModerator.value.tvosApps
+
+  // Hide apps marked as logged-in only for anonymous users
+  const baseApps = selectedModerator.value.tvosApps.filter(app => !app.loggedInOnly || !!user.value)
+
+  if (!searchQuery.value.trim()) return baseApps
   
   const query = searchQuery.value.toLowerCase()
-  return selectedModerator.value.tvosApps.filter(app => 
+  return baseApps.filter(app => 
     app.name.toLowerCase().includes(query) || 
     app.version.toLowerCase().includes(query) ||
     (app.buildNumber && app.buildNumber.toLowerCase().includes(query))
@@ -883,5 +975,10 @@ async function checkUdidInProfile(moderatorId: string, platform: 'IOS' | 'TVOS')
   } finally {
     checkingUdid.value[key] = false
   }
+}
+
+function isUserRegisteredWith(moderatorId: string): boolean {
+  if (!userRegistrations.value?.moderators) return false
+  return userRegistrations.value.moderators.some((m: any) => m.moderatorId === moderatorId)
 }
 </script>

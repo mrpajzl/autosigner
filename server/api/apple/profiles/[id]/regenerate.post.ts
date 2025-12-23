@@ -189,6 +189,16 @@ export default defineEventHandler(async (event) => {
         where: { id: created.id },
         data: { active: true }
       })
+      
+      // Trigger automatic re-signing for all apps using this profile
+      const { triggerResignForUser } = await import('../../../../utils/signer')
+      ;(async () => {
+        try {
+          await triggerResignForUser(user.id, platform as 'IOS' | 'TVOS')
+        } catch (e) {
+          console.error('Failed to trigger automatic re-signing after profile regeneration:', e)
+        }
+      })()
     }
 
     return {

@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 const schema = z.object({
   discordName: z.string().min(1, 'Discord name is required').max(100),
+  discordId: z.string().optional(), // Optional Discord ID for automatic linking
   notes: z.string().max(500).optional()
 })
 
@@ -16,7 +17,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: parsed.error.errors[0].message })
   }
 
-  const { discordName, notes } = parsed.data
+  const { discordName, discordId, notes } = parsed.data
 
   // Check if user with this discord name already exists for this owner
   const existing = await prisma.registeredUser.findUnique({
@@ -39,6 +40,7 @@ export default defineEventHandler(async (event) => {
     data: {
       ownerId: user.id,
       discordName,
+      discordId,
       notes
     },
     include: {
@@ -49,6 +51,7 @@ export default defineEventHandler(async (event) => {
   return {
     id: registeredUser.id,
     discordName: registeredUser.discordName,
+    discordId: registeredUser.discordId,
     notes: registeredUser.notes,
     createdAt: registeredUser.createdAt,
     updatedAt: registeredUser.updatedAt,

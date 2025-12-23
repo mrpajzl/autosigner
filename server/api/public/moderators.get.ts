@@ -1,6 +1,7 @@
 import { prisma } from '../../utils/db'
 import { decrypt } from '../../utils/crypto'
 import { AppleDeveloperAPI } from '../../utils/apple-api'
+import { getSessionUser } from '../../utils/auth'
 
 type PublicApp = {
   id: string
@@ -8,6 +9,7 @@ type PublicApp = {
   version: string
   buildNumber?: string | null
   showBuildNumber: boolean
+  loggedInOnly: boolean
   platform: 'IOS' | 'TVOS'
   uploadedAt: string
   manifestPath?: string | null
@@ -75,8 +77,9 @@ async function fetchDeviceCounts(credentials: { keyId: string; issuerId: string;
   }
 }
 
-export default defineEventHandler(async () => {
+export default defineEventHandler(async (event) => {
   try {
+    const user = await getSessionUser(event)
     const managers = await prisma.user.findMany({
       where: {
         role: { in: ['MANAGER', 'SUPERADMIN'] },
@@ -140,13 +143,14 @@ export default defineEventHandler(async () => {
         // Use SignedVersion records - apps signed by this moderator
         // Group by app name to show multiple different apps
         const iosApps = u.signedVersions
-          .filter((x) => x.app.platform === 'IOS')
+          .filter((x) => x.app.platform === 'IOS' && (!x.app.loggedInOnly || !!user))
           .map(sv => ({
             id: sv.id, // Use SignedVersion ID for manifest lookup
             name: sv.app.name,
             version: sv.app.version,
             buildNumber: sv.app.buildNumber,
             showBuildNumber: sv.app.showBuildNumber,
+            loggedInOnly: sv.app.loggedInOnly,
             platform: 'IOS' as const,
             uploadedAt: (sv.signedAt || sv.createdAt).toISOString(),
             manifestPath: sv.manifestPath,
@@ -156,13 +160,14 @@ export default defineEventHandler(async () => {
           }))
 
         const tvosApps = u.signedVersions
-          .filter((x) => x.app.platform === 'TVOS')
+          .filter((x) => x.app.platform === 'TVOS' && (!x.app.loggedInOnly || !!user))
           .map(sv => ({
             id: sv.id,
             name: sv.app.name,
             version: sv.app.version,
             buildNumber: sv.app.buildNumber,
             showBuildNumber: sv.app.showBuildNumber,
+            loggedInOnly: sv.app.loggedInOnly,
             platform: 'TVOS' as const,
             uploadedAt: (sv.signedAt || sv.createdAt).toISOString(),
             manifestPath: null,
@@ -203,13 +208,14 @@ export default defineEventHandler(async () => {
         // Fallback to old system - apps uploaded by this moderator
         // Show all apps, differentiated by name
         const iosApps = u.apps
-          .filter((x) => x.platform === 'IOS')
+          .filter((x) => x.platform === 'IOS' && (!x.loggedInOnly || !!user))
           .map((a) => ({
             id: a.id,
             name: a.name,
             version: a.version,
             buildNumber: a.buildNumber,
             showBuildNumber: a.showBuildNumber,
+            loggedInOnly: a.loggedInOnly,
             platform: 'IOS' as const,
             uploadedAt: a.uploadedAt.toISOString(),
             manifestPath: a.manifestPath,
@@ -219,13 +225,14 @@ export default defineEventHandler(async () => {
           }))
         
         const tvosApps = u.apps
-          .filter((x) => x.platform === 'TVOS')
+          .filter((x) => x.platform === 'TVOS' && (!x.loggedInOnly || !!user))
           .map((a) => ({
             id: a.id,
             name: a.name,
             version: a.version,
             buildNumber: a.buildNumber,
             showBuildNumber: a.showBuildNumber,
+            loggedInOnly: a.loggedInOnly,
             platform: 'TVOS' as const,
             uploadedAt: a.uploadedAt.toISOString(),
             manifestPath: null,

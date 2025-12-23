@@ -315,6 +315,15 @@
               <UBadge :color="app.platform === 'IOS' ? 'blue' : 'purple'" variant="soft" size="xs">
                 {{ app.platform === 'IOS' ? 'iOS' : 'tvOS' }}
               </UBadge>
+              <UBadge
+                v-if="app.loggedInOnly"
+                color="orange"
+                variant="soft"
+                size="xs"
+                title="Visible only to logged-in users on the homepage"
+              >
+                Logged-in only
+              </UBadge>
             </div>
             <p class="text-sm text-white/60 dark:text-white/60 truncate">
               {{ app.bundleId || 'Unknown bundle' }} • v{{ displayVersion(app) }}
@@ -459,6 +468,13 @@
                     >
                       <UIcon :name="app.showBuildNumber ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'" class="w-4 h-4" />
                       {{ app.showBuildNumber ? 'Hide build number' : 'Show build number' }}
+                    </button>
+                    <button
+                      class="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 text-left"
+                      @click="toggleVisibility(app.id); openMenuId = null"
+                    >
+                      <UIcon :name="app.loggedInOnly ? 'i-heroicons-user-group' : 'i-heroicons-lock-closed'" class="w-4 h-4" />
+                      {{ app.loggedInOnly ? 'Make app public' : 'Restrict to logged-in users' }}
                     </button>
                     <button
                       v-if="canDelete(app)"
@@ -686,6 +702,7 @@ type AppRow = {
   version: string
   buildNumber?: string | null
   showBuildNumber: boolean
+  loggedInOnly: boolean
   platform: 'IOS' | 'TVOS'
   uploadedAt: string
   iconPath?: string | null
@@ -1052,6 +1069,20 @@ async function toggleBuildNumber(appId: string) {
   }
 }
 
+// Toggle visibility (logged-in users only vs public)
+async function toggleVisibility(appId: string) {
+  try {
+    await $fetch(`/api/admin/apps/${appId}/toggle-visibility`, { method: 'POST' })
+    await refresh()
+  } catch (e: any) {
+    toast.add({
+      title: 'Failed to toggle visibility',
+      description: e?.data?.message || e?.message || 'Unknown error',
+      color: 'red'
+    })
+  }
+}
+
 // Get menu items for an app
 function getAppMenuItems(app: AppRow) {
   const items: any[][] = [[]]
@@ -1061,6 +1092,12 @@ function getAppMenuItems(app: AppRow) {
     label: app.showBuildNumber ? 'Hide build number' : 'Show build number',
     icon: app.showBuildNumber ? 'i-heroicons-eye-slash' : 'i-heroicons-eye',
     click: () => toggleBuildNumber(app.id)
+  })
+  // Visibility toggle
+  items[0].push({
+    label: app.loggedInOnly ? 'Make app public' : 'Restrict to logged-in users',
+    icon: app.loggedInOnly ? 'i-heroicons-user-group' : 'i-heroicons-lock-closed',
+    click: () => toggleVisibility(app.id)
   })
   
   // Delete option (only for users who can delete)

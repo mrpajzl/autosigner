@@ -15,6 +15,16 @@ export default defineEventHandler(async (event) => {
     include: {
       devices: {
         orderBy: { createdAt: 'desc' }
+      },
+      linkedUser: {
+        select: {
+          id: true,
+          nickname: true,
+          authProvider: true,
+          discordId: true,
+          discordUsername: true,
+          discordAvatar: true
+        }
       }
     },
     orderBy: { discordName: 'asc' }
@@ -49,6 +59,7 @@ export default defineEventHandler(async (event) => {
   return registeredUsers.map(regUser => ({
     id: regUser.id,
     discordName: regUser.discordName,
+    discordId: regUser.discordId,
     notes: regUser.notes,
     paidForNextYear: regUser.paidForNextYear,
     createdAt: regUser.createdAt,
@@ -67,7 +78,17 @@ export default defineEventHandler(async (event) => {
     deviceCount: regUser.devices.length,
     registeredInAppleCount: includeAppleStatus
       ? regUser.devices.filter(d => appleDeviceUdids.has(d.udid.toLowerCase())).length
-      : undefined
+      : undefined,
+    linkedUser: regUser.linkedUser
+      ? {
+          id: regUser.linkedUser.id,
+          nickname: regUser.linkedUser.nickname,
+          authProvider: regUser.linkedUser.authProvider,
+          discordId: regUser.linkedUser.discordId,
+          discordUsername: regUser.linkedUser.discordUsername,
+          discordAvatar: regUser.linkedUser.discordAvatar
+        }
+      : null
   }))
 })
 

@@ -1,6 +1,6 @@
 export default defineNuxtRouteMiddleware(async (to) => {
   // Only check auth on protected routes
-  const protectedRoutes = ['/admin', '/profile', '/apps']
+  const protectedRoutes = ['/admin', '/profile', '/apps', '/my-registrations']
   const isProtected = protectedRoutes.some(route => 
     to.path === route || to.path.startsWith(route + '/')
   )

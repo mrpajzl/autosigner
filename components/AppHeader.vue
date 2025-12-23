@@ -22,6 +22,15 @@
             </button>
           </UDropdown>
           <ClientOnly>
+            <!-- My Registrations in header for Discord users -->
+            <NuxtLink
+              v-if="me?.authProvider === 'discord'"
+              to="/my-registrations"
+              class="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition-colors"
+            >
+              <UIcon name="i-heroicons-rectangle-stack" class="w-4 h-4" />
+              My Registrations
+            </NuxtLink>
             <NuxtLink
               v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"
               to="/admin/apps"
@@ -37,6 +46,14 @@
             >
               <UIcon name="i-heroicons-shield-check" class="w-4 h-4" />
               Mods
+            </NuxtLink>
+            <NuxtLink
+              v-if="me?.role === 'SUPERADMIN'"
+              to="/admin/discord-users"
+              class="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition-colors"
+            >
+              <UIcon name="i-simple-icons-discord" class="w-4 h-4" />
+              Discord Users
             </NuxtLink>
             <NuxtLink
               v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"
@@ -105,8 +122,36 @@
         <ClientOnly>
           <template v-if="me">
             <UDropdown :items="userMenu">
-              <UButton color="gray" variant="outline" icon="i-heroicons-user-circle" :label="me.nickname" />
+              <button
+                class="flex items-center gap-2 rounded-full border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <UAvatar
+                  v-if="me.discordAvatar"
+                  :src="me.discordAvatar"
+                  :alt="me.discordUsername || me.nickname"
+                  size="xs"
+                  class="ring-2 ring-primary-500/60"
+                />
+                <UAvatar
+                  v-else
+                  icon="i-heroicons-user-circle"
+                  size="xs"
+                />
+                <span class="hidden sm:inline text-sm font-medium">
+                  {{ me.nickname }}
+                </span>
+              </button>
             </UDropdown>
+          </template>
+          <template v-else-if="initialized">
+            <UButton 
+              to="/auth/login" 
+              color="primary" 
+              variant="soft"
+              icon="i-heroicons-arrow-right-end-on-rectangle"
+            >
+              Sign in
+            </UButton>
           </template>
           <template #fallback>
             <UButton color="gray" variant="outline" icon="i-heroicons-user-circle" loading />
@@ -118,9 +163,24 @@
     <!-- Mobile slideover menu -->
     <USlideover v-model="mobileOpen">
       <div class="p-4 flex flex-col gap-4">
-        <div class="flex items-center gap-3">
-          <UIcon name="i-heroicons-sparkles" class="text-primary-400" size="28" />
-          <span class="font-semibold tracking-wide">FastSigner</span>
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <UIcon name="i-heroicons-sparkles" class="text-primary-400" size="28" />
+            <span class="font-semibold tracking-wide">FastSigner</span>
+          </div>
+          <ClientOnly>
+            <UButton 
+              v-if="!me && initialized"
+              to="/auth/login" 
+              color="primary" 
+              variant="soft"
+              size="sm"
+              icon="i-heroicons-arrow-right-end-on-rectangle"
+              @click="mobileOpen = false"
+            >
+              Sign in
+            </UButton>
+          </ClientOnly>
         </div>
         <nav class="flex flex-col gap-2 text-slate-600 dark:text-slate-200">
           <!-- Guides section - visible to everyone -->
@@ -172,6 +232,17 @@
           </div>
           
           <ClientOnly>
+            <!-- My Registrations for Discord users -->
+            <NuxtLink
+              v-if="me?.authProvider === 'discord'"
+              to="/my-registrations"
+              class="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+              @click="mobileOpen = false"
+            >
+              <UIcon name="i-heroicons-rectangle-stack" class="w-4 h-4 text-blue-500" />
+              My Registrations
+            </NuxtLink>
+            
             <NuxtLink
               v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"
               to="/admin/apps"
@@ -189,6 +260,15 @@
             >
               <UIcon name="i-heroicons-shield-check" class="w-4 h-4 text-amber-500" />
               Mods
+            </NuxtLink>
+            <NuxtLink
+              v-if="me?.role === 'SUPERADMIN'"
+              to="/admin/discord-users"
+              class="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+              @click="mobileOpen = false"
+            >
+              <UIcon name="i-simple-icons-discord" class="w-4 h-4 text-indigo-500" />
+              Discord Users
             </NuxtLink>
             <NuxtLink
               v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"
@@ -281,7 +361,7 @@
 <script setup lang="ts">
 const colorMode = useColorMode()
 const mobileOpen = ref(false)
-const { user: me, logout } = useAuth()
+const { user: me, logout, initialized } = useAuth()
 const toggleTheme = () => { colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark' }
 
 const guidesMenu = [[
@@ -361,10 +441,29 @@ const appleMenu = computed(() => {
   ]
 })
 
-const userMenu = computed(() => [[
-  { label: 'Profile', icon: 'i-heroicons-user', to: '/profile' },
-  { label: 'Sign out', icon: 'i-heroicons-arrow-left-on-rectangle', click: async () => { await logout(); navigateTo('/') } }
-]])
+const userMenu = computed(() => {
+  const items = []
+
+  // Add Profile and Sign out
+  items.push([
+    { label: 'Profile', icon: 'i-heroicons-user', to: '/profile' },
+    { 
+      label: 'Sign out', 
+      icon: 'i-heroicons-arrow-left-on-rectangle', 
+      click: async () => { 
+        await logout()
+        // Force a full reload to ensure all auth-dependent UI updates
+        if (process.client) {
+          window.location.href = '/'
+        } else {
+          navigateTo('/')
+        }
+      } 
+    }
+  ])
+  
+  return items
+})
 </script>
 
 

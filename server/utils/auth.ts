@@ -13,6 +13,12 @@ export async function createUser(nickname: string, password: string, role: 'SUPE
 export async function login(event: H3Event, nickname: string, password: string) {
   const user = await prisma.user.findUnique({ where: { nickname } })
   if (!user) throw createError({ statusCode: 401, message: 'Invalid credentials' })
+  
+  // Discord users cannot login with password
+  if (user.authProvider === 'discord' || !user.passwordHash) {
+    throw createError({ statusCode: 401, message: 'Please sign in with Discord' })
+  }
+  
   const ok = await bcrypt.compare(password, user.passwordHash)
   if (!ok) throw createError({ statusCode: 401, message: 'Invalid credentials' })
   if (user.status !== 'APPROVED') throw createError({ statusCode: 403, message: 'Account not approved' })

@@ -3,6 +3,10 @@ export interface AuthUser {
   nickname: string
   email?: string
   role: string
+  authProvider?: string
+  discordId?: string
+  discordUsername?: string
+  discordAvatar?: string
 }
 
 // Store refresh function globally for use after login/logout
@@ -43,9 +47,14 @@ export const useAuth = () => {
   }
 
   const logout = async () => {
-    await $fetch('/api/auth/signout', { method: 'POST' })
-    // Clear user data and refresh
-    await refresh()
+    try {
+      await $fetch('/api/auth/signout', { method: 'POST' })
+    } finally {
+      // Immediately clear user on client so UI updates without refresh
+      user.value = null
+      // Then refresh to ensure all auth-dependent data is in a clean state
+      await refresh()
+    }
   }
 
   return {

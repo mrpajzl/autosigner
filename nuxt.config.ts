@@ -116,6 +116,8 @@ export default defineNuxtConfig({
       // User database pages
       ensure('/profile/user-database', './pages/profile/user-database.vue', 'profile-user-database')
       ensure('/profile/user-import', './pages/profile/user-import.vue', 'profile-user-import')
+      // Discord user dashboard
+      ensure('/my-registrations', './pages/my-registrations.vue', 'my-registrations')
       ensure('/signing', './pages/signing.vue', 'signing')
       ensure('/auth/login', './pages/auth/login.vue', 'auth-login')
       ensure('/admin/approvals', './pages/admin/approvals.vue', 'admin-approvals')

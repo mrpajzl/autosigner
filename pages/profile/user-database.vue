@@ -210,12 +210,20 @@
           <div class="flex items-start justify-between">
             <div class="flex items-center gap-3">
               <div 
-                class="w-10 h-10 rounded-full flex items-center justify-center"
+                class="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ring-2"
                 :class="regUser.paidForNextYear 
-                  ? 'bg-gradient-to-br from-emerald-500 to-teal-500 ring-2 ring-emerald-400/50' 
-                  : 'bg-gradient-to-br from-blue-500 to-purple-500'"
+                  ? 'bg-gradient-to-br from-emerald-500 to-teal-500 ring-emerald-400/50' 
+                  : 'bg-gradient-to-br from-blue-500 to-purple-500 ring-white/20'"
               >
-                <span class="text-white font-bold">{{ regUser.discordName.charAt(0).toUpperCase() }}</span>
+                <img
+                  v-if="regUser.linkedUser?.discordAvatar"
+                  :src="regUser.linkedUser.discordAvatar"
+                  :alt="regUser.linkedUser.discordUsername || regUser.discordName"
+                  class="w-full h-full object-cover"
+                />
+                <span v-else class="text-white font-bold">
+                  {{ regUser.discordName.charAt(0).toUpperCase() }}
+                </span>
               </div>
               <div>
                 <div class="flex items-center gap-2">
@@ -229,6 +237,19 @@
                   >
                     <UIcon name="i-heroicons-check-badge" class="w-3 h-3" />
                     Paid
+                  </UBadge>
+                  <UBadge
+                    v-if="regUser.linkedUser && regUser.linkedUser.authProvider === 'discord'"
+                    color="blue"
+                    variant="soft"
+                    size="xs"
+                    class="gap-1"
+                  >
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    Linked
+                    <span v-if="regUser.linkedUser.discordUsername" class="hidden sm:inline">
+                      • {{ regUser.linkedUser.discordUsername }}
+                    </span>
                   </UBadge>
                   <button
                     type="button"
@@ -248,10 +269,27 @@
                   <span v-if="regUser.registeredInAppleCount !== undefined">
                     • {{ regUser.registeredInAppleCount }}/{{ regUser.deviceCount }} in Apple
                   </span>
+                  <span
+                    v-if="regUser.discordId"
+                    class="hidden sm:inline-flex items-center gap-1 text-xs text-slate-500 dark:text-white/50"
+                  >
+                    <UIcon name="i-heroicons-hashtag" class="w-3 h-3" />
+                    <span class="font-mono">{{ regUser.discordId }}</span>
+                  </span>
                 </div>
               </div>
             </div>
             <div class="flex items-center gap-1.5">
+              <button
+                v-if="regUser.discordId || regUser.linkedUser?.discordId"
+                type="button"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 transition-all"
+                title="Open Discord DM"
+                @click="openDiscordDM(regUser)"
+              >
+                <UIcon name="i-heroicons-chat-bubble-left-right" class="w-4 h-4" />
+                PM
+              </button>
               <button
                 type="button"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-all"
@@ -644,6 +682,7 @@ interface Device {
 interface RegisteredUser {
   id: string
   discordName: string
+  discordId?: string | null
   notes: string | null
   paidForNextYear: boolean
   devices: Device[]
@@ -651,6 +690,14 @@ interface RegisteredUser {
   registeredInAppleCount?: number
   createdAt: string
   updatedAt: string
+  linkedUser?: {
+    id: string
+    nickname: string
+    authProvider: string
+    discordId?: string | null
+    discordUsername?: string | null
+    discordAvatar?: string | null
+  } | null
 }
 
 const search = ref('')
@@ -809,6 +856,15 @@ async function copyUsername(discordName: string) {
     }, 2000)
   } catch (e) {
     console.error('Failed to copy:', e)
+  }
+}
+
+function openDiscordDM(regUser: RegisteredUser) {
+  const discordId = regUser.linkedUser?.discordId || regUser.discordId
+  if (!discordId) return
+  const url = `https://discord.com/users/${discordId}`
+  if (typeof window !== 'undefined') {
+    window.open(url, '_blank', 'noopener,noreferrer')
   }
 }
 

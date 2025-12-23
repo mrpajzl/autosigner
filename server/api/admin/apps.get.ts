@@ -33,6 +33,7 @@ export default defineEventHandler(async (event) => {
     version: app.version,
     buildNumber: app.buildNumber,
     showBuildNumber: app.showBuildNumber,
+    loggedInOnly: app.loggedInOnly,
     platform: app.platform,
     ipaFileName: app.ipaFileName,
     originalIpaPath: app.originalIpaPath,

@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 const schema = z.object({
   discordName: z.string().min(1, 'Discord name is required').max(100).optional(),
+  discordId: z.string().nullable().optional(), // Discord ID for automatic linking
   notes: z.string().max(500).nullable().optional(),
   paidForNextYear: z.boolean().optional()
 })
@@ -35,7 +36,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Access denied' })
   }
 
-  const { discordName, notes, paidForNextYear } = parsed.data
+  const { discordName, discordId, notes, paidForNextYear } = parsed.data
 
   // If changing discord name, check for duplicates
   if (discordName && discordName !== existing.discordName) {
@@ -59,6 +60,7 @@ export default defineEventHandler(async (event) => {
     where: { id },
     data: {
       ...(discordName && { discordName }),
+      ...(discordId !== undefined && { discordId }),
       ...(notes !== undefined && { notes }),
       ...(paidForNextYear !== undefined && { paidForNextYear })
     },
@@ -70,6 +72,7 @@ export default defineEventHandler(async (event) => {
   return {
     id: updated.id,
     discordName: updated.discordName,
+    discordId: updated.discordId,
     notes: updated.notes,
     paidForNextYear: updated.paidForNextYear,
     createdAt: updated.createdAt,

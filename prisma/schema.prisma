@@ -13,11 +13,17 @@ datasource db {
 model User {
   id            String   @id @default(cuid())
   nickname      String   @unique
-  passwordHash  String
+  passwordHash  String?  // Optional for Discord OAuth users
   role          String   @default("MANAGER")
   status        String   @default("APPROVED")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  
+  // Discord OAuth fields
+  authProvider    String  @default("local") // "local" or "discord"
+  discordId       String? @unique // Discord user ID from OAuth
+  discordUsername String? // Discord username (e.g., "johndoe" or "johndoe#1234")
+  discordAvatar   String? // Discord avatar URL
 
   managerProfile ManagerProfile?
   apps           App[]
@@ -26,7 +32,8 @@ model User {
   provisioningProfiles ProvisioningProfile[]
   signedVersions SignedVersion[]
   appleDeveloperCredentials AppleDeveloperCredentials?
-  registeredUsers RegisteredUser[]
+  registeredUsers RegisteredUser[] // For moderators managing user databases
+  linkedRegistrations RegisteredUser[] @relation("DiscordUserLink") // For Discord users linked to registrations
 }
 
 model ManagerProfile {
@@ -66,6 +73,8 @@ model App {
   version         String
   buildNumber     String?
   showBuildNumber Boolean  @default(false) // Show build number on homepage for all users
+  /// When true, this app is only shown to logged-in users (hidden from public listings)
+  loggedInOnly    Boolean  @default(false)
   ipaFileName     String?
   originalIpaPath String
   signedIpaPath   String?
@@ -158,16 +167,23 @@ model RegisteredUser {
   id              String   @id @default(cuid())
   ownerId         String   // The moderator who owns this user database
   discordName     String   // Discord nickname (e.g., "john_doe" or "John#1234")
+  discordId       String?  // Discord ID from OAuth (for automatic linking)
   notes           String?  // Optional notes about the user
   paidForNextYear Boolean  @default(false) // Track if user has paid for the next year's registration
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  
+  // Optional link to actual Discord-authenticated user
+  linkedUserId    String?
+  linkedUser      User?    @relation("DiscordUserLink", fields: [linkedUserId], references: [id], onDelete: SetNull)
 
   owner   User         @relation(fields: [ownerId], references: [id])
   devices UserDevice[]
 
   @@unique([ownerId, discordName]) // Unique per moderator
   @@index([ownerId])
+  @@index([discordId]) // For quick lookup when Discord user logs in
+  @@index([linkedUserId])
 }
 
 // A device belonging to a registered user

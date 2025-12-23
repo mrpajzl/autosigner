@@ -6,6 +6,30 @@
         <span class="font-semibold">Sign in</span>
       </div>
     </template>
+    
+    <!-- Discord OAuth Button -->
+    <div class="mb-6">
+      <UButton
+        block
+        color="indigo"
+        size="lg"
+        icon="i-simple-icons-discord"
+        @click="signInWithDiscord"
+      >
+        Sign in with Discord
+      </UButton>
+      
+      <!-- Divider -->
+      <div class="relative my-6">
+        <div class="absolute inset-0 flex items-center">
+          <div class="w-full border-t border-gray-300 dark:border-gray-700"></div>
+        </div>
+        <div class="relative flex justify-center text-sm">
+          <span class="px-2 bg-white dark:bg-gray-900 text-gray-500">Or continue with credentials</span>
+        </div>
+      </div>
+    </div>
+
     <UForm :state="state" class="space-y-4" @submit="onSubmit">
       <UFormGroup label="Nickname" name="nickname">
         <UInput v-model="state.nickname" type="text" placeholder="Your nickname" />
@@ -35,6 +59,11 @@ async function onSubmit() {
   } finally {
     loading.value = false
   }
+}
+
+function signInWithDiscord() {
+  // Redirect to Discord OAuth endpoint
+  window.location.href = '/api/auth/discord'
 }
 </script>
 
