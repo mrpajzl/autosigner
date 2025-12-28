@@ -226,9 +226,11 @@ async function importCertToKeychain(
       throw new Error('No valid signing identity found in P12')
     }
     
-    const identity = match[2] // Use the name, not the hash
+    const identityHash = match[1] // SHA-1 hash - use this to avoid ambiguity
+    const identityName = match[2] // Name for display
     
-    return { keychainPath, identity, isTemp: true }
+    // Return hash as identity to avoid ambiguity when same cert exists in multiple keychains
+    return { keychainPath, identity: identityHash, identityName, isTemp: true }
   } catch (e) {
     // Cleanup on failure
     await execa('security', ['delete-keychain', keychainPath]).catch(() => {})
@@ -347,40 +349,74 @@ async function codesignApp(
   entitlementsPath: string,
   keychainPath?: string
 ): Promise<void> {
-  const codesignArgs = [
-    '--force',
-    '--sign', identity,
-    '--entitlements', entitlementsPath,
-  ]
-  
+  // If using a specific keychain, temporarily restrict the keychain search list
+  // to avoid ambiguity when the same certificate exists in multiple keychains
+  let originalKeychainList: string[] | null = null
   if (keychainPath) {
-    codesignArgs.push('--keychain', keychainPath)
-  }
-  
-  // First, sign all frameworks and plugins
-  const frameworksDir = path.join(appPath, 'Frameworks')
-  const pluginsDir = path.join(appPath, 'PlugIns')
-  
-  for (const dir of [frameworksDir, pluginsDir]) {
-    if (await fse.pathExists(dir)) {
-      const items = await fse.readdir(dir)
-      for (const item of items) {
-        const itemPath = path.join(dir, item)
-        try {
-          await execa('codesign', [...codesignArgs, itemPath])
-        } catch (e) {
-          console.warn(`Warning: Failed to sign ${itemPath}:`, e)
-        }
-      }
+    try {
+      // Get current keychain list
+      const { stdout: existingKeychains } = await execa('security', ['list-keychains', '-d', 'user'])
+      originalKeychainList = existingKeychains
+        .split('\n')
+        .map(k => k.trim().replace(/^"|"$/g, ''))
+        .filter(Boolean)
+      
+      // Temporarily set search list to only our keychain + system keychains for chain validation
+      // This prevents codesign from finding duplicate certificates in other keychains
+      const loginKeychain = path.join(process.env.HOME || '/tmp', 'Library', 'Keychains', 'login.keychain-db')
+      const systemKeychain = '/Library/Keychains/System.keychain'
+      const restrictedKeychains = [keychainPath, loginKeychain, systemKeychain].filter(Boolean)
+      await execa('security', ['list-keychains', '-d', 'user', '-s', ...restrictedKeychains])
+    } catch (e) {
+      console.warn('Failed to restrict keychain search list, codesign may encounter ambiguity:', e)
     }
   }
   
-  // Sign the main app bundle
-  codesignArgs.push(appPath)
-  await execa('codesign', codesignArgs)
-  
-  // Verify the signature
-  await execa('codesign', ['--verify', '--deep', '--strict', appPath])
+  try {
+    const codesignArgs = [
+      '--force',
+      '--sign', identity, // identity is now SHA-1 hash to uniquely identify the certificate
+      '--entitlements', entitlementsPath,
+    ]
+    
+    if (keychainPath) {
+      codesignArgs.push('--keychain', keychainPath)
+    }
+    
+    // First, sign all frameworks and plugins
+    const frameworksDir = path.join(appPath, 'Frameworks')
+    const pluginsDir = path.join(appPath, 'PlugIns')
+    
+    for (const dir of [frameworksDir, pluginsDir]) {
+      if (await fse.pathExists(dir)) {
+        const items = await fse.readdir(dir)
+        for (const item of items) {
+          const itemPath = path.join(dir, item)
+          try {
+            await execa('codesign', [...codesignArgs, itemPath])
+          } catch (e) {
+            console.warn(`Warning: Failed to sign ${itemPath}:`, e)
+          }
+        }
+      }
+    }
+    
+    // Sign the main app bundle
+    codesignArgs.push(appPath)
+    await execa('codesign', codesignArgs)
+    
+    // Verify the signature
+    await execa('codesign', ['--verify', '--deep', '--strict', appPath])
+  } finally {
+    // Restore original keychain search list
+    if (originalKeychainList && keychainPath) {
+      try {
+        await execa('security', ['list-keychains', '-d', 'user', '-s', ...originalKeychainList])
+      } catch (e) {
+        console.warn('Failed to restore keychain search list:', e)
+      }
+    }
+  }
 }
 
 /**
