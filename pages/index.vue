@@ -288,7 +288,7 @@
                           </p>
                           <!-- Premium badge (only for apps marked as loggedInOnly) -->
                           <div
-                            v-if="app.loggedInOnly && selectedModerator && (isUserRegisteredWith(selectedModerator.id) || (user && (user.role === 'MANAGER' || user.role === 'SUPERADMIN') && user.id === selectedModerator.id))"
+                            v-if="app.loggedInOnly && selectedModerator && user"
                             class="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200 px-2 py-0.5 text-[10px] font-medium"
                           >
                             <UIcon name="i-heroicons-star" class="w-3 h-3" />
@@ -788,14 +788,15 @@ const searchQuery = ref('')
 const filteredIosApps = computed(() => {
   if (!selectedModerator.value) return []
 
-  // Check if user is a moderator viewing their own profile, or if user is registered
+  // Check if user is logged in, a moderator, or registered
   const isModerator = user.value && (user.value.role === 'MANAGER' || user.value.role === 'SUPERADMIN')
-  const isOwnProfile = isModerator && user.value && selectedModerator.value && user.value.id === selectedModerator.value.id
+  const isLoggedIn = !!user.value
   const isRegistered = selectedModerator.value ? isUserRegisteredWith(selectedModerator.value.id) : false
   
-  // Show all apps if user is viewing their own moderator profile, or show public apps + premium apps if registered
-  const canSeePremiumApps = isOwnProfile || isRegistered
-  const baseApps = selectedModerator.value.iosApps.filter(app => !app.loggedInOnly || canSeePremiumApps)
+  // Show hidden apps if user is logged in, is a moderator, or is registered
+  // Note: API already filters hidden apps for non-logged-in users, so if they're in the array, user is logged in
+  const canSeeHiddenApps = isLoggedIn || isModerator || isRegistered
+  const baseApps = selectedModerator.value.iosApps.filter(app => !app.loggedInOnly || canSeeHiddenApps)
 
   if (!searchQuery.value.trim()) return baseApps
   
@@ -810,14 +811,15 @@ const filteredIosApps = computed(() => {
 const filteredTvosApps = computed(() => {
   if (!selectedModerator.value) return []
 
-  // Check if user is a moderator viewing their own profile, or if user is registered
+  // Check if user is logged in, a moderator, or registered
   const isModerator = user.value && (user.value.role === 'MANAGER' || user.value.role === 'SUPERADMIN')
-  const isOwnProfile = isModerator && user.value && selectedModerator.value && user.value.id === selectedModerator.value.id
+  const isLoggedIn = !!user.value
   const isRegistered = selectedModerator.value ? isUserRegisteredWith(selectedModerator.value.id) : false
   
-  // Show all apps if user is viewing their own moderator profile, or show public apps + premium apps if registered
-  const canSeePremiumApps = isOwnProfile || isRegistered
-  const baseApps = selectedModerator.value.tvosApps.filter(app => !app.loggedInOnly || canSeePremiumApps)
+  // Show hidden apps if user is logged in, is a moderator, or is registered
+  // Note: API already filters hidden apps for non-logged-in users, so if they're in the array, user is logged in
+  const canSeeHiddenApps = isLoggedIn || isModerator || isRegistered
+  const baseApps = selectedModerator.value.tvosApps.filter(app => !app.loggedInOnly || canSeeHiddenApps)
 
   if (!searchQuery.value.trim()) return baseApps
   
