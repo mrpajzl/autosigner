@@ -308,6 +308,16 @@
                 {{ regUser.paidForNextYear ? 'Paid' : 'Mark Paid' }}
               </button>
               <button
+                v-if="!regUser.linkedUser"
+                type="button"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-all"
+                title="Link Discord Account"
+                @click="openLinkDiscordModal(regUser)"
+              >
+                <UIcon name="i-heroicons-link" class="w-4 h-4" />
+                Link
+              </button>
+              <button
                 v-if="appleConnected && regUser.devices.some(d => !d.isRegisteredInApple)"
                 type="button"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 transition-all"
@@ -554,6 +564,93 @@
           <div class="flex justify-end gap-2">
             <UButton color="gray" variant="ghost" @click="showResetPaidConfirm = false">Cancel</UButton>
             <UButton color="amber" :loading="resettingAllPaid" @click="handleResetAllPaid">Reset All</UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
+
+    <!-- Link Discord Account Modal -->
+    <UModal v-model="showLinkDiscordModal">
+      <UCard class="glass max-w-lg">
+        <template #header>
+          <div class="flex items-center gap-2">
+            <UIcon name="i-heroicons-link" />
+            <span class="font-semibold">Link Discord Account</span>
+          </div>
+        </template>
+
+        <div class="space-y-4">
+          <div class="text-sm text-slate-600 dark:text-white/70">
+            <p v-if="selectedUserForLink">
+              Linking for:
+              <span class="font-medium">{{ selectedUserForLink.discordName }}</span>
+            </p>
+          </div>
+
+          <UFormGroup label="Search Discord users" help="Search by nickname, Discord username, or Discord ID">
+            <div class="flex gap-2">
+              <UInput
+                v-model="discordSearchQuery"
+                placeholder="e.g. john_doe, John#1234 or Discord ID"
+                class="flex-1"
+                size="sm"
+                :disabled="discordSearchLoading"
+                @keyup.enter="searchDiscordUsers"
+              />
+              <UButton
+                size="sm"
+                color="gray"
+                icon="i-heroicons-magnifying-glass"
+                :loading="discordSearchLoading"
+                @click="searchDiscordUsers"
+              >
+                Search
+              </UButton>
+            </div>
+          </UFormGroup>
+
+          <UFormGroup label="Select Discord user">
+            <USelectMenu
+              v-model="selectedDiscordUserId"
+              :options="discordUserOptions"
+              value-attribute="value"
+              option-attribute="label"
+              placeholder="Choose a Discord user from search results"
+              :disabled="discordUserOptions.length === 0"
+            >
+              <template #option="{ option }">
+                <div class="flex items-center gap-2">
+                  <img
+                    v-if="option.avatar"
+                    :src="option.avatar"
+                    :alt="option.label"
+                    class="w-6 h-6 rounded-full"
+                  />
+                  <div v-else class="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center">
+                    <UIcon name="i-heroicons-user-circle" class="w-4 h-4 text-blue-400" />
+                  </div>
+                  <div class="flex-1">
+                    <div class="font-medium">{{ option.label }}</div>
+                    <div v-if="option.username" class="text-xs text-slate-500">{{ option.username }}</div>
+                  </div>
+                </div>
+              </template>
+            </USelectMenu>
+          </UFormGroup>
+
+          <p v-if="linkDiscordError" class="text-sm text-red-400">
+            {{ linkDiscordError }}
+          </p>
+        </div>
+
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton color="gray" variant="ghost" @click="showLinkDiscordModal = false">
+              Cancel
+            </UButton>
+            <UButton color="blue" :loading="linkDiscordSaving" @click="saveDiscordLink">
+              Link Account
+            </UButton>
           </div>
         </template>
       </UCard>
@@ -1209,6 +1306,101 @@ async function handleImportAll() {
   openImportModal()
 }
 
+// Link Discord Account state
+const showLinkDiscordModal = ref(false)
+const selectedUserForLink = ref<RegisteredUser | null>(null)
+const discordSearchQuery = ref('')
+const discordSearchLoading = ref(false)
+const discordUserOptions = ref<
+  {
+    value: string
+    label: string
+    username?: string | null
+    avatar?: string | null
+  }[]
+>([])
+const selectedDiscordUserId = ref<string | null>(null)
+const linkDiscordError = ref<string | null>(null)
+const linkDiscordSaving = ref(false)
+
+function openLinkDiscordModal(user: RegisteredUser) {
+  selectedUserForLink.value = user
+  discordSearchQuery.value = user.discordName || ''
+  selectedDiscordUserId.value = null
+  discordUserOptions.value = []
+  linkDiscordError.value = null
+  showLinkDiscordModal.value = true
+}
+
+async function searchDiscordUsers() {
+  const q = discordSearchQuery.value.trim()
+  discordUserOptions.value = []
+  selectedDiscordUserId.value = null
+  linkDiscordError.value = null
+
+  if (!q) {
+    return
+  }
+
+  discordSearchLoading.value = true
+  try {
+    const results = await $fetch<Array<{
+      id: string
+      nickname: string
+      discordId?: string | null
+      discordUsername?: string | null
+      discordAvatar?: string | null
+    }>>('/api/registered-users/search-discord-users', {
+      query: { q }
+    })
+
+    discordUserOptions.value = results.map((r) => ({
+      value: r.id,
+      label: `${r.nickname}${r.discordUsername ? ` (${r.discordUsername})` : ''}`,
+      username: r.discordUsername,
+      avatar: r.discordAvatar
+    }))
+
+    if (discordUserOptions.value.length === 0) {
+      linkDiscordError.value = 'No matching Discord users found'
+    }
+  } catch (e: any) {
+    console.error(e)
+    linkDiscordError.value = e?.data?.message || 'Failed to search Discord users'
+  } finally {
+    discordSearchLoading.value = false
+  }
+}
+
+async function saveDiscordLink() {
+  if (!selectedUserForLink.value || !selectedDiscordUserId.value) {
+    linkDiscordError.value = 'Please select a Discord user'
+    return
+  }
+
+  linkDiscordSaving.value = true
+  linkDiscordError.value = null
+
+  try {
+    await $fetch(`/api/registered-users/${selectedUserForLink.value.id}/link-discord`, {
+      method: 'POST',
+      body: {
+        discordUserId: selectedDiscordUserId.value
+      }
+    })
+
+    showLinkDiscordModal.value = false
+    selectedUserForLink.value = null
+    await refreshUsers()
+    useToast().add({ title: 'Discord account linked', color: 'green' })
+  } catch (e: any) {
+    console.error(e)
+    linkDiscordError.value = e?.data?.message || 'Failed to link Discord account'
+  } finally {
+    linkDiscordSaving.value = false
+  }
+}
+
 // Reset user modal when closed
 watch(showAddUser, (val) => {
   if (!val) {
@@ -1220,6 +1412,17 @@ watch(showAddUser, (val) => {
     mergeTargetId.value = null
     mergeError.value = ''
     mergeSuccess.value = ''
+  }
+})
+
+// Reset link Discord modal when closed
+watch(showLinkDiscordModal, (val) => {
+  if (!val) {
+    selectedUserForLink.value = null
+    discordSearchQuery.value = ''
+    selectedDiscordUserId.value = null
+    discordUserOptions.value = []
+    linkDiscordError.value = null
   }
 })
 </script>

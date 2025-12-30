@@ -41,19 +41,11 @@
             </NuxtLink>
             <NuxtLink
               v-if="me?.role === 'SUPERADMIN'"
-              to="/admin/approvals"
+              to="/admin/users"
               class="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
-              <UIcon name="i-heroicons-shield-check" class="w-4 h-4" />
-              Mods
-            </NuxtLink>
-            <NuxtLink
-              v-if="me?.role === 'SUPERADMIN'"
-              to="/admin/discord-users"
-              class="flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition-colors"
-            >
-              <UIcon name="i-simple-icons-discord" class="w-4 h-4" />
-              Discord Users
+              <UIcon name="i-heroicons-users" class="w-4 h-4" />
+              User Management
             </NuxtLink>
             <NuxtLink
               v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"
@@ -254,21 +246,12 @@
             </NuxtLink>
             <NuxtLink
               v-if="me?.role === 'SUPERADMIN'"
-              to="/admin/approvals"
+              to="/admin/users"
               class="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
               @click="mobileOpen = false"
             >
-              <UIcon name="i-heroicons-shield-check" class="w-4 h-4 text-amber-500" />
-              Mods
-            </NuxtLink>
-            <NuxtLink
-              v-if="me?.role === 'SUPERADMIN'"
-              to="/admin/discord-users"
-              class="flex items-center gap-2 px-3 py-2 rounded hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
-              @click="mobileOpen = false"
-            >
-              <UIcon name="i-simple-icons-discord" class="w-4 h-4 text-indigo-500" />
-              Discord Users
+              <UIcon name="i-heroicons-users" class="w-4 h-4 text-amber-500" />
+              User Management
             </NuxtLink>
             <NuxtLink
               v-if="me?.role === 'MANAGER' || me?.role === 'SUPERADMIN'"

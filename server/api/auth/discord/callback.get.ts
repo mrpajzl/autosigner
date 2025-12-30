@@ -1,5 +1,6 @@
 import { prisma } from '../../../utils/db'
 import { nanoid } from 'nanoid'
+import { linkDiscordUser } from '../../../utils/discord-linking'
 
 interface DiscordTokenResponse {
   access_token: string
@@ -102,7 +103,7 @@ export default defineEventHandler(async (event) => {
       })
       
       // Link with any existing RegisteredUser entries that match this Discord ID
-      await linkDiscordUser(user.id, discordUser.id, discordUsername)
+      await linkDiscordUser(user.id, discordUser.id, discordUsername, user.nickname)
     } else {
       // Update existing user's Discord info
       user = await prisma.user.update({
@@ -113,8 +114,9 @@ export default defineEventHandler(async (event) => {
         }
       })
       
-      // Link with any existing RegisteredUser entries (in case they weren't linked before)
-      await linkDiscordUser(user.id, discordUser.id, discordUsername)
+      // Always try to link with any existing RegisteredUser entries
+      // This ensures we catch new matches on every sign-in, especially if no connection exists
+      await linkDiscordUser(user.id, discordUser.id, discordUsername, user.nickname)
     }
     
     // Create session
@@ -149,29 +151,4 @@ export default defineEventHandler(async (event) => {
   }
 })
 
-// Helper function to link Discord user with RegisteredUser entries
-async function linkDiscordUser(userId: string, discordId: string, discordUsername: string) {
-  // Find all RegisteredUser entries that match this Discord ID or username
-  const matchingEntries = await prisma.registeredUser.findMany({
-    where: {
-      OR: [
-        { discordId: discordId },
-        { discordName: discordUsername },
-        // Also try without discriminator
-        { discordName: discordUsername.split('#')[0] }
-      ]
-    }
-  })
-  
-  // Link them all to this user
-  for (const entry of matchingEntries) {
-    await prisma.registeredUser.update({
-      where: { id: entry.id },
-      data: {
-        linkedUserId: userId,
-        discordId: discordId
-      }
-    })
-  }
-}
 

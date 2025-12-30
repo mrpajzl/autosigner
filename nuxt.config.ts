@@ -120,7 +120,6 @@ export default defineNuxtConfig({
       ensure('/my-registrations', './pages/my-registrations.vue', 'my-registrations')
       ensure('/signing', './pages/signing.vue', 'signing')
       ensure('/auth/login', './pages/auth/login.vue', 'auth-login')
-      ensure('/admin/approvals', './pages/admin/approvals.vue', 'admin-approvals')
       ensure('/admin/apps', './pages/admin/apps.vue', 'admin-apps')
       // Guides pages
       ensure('/guides/apple-tv-sideloading', './pages/guides/apple-tv-sideloading.vue', 'guides-apple-tv-sideloading')
