@@ -93,15 +93,17 @@
                 />
               </div>
               <div class="min-w-0 flex-1 flex items-center gap-2">
-                <div class="min-w-0 flex-1">
+                <div class="min-w-0">
                   <div class="font-medium text-slate-900 dark:text-white truncate">
                     {{ row.nickname }}
                   </div>
-                  <div class="text-xs text-slate-500 dark:text-white/60 truncate">
-                    {{ row.discordUsername || row.authProvider || 'User' }}
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-xs text-slate-500 dark:text-white/60 truncate">
+                      {{ row.discordUsername || row.authProvider || 'User' }}
+                    </span>
                   </div>
                 </div>
-                <div v-if="row.discordId" class="relative flex-shrink-0">
+                <div v-if="row.discordId" class="relative flex-1">
                   <UButton
                     :data-info-button="row.id"
                     icon="i-heroicons-information-circle"
@@ -121,7 +123,7 @@
                   >
                     <div
                       v-if="openInfoTooltipId === row.id"
-                      class="absolute left-full ml-2 top-0 z-50 min-w-[200px] rounded-xl bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 p-3"
+                      class="absolute left-full ml-2 top-1/2 -translate-y-1/2 z-50 min-w-[200px] rounded-xl bg-white dark:bg-gray-800 shadow-lg ring-1 ring-black/5 dark:ring-white/10 p-3"
                     >
                       <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
                         Discord ID
