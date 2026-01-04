@@ -131,7 +131,7 @@
 
     <!-- Moderator Selection -->
     <template v-else-if="moderators && moderators.length > 0">
-      <div class="space-y-4">
+      <div class="space-y-4 relative z-50">
         <!-- Combined Moderator Selection & Info -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-4 p-4 rounded-xl bg-white/50 dark:bg-white/5 backdrop-blur-sm border border-white/10">
           <div class="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
@@ -164,7 +164,8 @@
                 }"
                 :uiMenu="{ 
                   width: 'w-full',
-                  height: 'max-h-60'
+                  height: 'max-h-60',
+                  base: 'z-[9999]'
                 }"
                 @update:model-value="onModeratorChange"
               >

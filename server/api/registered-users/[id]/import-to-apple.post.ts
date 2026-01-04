@@ -89,23 +89,30 @@ export default defineEventHandler(async (event) => {
     name: string
     success: boolean
     error?: string
+    appleDeviceId?: string
   }> = []
 
   for (const device of unregisteredDevices) {
     try {
-      // Format device name to include discord name
-      const deviceName = `${registeredUser.discordName} - ${device.name}`
-      
-      await api.registerDevice(
+      // Use the device's name which is already in the unified format
+      // Format: "Discord Name - Device Type Number"
+      const appleDevice = await api.registerDevice(
         device.udid,
-        deviceName,
+        device.name, // Already formatted as "John - iPhone 1"
         device.platform as 'IOS' | 'MAC_OS' | 'APPLE_TV'
       )
+      
+      // Store the Apple device ID for future syncing
+      await prisma.userDevice.update({
+        where: { id: device.id },
+        data: { appleDeviceId: appleDevice.id }
+      })
       
       results.push({
         udid: device.udid,
         name: device.name,
-        success: true
+        success: true,
+        appleDeviceId: appleDevice.id
       })
 
       // Small delay to avoid rate limiting

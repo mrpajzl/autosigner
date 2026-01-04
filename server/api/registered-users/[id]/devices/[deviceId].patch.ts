@@ -1,5 +1,6 @@
 import { requireAnyRole } from '../../../../utils/auth'
 import { prisma } from '../../../../utils/db'
+import { generateDeviceName } from '../../../../utils/device-naming'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -45,7 +46,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Device not found' })
   }
 
-  const { udid, name, platform } = parsed.data
+  const { udid, platform } = parsed.data
 
   // If changing UDID, check for duplicates
   if (udid && udid !== existingDevice.udid) {
@@ -65,11 +66,19 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // If platform changes, regenerate the device name with new platform type
+  const updatedPlatform = platform || existingDevice.platform
+  const newName = generateDeviceName(
+    registeredUser.discordName,
+    updatedPlatform,
+    existingDevice.deviceNumber
+  )
+
   const device = await prisma.userDevice.update({
     where: { id: deviceId },
     data: {
       ...(udid && { udid }),
-      ...(name && { name }),
+      name: newName, // Always update name to maintain unified format
       ...(platform && { platform })
     }
   })
@@ -78,6 +87,7 @@ export default defineEventHandler(async (event) => {
     id: device.id,
     udid: device.udid,
     name: device.name,
+    deviceNumber: device.deviceNumber,
     platform: device.platform,
     createdAt: device.createdAt,
     updatedAt: device.updatedAt

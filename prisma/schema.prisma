@@ -191,14 +191,17 @@ model UserDevice {
   id               String   @id @default(cuid())
   registeredUserId String
   udid             String   // Device UDID
-  name             String   // Device name (e.g., "John's iPhone 15")
+  name             String   // Device name (e.g., "John - iPhone 1")
+  deviceNumber     Int      // Sequential number for this user's devices (1, 2, 3, etc.)
   platform         String   @default("IOS") // IOS | MAC_OS | APPLE_TV
+  appleDeviceId    String?  // Apple Developer Portal device ID (for syncing names)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   registeredUser RegisteredUser @relation(fields: [registeredUserId], references: [id], onDelete: Cascade)
 
   @@unique([registeredUserId, udid]) // One device per user
+  @@unique([registeredUserId, deviceNumber]) // Unique device number per user
   @@index([registeredUserId])
   @@index([udid]) // For quick lookup when checking Apple registration
 }

@@ -178,13 +178,48 @@
               </div>
 
               <!-- New User Input -->
-              <div v-if="mappings[device.udid].mode === 'new'" class="pl-6">
-                <UFormGroup label="Discord Name">
-                  <UInput
-                    v-model="mappings[device.udid].discordName"
-                    placeholder="Enter Discord name..."
-                    :class="{ 'ring-2 ring-green-500': mappings[device.udid].discordName }"
-                  />
+              <div v-if="mappings[device.udid].mode === 'new'" class="pl-6 space-y-3">
+                <UFormGroup label="Discord Name or Search Discord User">
+                  <div class="flex gap-2">
+                    <UInput
+                      v-model="mappings[device.udid].discordName"
+                      placeholder="Enter Discord name or search..."
+                      :class="{ 'ring-2 ring-green-500': mappings[device.udid].discordName }"
+                      class="flex-1"
+                      @keyup.enter="searchDiscordForImport(device.udid)"
+                    />
+                    <UButton
+                      color="blue"
+                      variant="soft"
+                      icon="i-heroicons-magnifying-glass"
+                      :loading="discordSearchLoading[device.udid]"
+                      @click="searchDiscordForImport(device.udid)"
+                    >
+                      Search
+                    </UButton>
+                  </div>
+                </UFormGroup>
+                <UFormGroup v-if="discordUserOptions[device.udid]?.length > 0" label="Select Discord User">
+                  <USelectMenu
+                    :model-value="mappings[device.udid].discordId"
+                    :options="discordUserOptions[device.udid]"
+                    value-attribute="id"
+                    option-attribute="label"
+                    placeholder="Choose a Discord user"
+                    @update:model-value="selectDiscordUserForImport(device.udid, $event)"
+                  >
+                    <template #option="{ option }">
+                      <div class="flex items-center gap-2">
+                        <img
+                          v-if="option.avatar"
+                          :src="option.avatar"
+                          :alt="option.username"
+                          class="w-6 h-6 rounded-full"
+                        />
+                        <span>{{ option.label }}</span>
+                      </div>
+                    </template>
+                  </USelectMenu>
                 </UFormGroup>
               </div>
 
@@ -225,6 +260,7 @@ interface AppleDevice {
 interface DeviceMapping {
   mode: 'new' | 'existing' | 'skip'
   discordName: string
+  discordId?: string | null
   skip: boolean
 }
 
@@ -261,11 +297,63 @@ watch(appleDevices, (devices) => {
       mappings[device.udid] = {
         mode: 'new',
         discordName: '',
+        discordId: null,
         skip: false
       }
     }
   }
 }, { immediate: true })
+
+// Discord search for import
+const discordSearchLoading = ref<Record<string, boolean>>({})
+const discordUserOptions = ref<Record<string, Array<{
+  id: string
+  label: string
+  username: string
+  avatar?: string | null
+}>>>({})
+
+async function searchDiscordForImport(udid: string) {
+  const query = mappings[udid].discordName.trim()
+  if (!query) {
+    return
+  }
+
+  discordSearchLoading.value[udid] = true
+  try {
+    const results = await $fetch<Array<{
+      id: string
+      username: string
+      nickname?: string
+      avatar?: string | null
+      source: 'database' | 'discord_api'
+    }>>('/api/admin/discord-users/search', {
+      query: { q: query }
+    })
+
+    discordUserOptions.value[udid] = results.map((r) => ({
+      id: r.id,
+      label: `${r.username}${r.nickname ? ` (${r.nickname})` : ''}${r.source === 'discord_api' ? ' [Discord API]' : ''}`,
+      username: r.username,
+      avatar: r.avatar
+    }))
+  } catch (e: any) {
+    console.error(e)
+    useToast().add({ title: 'Search failed', description: e?.data?.message || 'Failed to search Discord users', color: 'red' })
+  } finally {
+    discordSearchLoading.value[udid] = false
+  }
+}
+
+function selectDiscordUserForImport(udid: string, discordId: string | null) {
+  mappings[udid].discordId = discordId
+  if (discordId) {
+    const selected = discordUserOptions.value[udid]?.find(u => u.id === discordId)
+    if (selected) {
+      mappings[udid].discordName = selected.username
+    }
+  }
+}
 
 // Statistics
 const mappedCount = computed(() => {
@@ -316,9 +404,11 @@ function clearAllMappings() {
     mappings[udid] = {
       mode: 'new',
       discordName: '',
+      discordId: null,
       skip: false
     }
   }
+  discordUserOptions.value = {}
 }
 
 function autoMapByName() {
@@ -369,6 +459,7 @@ async function handleImport() {
       name: device.name,
       platform: device.platform,
       discordName: mappings[device.udid].discordName,
+      discordId: mappings[device.udid].discordId || undefined,
       skip: mappings[device.udid].skip
     }))
 

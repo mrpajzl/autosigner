@@ -2,6 +2,7 @@ import { requireAnyRole } from '../../utils/auth'
 import { prisma } from '../../utils/db'
 import { decrypt } from '../../utils/crypto'
 import { AppleDeveloperAPI } from '../../utils/apple-api'
+import { deviceClassToPlatform, getNextDeviceNumber } from '../../utils/device-naming'
 import { z } from 'zod'
 
 const deviceMappingSchema = z.object({
@@ -9,6 +10,7 @@ const deviceMappingSchema = z.object({
   name: z.string(),
   platform: z.string(),
   discordName: z.string().min(1, 'Discord name is required'),
+  discordId: z.string().optional(), // Optional Discord ID for matching
   skip: z.boolean().optional()
 })
 
@@ -54,13 +56,15 @@ export default defineEventHandler(async (event) => {
     privateKey
   })
 
-  let appleDevices: Map<string, { name: string; platform: string }>
+  let appleDevices: Map<string, { name: string; platform: string; deviceClass: string; id: string }>
   try {
     const devices = await api.listDevices()
     appleDevices = new Map(
       devices.map(d => [d.attributes.udid.toLowerCase(), {
         name: d.attributes.name,
-        platform: d.attributes.platform
+        platform: d.attributes.platform,
+        deviceClass: d.attributes.deviceClass,
+        id: d.id
       }])
     )
   } catch (e: any) {
@@ -71,16 +75,20 @@ export default defineEventHandler(async (event) => {
   }
 
   // Group mappings by discord name
-  const groupedByUser = new Map<string, Array<{ udid: string; name: string; platform: string }>>()
+  const groupedByUser = new Map<string, Array<{ udid: string; name: string; platform: string; deviceClass: string; appleDeviceId: string }>>()
   
   for (const mapping of validMappings) {
     const normalizedUdid = mapping.udid.toLowerCase()
     
     // Verify the device exists in Apple
-    if (!appleDevices.has(normalizedUdid)) {
+    const appleDevice = appleDevices.get(normalizedUdid)
+    if (!appleDevice) {
       // Skip devices that don't exist in Apple (might have been removed)
       continue
     }
+
+    // Use the correct platform from Apple's deviceClass
+    const correctPlatform = deviceClassToPlatform(appleDevice.deviceClass)
 
     const discordName = mapping.discordName.trim()
     if (!groupedByUser.has(discordName)) {
@@ -89,7 +97,9 @@ export default defineEventHandler(async (event) => {
     groupedByUser.get(discordName)!.push({
       udid: mapping.udid,
       name: mapping.name,
-      platform: mapping.platform
+      platform: correctPlatform,
+      deviceClass: appleDevice.deviceClass,
+      appleDeviceId: appleDevice.id
     })
   }
 
@@ -97,6 +107,10 @@ export default defineEventHandler(async (event) => {
   const results: Array<{ discordName: string; devicesAdded: number; isNew: boolean }> = []
 
   for (const [discordName, devices] of groupedByUser) {
+    // Get the Discord ID from the first mapping (they should all have the same)
+    const firstMapping = validMappings.find(m => m.discordName === discordName)
+    const discordId = firstMapping?.discordId
+
     // Find or create the registered user
     let registeredUser = await prisma.registeredUser.findUnique({
       where: {
@@ -113,21 +127,60 @@ export default defineEventHandler(async (event) => {
       registeredUser = await prisma.registeredUser.create({
         data: {
           ownerId: user.id,
-          discordName
+          discordName,
+          discordId: discordId || null
         }
       })
+
+      // If Discord ID is provided, try to link with existing Discord user
+      if (discordId) {
+        const discordUser = await prisma.user.findUnique({
+          where: { discordId }
+        })
+
+        if (discordUser) {
+          // Link the registered user to the Discord user
+          await prisma.registeredUser.update({
+            where: { id: registeredUser.id },
+            data: { linkedUserId: discordUser.id }
+          })
+        }
+      }
+    } else if (discordId && !registeredUser.discordId) {
+      // Update existing registered user with Discord ID if not already set
+      await prisma.registeredUser.update({
+        where: { id: registeredUser.id },
+        data: { discordId }
+      })
+
+      // Try to link with Discord user
+      const discordUser = await prisma.user.findUnique({
+        where: { discordId }
+      })
+
+      if (discordUser && !registeredUser.linkedUserId) {
+        await prisma.registeredUser.update({
+          where: { id: registeredUser.id },
+          data: { linkedUserId: discordUser.id }
+        })
+      }
     }
 
     // Add devices (skip duplicates)
     let devicesAdded = 0
     for (const device of devices) {
       try {
+        // Get the next device number for this user
+        const deviceNumber = await getNextDeviceNumber(registeredUser.id, prisma)
+        
         await prisma.userDevice.create({
           data: {
             registeredUserId: registeredUser.id,
             udid: device.udid,
             name: device.name,
-            platform: device.platform === 'MAC_OS' ? 'MAC_OS' : 'IOS'
+            platform: device.platform,
+            deviceNumber,
+            appleDeviceId: device.appleDeviceId
           }
         })
         devicesAdded++

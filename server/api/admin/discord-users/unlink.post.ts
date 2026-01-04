@@ -6,20 +6,11 @@ export default defineEventHandler(async (event) => {
   await requireRole(event, 'SUPERADMIN')
 
   const body = await readBody<{
-    discordUserId?: string
     registeredUserId?: string
   }>(event)
 
-  if (!body.discordUserId || !body.registeredUserId) {
-    throw createError({ statusCode: 400, message: 'discordUserId and registeredUserId are required' })
-  }
-
-  const discordUser = await prisma.user.findUnique({
-    where: { id: body.discordUserId }
-  })
-
-  if (!discordUser || discordUser.authProvider !== 'discord') {
-    throw createError({ statusCode: 400, message: 'Invalid Discord user' })
+  if (!body.registeredUserId) {
+    throw createError({ statusCode: 400, message: 'registeredUserId is required' })
   }
 
   const regUser = await prisma.registeredUser.findUnique({
@@ -27,6 +18,14 @@ export default defineEventHandler(async (event) => {
     include: {
       owner: {
         select: { id: true, nickname: true }
+      },
+      linkedUser: {
+        select: {
+          id: true,
+          nickname: true,
+          discordId: true,
+          discordUsername: true
+        }
       }
     }
   })
@@ -35,12 +34,15 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: 'Registered user not found' })
   }
 
+  if (!regUser.linkedUserId) {
+    throw createError({ statusCode: 400, message: 'This registered user is not linked to any Discord user' })
+  }
+
+  // Unlink by setting linkedUserId to null
   const updated = await prisma.registeredUser.update({
     where: { id: regUser.id },
     data: {
-      linkedUserId: discordUser.id,
-      // Keep discordId in sync - this is now the primary linking mechanism
-      discordId: discordUser.discordId
+      linkedUserId: null
     },
     include: {
       owner: {
@@ -52,8 +54,7 @@ export default defineEventHandler(async (event) => {
   return {
     success: true,
     registeredUserId: updated.id,
-    owner: updated.owner
+    owner: updated.owner,
+    unlinkedDiscordUser: regUser.linkedUser
   }
 })
-
-

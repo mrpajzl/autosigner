@@ -1,10 +1,11 @@
 import { requireAnyRole } from '../../../../utils/auth'
 import { prisma } from '../../../../utils/db'
+import { generateDeviceName, getNextDeviceNumber } from '../../../../utils/device-naming'
 import { z } from 'zod'
 
 const schema = z.object({
   udid: z.string().min(1, 'UDID is required'),
-  name: z.string().min(1, 'Device name is required').max(100),
+  name: z.string().min(1, 'Device name is required').max(100).optional(), // Now optional, will be auto-generated
   platform: z.enum(['IOS', 'MAC_OS', 'APPLE_TV']).default('IOS')
 })
 
@@ -35,7 +36,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Access denied' })
   }
 
-  const { udid, name, platform } = parsed.data
+  const { udid, platform } = parsed.data
 
   // Check if device with this UDID already exists for this user
   const existingDevice = await prisma.userDevice.findUnique({
@@ -54,11 +55,18 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  // Get the next device number for this user
+  const deviceNumber = await getNextDeviceNumber(userId, prisma)
+  
+  // Generate the unified device name
+  const deviceName = generateDeviceName(registeredUser.discordName, platform, deviceNumber)
+
   const device = await prisma.userDevice.create({
     data: {
       registeredUserId: userId,
       udid,
-      name,
+      name: deviceName,
+      deviceNumber,
       platform
     }
   })
@@ -67,6 +75,7 @@ export default defineEventHandler(async (event) => {
     id: device.id,
     udid: device.udid,
     name: device.name,
+    deviceNumber: device.deviceNumber,
     platform: device.platform,
     createdAt: device.createdAt,
     updatedAt: device.updatedAt

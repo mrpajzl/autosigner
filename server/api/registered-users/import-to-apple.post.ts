@@ -162,28 +162,36 @@ export default defineEventHandler(async (event) => {
     discordName: string
     success: boolean
     error?: string
+    appleDeviceId?: string
   }> = []
 
   for (const device of unregisteredDevices) {
     try {
-      // Format device name to include discord name for clarity
-      const deviceName = `${device.discordName} - ${device.name}`
+      // Use the device's name which is already in the unified format
+      // Format: "Discord Name - Device Type Number"
 
       // Map APPLE_TV to IOS for Apple API as it doesn't support APPLE_TV platform type explicitly
       // but treats tvOS devices as part of the iOS family for registration
       const applePlatform = device.platform === 'APPLE_TV' ? 'IOS' : device.platform
 
-      await api.registerDevice(
+      const appleDevice = await api.registerDevice(
         device.udid,
-        deviceName,
+        device.name, // Already formatted as "John - iPhone 1"
         applePlatform as 'IOS' | 'MAC_OS'
       )
+
+      // Store the Apple device ID for future syncing
+      await prisma.userDevice.update({
+        where: { id: device.id },
+        data: { appleDeviceId: appleDevice.id }
+      })
 
       results.push({
         udid: device.udid,
         name: device.name,
         discordName: device.discordName,
-        success: true
+        success: true,
+        appleDeviceId: appleDevice.id
       })
 
       // Small delay to avoid rate limiting (100ms between requests)

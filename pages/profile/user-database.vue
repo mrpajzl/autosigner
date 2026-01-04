@@ -216,12 +216,16 @@
                   : 'bg-gradient-to-br from-blue-500 to-purple-500 ring-white/20'"
               >
                 <img
-                  v-if="regUser.linkedUser?.discordAvatar"
-                  :src="regUser.linkedUser.discordAvatar"
-                  :alt="regUser.linkedUser.discordUsername || regUser.discordName"
+                  v-if="regUser.linkedUser?.discordAvatar || regUser.discordAvatar"
+                  :src="regUser.linkedUser?.discordAvatar || regUser.discordAvatar || undefined"
+                  :alt="regUser.linkedUser?.discordUsername || regUser.discordName"
                   class="w-full h-full object-cover"
+                  @error="(e: any) => { e.target.style.display = 'none'; e.target.nextElementSibling?.classList.remove('hidden') }"
                 />
-                <span v-else class="text-white font-bold">
+                <span 
+                  :class="(regUser.linkedUser?.discordAvatar || regUser.discordAvatar) ? 'hidden' : ''"
+                  class="text-white font-bold"
+                >
                   {{ regUser.discordName.charAt(0).toUpperCase() }}
                 </span>
               </div>
@@ -308,16 +312,6 @@
                 {{ regUser.paidForNextYear ? 'Paid' : 'Mark Paid' }}
               </button>
               <button
-                v-if="!regUser.linkedUser"
-                type="button"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 transition-all"
-                title="Link Discord Account"
-                @click="openLinkDiscordModal(regUser)"
-              >
-                <UIcon name="i-heroicons-link" class="w-4 h-4" />
-                Link
-              </button>
-              <button
                 v-if="appleConnected && regUser.devices.some(d => !d.isRegisteredInApple)"
                 type="button"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 transition-all"
@@ -365,6 +359,12 @@
                 <div class="min-w-0">
                   <p class="font-medium truncate text-slate-900 dark:text-white">{{ device.name }}</p>
                   <p class="font-mono text-xs text-slate-500 dark:text-white/40 truncate">{{ device.udid }}</p>
+                  <p v-if="syncSuccess === device.id" class="text-xs text-green-600 dark:text-green-400 mt-1">
+                    ✓ Synced to Apple Developer Portal
+                  </p>
+                  <p v-if="syncError === device.id" class="text-xs text-red-600 dark:text-red-400 mt-1">
+                    ✗ Sync failed - please try again
+                  </p>
                 </div>
               </div>
               <div class="flex items-center gap-1.5">
@@ -377,6 +377,17 @@
                   {{ device.isRegisteredInApple ? 'In Apple' : 'Not in Apple' }}
                 </UBadge>
                 <UBadge color="blue" variant="soft" size="xs">{{ device.platform }}</UBadge>
+                <button
+                  v-if="device.isRegisteredInApple"
+                  type="button"
+                  class="p-1.5 rounded-md text-slate-400 hover:text-green-400 hover:bg-green-500/10 transition-all"
+                  :disabled="syncingDevice === device.id"
+                  @click="syncDeviceToApple(regUser, device)"
+                  title="Sync device name to Apple Developer Portal"
+                >
+                  <UIcon v-if="syncingDevice === device.id" name="i-heroicons-arrow-path" class="w-3.5 h-3.5 animate-spin" />
+                  <UIcon v-else name="i-heroicons-arrow-path" class="w-3.5 h-3.5" />
+                </button>
                 <button
                   type="button"
                   class="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-all"
@@ -421,11 +432,111 @@
         </template>
 
         <form class="space-y-4" @submit.prevent="handleSaveUser">
-          <UFormGroup label="Discord Name" required>
-            <UInput v-model="userForm.discordName" placeholder="john_doe or John#1234" />
-          </UFormGroup>
+          <!-- Discord User Matching (Primary Method) -->
+          <div class="space-y-4 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900">
+            <div class="flex items-center gap-2">
+              <UIcon name="i-heroicons-identification" class="text-blue-600 dark:text-blue-400" />
+              <span class="font-semibold text-blue-900 dark:text-blue-100">Discord User Matching (Recommended)</span>
+            </div>
+            
+            <UFormGroup label="Discord User ID" help="Enter Discord user ID (18-19 digit number)">
+              <UInput
+                v-model="userFormDiscordId"
+                placeholder="e.g. 123456789012345678"
+                class="flex-1"
+                :disabled="userFormDiscordLoading"
+                @input="fetchDiscordUserDetails"
+              />
+            </UFormGroup>
+
+            <!-- Discord User Details -->
+            <div v-if="userFormDiscordDetails" class="p-3 rounded-lg bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800">
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-500 to-purple-500">
+                  <img
+                    v-if="userFormDiscordDetails.avatar"
+                    :src="userFormDiscordDetails.avatar"
+                    :alt="userFormDiscordDetails.username"
+                    class="w-full h-full object-cover"
+                    @error="(e: any) => { e.target.style.display = 'none'; e.target.nextElementSibling?.classList.remove('hidden') }"
+                  />
+                  <div 
+                    :class="userFormDiscordDetails.avatar ? 'hidden' : ''"
+                    class="w-full h-full flex items-center justify-center text-white font-bold text-lg"
+                  >
+                    {{ userFormDiscordDetails.username.charAt(0).toUpperCase() }}
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="font-semibold text-slate-900 dark:text-white truncate">{{ userFormDiscordDetails.username }}</div>
+                  <div class="text-sm text-slate-600 dark:text-white/60">
+                    <span class="font-mono">{{ userFormDiscordDetails.id }}</span>
+                    <span v-if="userFormDiscordDetails.globalName" class="ml-2">
+                      • {{ userFormDiscordDetails.globalName }}
+                    </span>
+                  </div>
+                </div>
+                <UBadge color="green" variant="soft" size="sm">Verified</UBadge>
+              </div>
+            </div>
+
+            <UAlert
+              v-if="userFormDiscordError"
+              icon="i-heroicons-exclamation-circle"
+              color="red"
+              variant="soft"
+              :title="userFormDiscordError"
+            />
+
+            <UButton
+              v-if="userFormDiscordDetails"
+              color="gray"
+              variant="soft"
+              size="sm"
+              :icon="userForm.useCustomName ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
+              @click="userForm.useCustomName = !userForm.useCustomName"
+            >
+              {{ userForm.useCustomName ? 'Hide' : 'Use Custom Discord Name' }}
+            </UButton>
+
+            <!-- Custom Discord Name (Only shown when toggled) -->
+            <div v-if="userForm.useCustomName && userFormDiscordDetails" class="mt-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+              <UFormGroup label="Custom Discord Name" help="Override the Discord username with a custom name">
+                <UInput
+                  v-model="userForm.discordName"
+                  placeholder="Enter custom Discord name"
+                />
+              </UFormGroup>
+              <UButton
+                v-if="editingUser && editingUser.discordId"
+                color="red"
+                variant="soft"
+                size="xs"
+                class="mt-2"
+                @click="clearCustomName"
+              >
+                Remove Custom Name
+              </UButton>
+            </div>
+          </div>
+
+          <!-- Custom Discord Name (When no Discord ID provided) -->
+          <div v-if="!userFormDiscordId" class="space-y-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-800">
+            <div class="flex items-center gap-2">
+              <UIcon name="i-heroicons-user" class="text-slate-600 dark:text-slate-400" />
+              <span class="font-semibold text-slate-900 dark:text-slate-100">Custom Discord Name (Alternative)</span>
+            </div>
+
+            <UFormGroup label="Discord Name">
+              <UInput
+                v-model="userForm.discordName"
+                placeholder="john_doe or John#1234"
+              />
+            </UFormGroup>
+          </div>
+
           <UFormGroup label="Notes">
-            <UTextarea v-model="userForm.notes" placeholder="Optional notes about this user..." rows="3" />
+            <UTextarea v-model="userForm.notes" placeholder="Optional notes about this user..." :rows="3" />
           </UFormGroup>
           <p v-if="userFormError" class="text-sm text-red-400">{{ userFormError }}</p>
 
@@ -440,7 +551,7 @@
                   placeholder="Select a user..."
                   value-attribute="value"
                   option-attribute="label"
-                  searchable
+                  :searchable="true"
                   searchable-placeholder="Search users..."
                 />
               </UFormGroup>
@@ -497,11 +608,33 @@
         </template>
 
         <form class="space-y-4" @submit.prevent="handleSaveDevice">
-          <UFormGroup label="Device Name" required>
-            <UInput v-model="deviceForm.name" placeholder="iPhone 15 Pro" />
-          </UFormGroup>
+          <div class="p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900">
+            <p class="text-sm text-blue-900 dark:text-blue-100">
+              <strong>Note:</strong> Device names are automatically generated in the format: 
+              <span class="font-mono">[Discord name] - [Device type] [number]</span>
+            </p>
+          </div>
           <UFormGroup label="UDID" required>
-            <UInput v-model="deviceForm.udid" placeholder="00000000-000000000000000" class="font-mono" />
+            <div class="flex gap-2">
+              <UInput 
+                v-model="deviceForm.udid" 
+                placeholder="00000000-000000000000000" 
+                class="font-mono flex-1" 
+              />
+              <UButton
+                color="blue"
+                variant="soft"
+                icon="i-heroicons-magnifying-glass"
+                :loading="detectingDevice"
+                @click="detectDeviceType"
+                title="Auto-detect device type from Apple"
+              >
+                Detect
+              </UButton>
+            </div>
+            <p v-if="deviceDetected" class="text-xs text-green-600 dark:text-green-400 mt-1">
+              ✓ Device type detected from Apple Developer Portal
+            </p>
           </UFormGroup>
           <UFormGroup label="Platform">
             <USelect v-model="deviceForm.platform" :options="platformOptions" />
@@ -564,93 +697,6 @@
           <div class="flex justify-end gap-2">
             <UButton color="gray" variant="ghost" @click="showResetPaidConfirm = false">Cancel</UButton>
             <UButton color="amber" :loading="resettingAllPaid" @click="handleResetAllPaid">Reset All</UButton>
-          </div>
-        </template>
-      </UCard>
-    </UModal>
-
-    <!-- Link Discord Account Modal -->
-    <UModal v-model="showLinkDiscordModal">
-      <UCard class="glass max-w-lg">
-        <template #header>
-          <div class="flex items-center gap-2">
-            <UIcon name="i-heroicons-link" />
-            <span class="font-semibold">Link Discord Account</span>
-          </div>
-        </template>
-
-        <div class="space-y-4">
-          <div class="text-sm text-slate-600 dark:text-white/70">
-            <p v-if="selectedUserForLink">
-              Linking for:
-              <span class="font-medium">{{ selectedUserForLink.discordName }}</span>
-            </p>
-          </div>
-
-          <UFormGroup label="Search Discord users" help="Search by nickname, Discord username, or Discord ID">
-            <div class="flex gap-2">
-              <UInput
-                v-model="discordSearchQuery"
-                placeholder="e.g. john_doe, John#1234 or Discord ID"
-                class="flex-1"
-                size="sm"
-                :disabled="discordSearchLoading"
-                @keyup.enter="searchDiscordUsers"
-              />
-              <UButton
-                size="sm"
-                color="gray"
-                icon="i-heroicons-magnifying-glass"
-                :loading="discordSearchLoading"
-                @click="searchDiscordUsers"
-              >
-                Search
-              </UButton>
-            </div>
-          </UFormGroup>
-
-          <UFormGroup label="Select Discord user">
-            <USelectMenu
-              v-model="selectedDiscordUserId"
-              :options="discordUserOptions"
-              value-attribute="value"
-              option-attribute="label"
-              placeholder="Choose a Discord user from search results"
-              :disabled="discordUserOptions.length === 0"
-            >
-              <template #option="{ option }">
-                <div class="flex items-center gap-2">
-                  <img
-                    v-if="option.avatar"
-                    :src="option.avatar"
-                    :alt="option.label"
-                    class="w-6 h-6 rounded-full"
-                  />
-                  <div v-else class="w-6 h-6 rounded-full bg-blue-500/20 flex items-center justify-center">
-                    <UIcon name="i-heroicons-user-circle" class="w-4 h-4 text-blue-400" />
-                  </div>
-                  <div class="flex-1">
-                    <div class="font-medium">{{ option.label }}</div>
-                    <div v-if="option.username" class="text-xs text-slate-500">{{ option.username }}</div>
-                  </div>
-                </div>
-              </template>
-            </USelectMenu>
-          </UFormGroup>
-
-          <p v-if="linkDiscordError" class="text-sm text-red-400">
-            {{ linkDiscordError }}
-          </p>
-        </div>
-
-        <template #footer>
-          <div class="flex justify-end gap-2">
-            <UButton color="gray" variant="ghost" @click="showLinkDiscordModal = false">
-              Cancel
-            </UButton>
-            <UButton color="blue" :loading="linkDiscordSaving" @click="saveDiscordLink">
-              Link Account
-            </UButton>
           </div>
         </template>
       </UCard>
@@ -770,16 +816,19 @@ interface Device {
   id: string
   udid: string
   name: string
+  deviceNumber: number
   platform: string
   createdAt: string
   updatedAt: string
   isRegisteredInApple?: boolean
+  appleDeviceId?: string
 }
 
 interface RegisteredUser {
   id: string
   discordName: string
   discordId?: string | null
+  discordAvatar?: string | null // Avatar URL fetched from Discord API
   notes: string | null
   paidForNextYear: boolean
   devices: Device[]
@@ -865,13 +914,32 @@ const showAddUser = ref(false)
 const editingUser = ref<RegisteredUser | null>(null)
 const userForm = reactive({
   discordName: '',
-  notes: ''
+  notes: '',
+  useCustomName: false
 })
 const userFormError = ref('')
 const savingUser = ref(false)
 
+// Discord ID for user form
+const userFormDiscordId = ref('')
+const userFormDiscordLoading = ref(false)
+const userFormDiscordDetails = ref<{
+  id: string
+  username: string
+  avatar: string | null
+  globalName?: string | null
+} | null>(null)
+const userFormDiscordError = ref<string | null>(null)
+
+function clearCustomName() {
+  userForm.useCustomName = false
+  if (userFormDiscordDetails.value) {
+    userForm.discordName = userFormDiscordDetails.value.username
+  }
+}
+
 // Merge state
-const mergeTargetId = ref<string | null>(null)
+const mergeTargetId = ref<string | undefined>(undefined)
 const merging = ref(false)
 const mergeError = ref('')
 const mergeSuccess = ref('')
@@ -900,6 +968,13 @@ const deviceForm = reactive({
 })
 const deviceFormError = ref('')
 const savingDevice = ref(false)
+const detectingDevice = ref(false)
+const deviceDetected = ref(false)
+
+// Device sync state
+const syncingDevice = ref<string | null>(null)
+const syncSuccess = ref<string | null>(null)
+const syncError = ref<string | null>(null)
 
 // Delete state
 const showDeleteConfirm = ref(false)
@@ -1016,14 +1091,87 @@ async function handleResetAllPaid() {
   }
 }
 
+// Fetch Discord user details by ID
+async function fetchDiscordUserDetails() {
+  const discordId = userFormDiscordId.value.trim()
+  userFormDiscordDetails.value = null
+  userFormDiscordError.value = null
+
+  // Validate Discord ID format (18-19 digits)
+  if (!discordId) {
+    return
+  }
+
+  if (!/^\d{17,19}$/.test(discordId)) {
+    userFormDiscordError.value = 'Invalid Discord ID format (must be 18-19 digits)'
+    return
+  }
+
+  userFormDiscordLoading.value = true
+  try {
+    const details = await $fetch<{
+      id: string
+      username: string
+      avatar: string | null
+      globalName?: string | null
+    }>(`/api/admin/discord-users/${discordId}`)
+
+    userFormDiscordDetails.value = details
+    
+    // Always auto-fill Discord name from verified Discord user
+    // User can override with custom name checkbox if needed
+    userForm.discordName = details.username
+  } catch (e: any) {
+    console.error(e)
+    userFormDiscordError.value = e?.data?.message || 'Failed to fetch Discord user'
+    userFormDiscordDetails.value = null
+  } finally {
+    userFormDiscordLoading.value = false
+  }
+}
+
+// Watch for custom name checkbox - restore Discord username when unchecked
+watch(() => userForm.useCustomName, (useCustom) => {
+  if (!useCustom && userFormDiscordDetails.value) {
+    // Restore Discord username when custom name is unchecked
+    userForm.discordName = userFormDiscordDetails.value.username
+  }
+})
+
 // User CRUD
-function editUser(user: RegisteredUser) {
+async function editUser(user: RegisteredUser) {
   editingUser.value = user
-  userForm.discordName = user.discordName
   userForm.notes = user.notes || ''
   userFormError.value = ''
+  // Reset Discord ID
+  userFormDiscordId.value = user.discordId || ''
+  userFormDiscordDetails.value = null
+  userFormDiscordError.value = null
+  userForm.useCustomName = false
+  
+  if (user.discordId) {
+    // Fetch Discord details first, then set the name
+    await fetchDiscordUserDetails()
+    // After fetching, check if the stored name matches the Discord username
+    // If it doesn't match, user is using a custom name
+    const details = userFormDiscordDetails.value
+    if (details && typeof details === 'object' && 'username' in details) {
+      const typedDetails = details as { id: string; username: string; avatar: string | null; globalName?: string | null }
+      if (user.discordName !== typedDetails.username) {
+        userForm.useCustomName = true
+        userForm.discordName = user.discordName
+      } else {
+        userForm.discordName = typedDetails.username
+      }
+    } else {
+      userForm.discordName = user.discordName
+    }
+  } else {
+    userForm.discordName = user.discordName
+  }
+  
   // Reset merge state
-  mergeTargetId.value = null
+  mergeTargetId.value = undefined
   mergeError.value = ''
   mergeSuccess.value = ''
   showAddUser.value = true
@@ -1050,7 +1198,7 @@ async function handleMergeUser() {
     setTimeout(async () => {
       showAddUser.value = false
       editingUser.value = null
-      mergeTargetId.value = null
+      mergeTargetId.value = undefined
       await refreshUsers()
     }, 1500)
   } catch (e: any) {
@@ -1061,8 +1209,16 @@ async function handleMergeUser() {
 }
 
 async function handleSaveUser() {
-  if (!userForm.discordName.trim()) {
-    userFormError.value = 'Discord name is required'
+  // Validate: either Discord ID provided OR custom Discord name provided
+  const discordId = userFormDiscordId.value.trim()
+  if (!discordId && !userForm.discordName.trim()) {
+    userFormError.value = 'Either provide a Discord ID or a custom Discord name'
+    return
+  }
+
+  // If Discord ID is provided, validate format
+  if (discordId && !/^\d{17,19}$/.test(discordId)) {
+    userFormError.value = 'Invalid Discord ID format (must be 18-19 digits)'
     return
   }
 
@@ -1070,27 +1226,53 @@ async function handleSaveUser() {
   userFormError.value = ''
 
   try {
+    const body: any = {
+      notes: userForm.notes.trim() || null
+    }
+
+    if (discordId) {
+      // Use Discord matching - always send Discord ID
+      // Backend will fetch Discord username unless useCustomName is true
+      body.discordId = discordId
+      // Always send useCustomName so backend knows whether to fetch from Discord or use custom name
+      body.useCustomName = userForm.useCustomName
+      // Only send custom name if explicitly using custom name and it's provided
+      if (userForm.useCustomName && userForm.discordName.trim()) {
+        body.discordName = userForm.discordName.trim()
+      }
+      // If not using custom name, backend will fetch and use Discord username automatically
+    } else if (editingUser.value?.discordId) {
+      // When editing with existing Discord ID but form field is empty, send the existing ID
+      // This happens when user wants to keep the Discord ID but we need to send it for backend processing
+      body.discordId = editingUser.value.discordId
+      body.useCustomName = userForm.useCustomName
+      if (userForm.useCustomName && userForm.discordName.trim()) {
+        body.discordName = userForm.discordName.trim()
+      }
+    } else {
+      // Use custom Discord name (no Discord ID provided)
+      body.discordName = userForm.discordName.trim()
+    }
+
     if (editingUser.value) {
       await $fetch(`/api/registered-users/${editingUser.value.id}`, {
         method: 'PATCH',
-        body: {
-          discordName: userForm.discordName.trim(),
-          notes: userForm.notes.trim() || null
-        }
+        body
       })
     } else {
       await $fetch('/api/registered-users', {
         method: 'POST',
-        body: {
-          discordName: userForm.discordName.trim(),
-          notes: userForm.notes.trim() || undefined
-        }
+        body
       })
     }
     showAddUser.value = false
     editingUser.value = null
     userForm.discordName = ''
     userForm.notes = ''
+    userForm.useCustomName = false
+    userFormDiscordId.value = ''
+    userFormDiscordDetails.value = null
+    userFormDiscordError.value = null
     await refreshUsers()
   } catch (e: any) {
     userFormError.value = e?.data?.message || 'Failed to save user'
@@ -1113,22 +1295,61 @@ function addDeviceToUser(user: RegisteredUser) {
   deviceForm.udid = ''
   deviceForm.platform = 'IOS'
   deviceFormError.value = ''
+  detectingDevice.value = false
+  deviceDetected.value = false
   showAddDevice.value = true
+}
+
+// Auto-detect device type from Apple Developer Portal
+async function detectDeviceType() {
+  if (!deviceForm.udid.trim()) {
+    deviceFormError.value = 'Please enter a UDID first'
+    return
+  }
+
+  detectingDevice.value = true
+  deviceFormError.value = ''
+  deviceDetected.value = false
+
+  try {
+    const result = await $fetch<{
+      found: boolean
+      platform?: string
+      deviceClass?: string
+      message?: string
+    }>(`/api/apple/detect-device?udid=${encodeURIComponent(deviceForm.udid.trim())}`)
+
+    if (result.found && result.platform) {
+      deviceForm.platform = result.platform
+      deviceDetected.value = true
+      // Clear detected status after 3 seconds
+      setTimeout(() => {
+        deviceDetected.value = false
+      }, 3000)
+    } else {
+      deviceFormError.value = result.message || 'Device not found in Apple Developer account'
+    }
+  } catch (e: any) {
+    deviceFormError.value = e?.data?.message || 'Failed to detect device type'
+  } finally {
+    detectingDevice.value = false
+  }
 }
 
 function editDevice(user: RegisteredUser, device: Device) {
   deviceForUser.value = user
   editingDevice.value = device
-  deviceForm.name = device.name
   deviceForm.udid = device.udid
   deviceForm.platform = device.platform
   deviceFormError.value = ''
+  detectingDevice.value = false
+  deviceDetected.value = false
   showAddDevice.value = true
 }
 
 async function handleSaveDevice() {
-  if (!deviceForm.name.trim() || !deviceForm.udid.trim()) {
-    deviceFormError.value = 'Device name and UDID are required'
+  if (!deviceForm.udid.trim()) {
+    deviceFormError.value = 'UDID is required'
     return
   }
 
@@ -1142,7 +1363,6 @@ async function handleSaveDevice() {
       await $fetch(`/api/registered-users/${deviceForUser.value.id}/devices/${editingDevice.value.id}`, {
         method: 'PATCH',
         body: {
-          name: deviceForm.name.trim(),
           udid: deviceForm.udid.trim(),
           platform: deviceForm.platform
         }
@@ -1151,7 +1371,6 @@ async function handleSaveDevice() {
       await $fetch(`/api/registered-users/${deviceForUser.value.id}/devices`, {
         method: 'POST',
         body: {
-          name: deviceForm.name.trim(),
           udid: deviceForm.udid.trim(),
           platform: deviceForm.platform
         }
@@ -1191,6 +1410,42 @@ async function handleDelete() {
     console.error('Delete failed:', e)
   } finally {
     deleting.value = false
+  }
+}
+
+// Sync device name to Apple Developer Portal
+async function syncDeviceToApple(user: RegisteredUser, device: Device) {
+  syncingDevice.value = device.id
+  syncSuccess.value = null
+  syncError.value = null
+
+  try {
+    const result = await $fetch<{ success: boolean; deviceName: string }>(`/api/registered-users/${user.id}/devices/${device.id}/sync-to-apple`, {
+      method: 'POST'
+    })
+    
+    if (result.success) {
+      syncSuccess.value = device.id
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        if (syncSuccess.value === device.id) {
+          syncSuccess.value = null
+        }
+      }, 3000)
+      // Refresh to show updated device info
+      await refreshUsers()
+    }
+  } catch (e: any) {
+    syncError.value = device.id
+    console.error('Sync failed:', e)
+    // Clear error message after 5 seconds
+    setTimeout(() => {
+      if (syncError.value === device.id) {
+        syncError.value = null
+      }
+    }, 5000)
+  } finally {
+    syncingDevice.value = null
   }
 }
 
@@ -1306,123 +1561,21 @@ async function handleImportAll() {
   openImportModal()
 }
 
-// Link Discord Account state
-const showLinkDiscordModal = ref(false)
-const selectedUserForLink = ref<RegisteredUser | null>(null)
-const discordSearchQuery = ref('')
-const discordSearchLoading = ref(false)
-const discordUserOptions = ref<
-  {
-    value: string
-    label: string
-    username?: string | null
-    avatar?: string | null
-  }[]
->([])
-const selectedDiscordUserId = ref<string | null>(null)
-const linkDiscordError = ref<string | null>(null)
-const linkDiscordSaving = ref(false)
-
-function openLinkDiscordModal(user: RegisteredUser) {
-  selectedUserForLink.value = user
-  discordSearchQuery.value = user.discordName || ''
-  selectedDiscordUserId.value = null
-  discordUserOptions.value = []
-  linkDiscordError.value = null
-  showLinkDiscordModal.value = true
-}
-
-async function searchDiscordUsers() {
-  const q = discordSearchQuery.value.trim()
-  discordUserOptions.value = []
-  selectedDiscordUserId.value = null
-  linkDiscordError.value = null
-
-  if (!q) {
-    return
-  }
-
-  discordSearchLoading.value = true
-  try {
-    const results = await $fetch<Array<{
-      id: string
-      nickname: string
-      discordId?: string | null
-      discordUsername?: string | null
-      discordAvatar?: string | null
-    }>>('/api/registered-users/search-discord-users', {
-      query: { q }
-    })
-
-    discordUserOptions.value = results.map((r) => ({
-      value: r.id,
-      label: `${r.nickname}${r.discordUsername ? ` (${r.discordUsername})` : ''}`,
-      username: r.discordUsername,
-      avatar: r.discordAvatar
-    }))
-
-    if (discordUserOptions.value.length === 0) {
-      linkDiscordError.value = 'No matching Discord users found'
-    }
-  } catch (e: any) {
-    console.error(e)
-    linkDiscordError.value = e?.data?.message || 'Failed to search Discord users'
-  } finally {
-    discordSearchLoading.value = false
-  }
-}
-
-async function saveDiscordLink() {
-  if (!selectedUserForLink.value || !selectedDiscordUserId.value) {
-    linkDiscordError.value = 'Please select a Discord user'
-    return
-  }
-
-  linkDiscordSaving.value = true
-  linkDiscordError.value = null
-
-  try {
-    await $fetch(`/api/registered-users/${selectedUserForLink.value.id}/link-discord`, {
-      method: 'POST',
-      body: {
-        discordUserId: selectedDiscordUserId.value
-      }
-    })
-
-    showLinkDiscordModal.value = false
-    selectedUserForLink.value = null
-    await refreshUsers()
-    useToast().add({ title: 'Discord account linked', color: 'green' })
-  } catch (e: any) {
-    console.error(e)
-    linkDiscordError.value = e?.data?.message || 'Failed to link Discord account'
-  } finally {
-    linkDiscordSaving.value = false
-  }
-}
-
 // Reset user modal when closed
 watch(showAddUser, (val) => {
   if (!val) {
     editingUser.value = null
     userForm.discordName = ''
     userForm.notes = ''
+    userForm.useCustomName = false
     userFormError.value = ''
+    userFormDiscordId.value = ''
+    userFormDiscordDetails.value = null
+    userFormDiscordError.value = null
     // Reset merge state
-    mergeTargetId.value = null
+    mergeTargetId.value = undefined
     mergeError.value = ''
     mergeSuccess.value = ''
-  }
-})
-
-// Reset link Discord modal when closed
-watch(showLinkDiscordModal, (val) => {
-  if (!val) {
-    selectedUserForLink.value = null
-    discordSearchQuery.value = ''
-    selectedDiscordUserId.value = null
-    discordUserOptions.value = []
-    linkDiscordError.value = null
   }
 })
 </script>

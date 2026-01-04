@@ -9,17 +9,91 @@
         </div>
       </template>
       <UForm :state="newUser" class="space-y-4" @submit="createNewUser">
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          <UFormGroup label="Nickname" name="nickname">
-            <UInput v-model="newUser.nickname" placeholder="Enter nickname" />
+        <!-- Discord User Matching (Primary Method) -->
+        <div class="space-y-4 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-heroicons-identification" class="text-blue-600 dark:text-blue-400" />
+            <span class="font-semibold text-blue-900 dark:text-blue-100">Discord User Matching (Recommended)</span>
+          </div>
+          
+          <UFormGroup label="Discord User ID" help="Enter Discord user ID (18-19 digit number)">
+            <UInput
+              v-model="discordIdForCreation"
+              placeholder="e.g. 123456789012345678"
+              class="flex-1"
+              :disabled="discordLoadingForCreation"
+              @input="fetchDiscordUserForCreation"
+            />
           </UFormGroup>
-          <UFormGroup label="Password" name="password">
-            <UInput v-model="newUser.password" type="password" placeholder="Min 8 characters" />
-          </UFormGroup>
-          <UFormGroup label="Role" name="role">
-            <USelect v-model="newUser.role" :options="roleOptions" />
-          </UFormGroup>
+
+          <!-- Discord User Details -->
+          <div v-if="discordDetailsForCreation" class="p-3 rounded-lg bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800">
+            <div class="flex items-center gap-3">
+              <img
+                v-if="discordDetailsForCreation.avatar"
+                :src="discordDetailsForCreation.avatar"
+                :alt="discordDetailsForCreation.username"
+                class="w-12 h-12 rounded-full"
+              />
+              <div v-else class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                {{ discordDetailsForCreation.username.charAt(0).toUpperCase() }}
+              </div>
+              <div class="flex-1">
+                <div class="font-semibold text-slate-900 dark:text-white">{{ discordDetailsForCreation.username }}</div>
+                <div class="text-sm text-slate-600 dark:text-white/60">
+                  <span class="font-mono">{{ discordDetailsForCreation.id }}</span>
+                  <span v-if="discordDetailsForCreation.globalName" class="ml-2">
+                    • {{ discordDetailsForCreation.globalName }}
+                  </span>
+                </div>
+              </div>
+              <UBadge color="green" variant="soft" size="sm">Verified</UBadge>
+            </div>
+          </div>
+
+          <UAlert
+            v-if="discordErrorForCreation"
+            icon="i-heroicons-exclamation-circle"
+            color="red"
+            variant="soft"
+            :title="discordErrorForCreation"
+          />
+
+          <UCheckbox
+            v-model="newUser.useCustomNickname"
+            label="Use custom nickname instead of Discord username"
+          />
         </div>
+
+        <!-- Custom User Creation (Secondary Method) -->
+        <div class="space-y-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-800">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-heroicons-user" class="text-slate-600 dark:text-slate-400" />
+            <span class="font-semibold text-slate-900 dark:text-slate-100">Custom User (Alternative)</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <UFormGroup label="Nickname" name="nickname" :required="!discordIdForCreation">
+              <UInput
+                v-model="newUser.nickname"
+                placeholder="Enter nickname"
+                :disabled="!!discordIdForCreation && !newUser.useCustomNickname"
+              />
+            </UFormGroup>
+            <UFormGroup label="Password" name="password" :required="!discordIdForCreation">
+              <UInput
+                v-model="newUser.password"
+                type="password"
+                placeholder="Min 8 characters"
+                :disabled="!!discordIdForCreation"
+              />
+            </UFormGroup>
+            <UFormGroup label="Role" name="role">
+              <USelect v-model="newUser.role" :options="roleOptions" />
+            </UFormGroup>
+          </div>
+        </div>
+
         <div class="flex justify-end">
           <UButton type="submit" color="red" variant="solid" :loading="creating" icon="i-heroicons-user-plus" label="Create User" />
         </div>
@@ -166,11 +240,11 @@
             </div>
             <div class="xl:hidden">
               <UBadge 
-                :color="getRoleBadgeColor(roles[row.id])" 
+                :color="getRoleBadgeColor(roles[row.id] || 'USER')" 
                 variant="soft" 
                 size="xs"
               >
-                {{ getRoleLabel(roles[row.id]) }}
+                {{ getRoleLabel(roles[row.id] || 'USER') }}
               </UBadge>
             </div>
           </template>
@@ -187,44 +261,67 @@
             </div>
             <div class="xl:hidden">
               <UBadge 
-                :color="getStatusBadgeColor(statuses[row.id])" 
+                :color="getStatusBadgeColor(statuses[row.id] || 'PENDING')" 
                 variant="soft" 
                 size="xs"
               >
-                {{ getStatusLabel(statuses[row.id]) }}
+                {{ getStatusLabel(statuses[row.id] || 'PENDING') }}
               </UBadge>
             </div>
           </template>
 
           <template #linkedRegistration-data="{ row }">
-            <div v-if="row.authProvider === 'discord'" class="hidden xl:flex items-center gap-2">
-              <UBadge
-                v-if="row.linkedRegistrations && row.linkedRegistrations.length > 0"
-                color="green"
-                variant="soft"
-                size="xs"
-                class="max-w-[12rem]"
-              >
-                <span class="truncate">
-                  {{ row.linkedRegistrations[0].owner.nickname }}
-                  <span v-if="row.linkedRegistrations.length > 1">
-                    +{{ row.linkedRegistrations.length - 1 }}
-                  </span>
-                </span>
-              </UBadge>
-              <UButton
-                size="2xs"
-                color="blue"
-                variant="soft"
-                :icon="row.linkedRegistrations && row.linkedRegistrations.length > 0 ? 'i-heroicons-pencil' : 'i-heroicons-link'"
-                :square="!!(row.linkedRegistrations && row.linkedRegistrations.length > 0)"
-                :padded="!(row.linkedRegistrations && row.linkedRegistrations.length > 0)"
-                @click="openLinkModal(row)"
-              >
-                <span v-if="!row.linkedRegistrations || row.linkedRegistrations.length === 0" class="text-xs">
-                  Link
-                </span>
-              </UButton>
+            <div v-if="row.authProvider === 'discord'" class="hidden xl:block">
+              <div v-if="row.linkedRegistrations && row.linkedRegistrations.length > 0" class="space-y-2">
+                <div
+                  v-for="registration in row.linkedRegistrations"
+                  :key="registration.id"
+                  class="flex items-center justify-between gap-2 p-2 bg-slate-50 dark:bg-slate-800/50 rounded border border-slate-200 dark:border-slate-700"
+                >
+                  <div class="flex-1 min-w-0">
+                    <UBadge
+                      color="green"
+                      variant="soft"
+                      size="xs"
+                      class="max-w-[10rem]"
+                    >
+                      <span class="truncate">
+                        {{ registration.owner.nickname }}
+                      </span>
+                    </UBadge>
+                  </div>
+                  <UButton
+                    size="2xs"
+                    color="red"
+                    variant="ghost"
+                    icon="i-heroicons-x-mark"
+                    square
+                    :loading="unlinkingIds.has(registration.id)"
+                    @click.stop="unlinkConnection(registration.id, row.nickname, registration.owner.nickname)"
+                  />
+                </div>
+                <UButton
+                  size="2xs"
+                  color="blue"
+                  variant="soft"
+                  icon="i-heroicons-pencil"
+                  class="w-full"
+                  @click.stop="openLinkModal(row)"
+                >
+                  <span class="text-xs">Edit Links</span>
+                </UButton>
+              </div>
+              <div v-else class="flex items-center gap-2">
+                <UButton
+                  size="2xs"
+                  color="blue"
+                  variant="soft"
+                  icon="i-heroicons-link"
+                  @click.stop="openLinkModal(row)"
+                >
+                  <span class="text-xs">Link</span>
+                </UButton>
+              </div>
             </div>
             <div v-else class="hidden xl:inline text-xs text-slate-400 dark:text-white/40">—</div>
           </template>
@@ -300,6 +397,111 @@
       </div>
     </UCard>
 
+    <!-- Edit User Modal -->
+    <UModal v-model="showEditModal">
+      <UCard class="glass max-w-lg">
+        <template #header>
+          <div class="flex items-center gap-2">
+            <UIcon name="i-heroicons-pencil" />
+            <span class="font-semibold">Edit User</span>
+          </div>
+        </template>
+
+        <div class="space-y-4">
+          <div class="text-sm text-slate-600 dark:text-white/70">
+            <p v-if="selectedUserForEdit">
+              Editing:
+              <span class="font-medium">{{ selectedUserForEdit.nickname }}</span>
+            </p>
+          </div>
+
+          <!-- Discord Matching Section -->
+          <div class="space-y-4 p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-900">
+            <div class="flex items-center gap-2">
+              <UIcon name="i-heroicons-identification" class="text-blue-600 dark:text-blue-400" />
+              <span class="font-semibold text-blue-900 dark:text-blue-100">Link Discord Account</span>
+            </div>
+            
+            <UFormGroup label="Discord User ID" help="Enter Discord user ID (18-19 digit number)">
+              <UInput
+                v-model="discordIdForEdit"
+                placeholder="e.g. 123456789012345678"
+                class="flex-1"
+                :disabled="discordLoadingForEdit"
+                @input="fetchDiscordUserForEdit"
+              />
+            </UFormGroup>
+
+            <!-- Discord User Details -->
+            <div v-if="discordDetailsForEdit" class="p-3 rounded-lg bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800">
+              <div class="flex items-center gap-3">
+                <img
+                  v-if="discordDetailsForEdit.avatar"
+                  :src="discordDetailsForEdit.avatar"
+                  :alt="discordDetailsForEdit.username"
+                  class="w-12 h-12 rounded-full"
+                />
+                <div v-else class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                  {{ discordDetailsForEdit.username.charAt(0).toUpperCase() }}
+                </div>
+                <div class="flex-1">
+                  <div class="font-semibold text-slate-900 dark:text-white">{{ discordDetailsForEdit.username }}</div>
+                  <div class="text-sm text-slate-600 dark:text-white/60">
+                    <span class="font-mono">{{ discordDetailsForEdit.id }}</span>
+                    <span v-if="discordDetailsForEdit.globalName" class="ml-2">
+                      • {{ discordDetailsForEdit.globalName }}
+                    </span>
+                  </div>
+                </div>
+                <UBadge color="green" variant="soft" size="sm">Verified</UBadge>
+              </div>
+            </div>
+
+            <UAlert
+              v-if="discordErrorForEdit"
+              icon="i-heroicons-exclamation-circle"
+              color="red"
+              variant="soft"
+              :title="discordErrorForEdit"
+            />
+
+            <UButton
+              v-if="selectedUserForEdit?.discordId"
+              color="red"
+              variant="soft"
+              size="sm"
+              @click="clearDiscordLink"
+            >
+              Remove Discord Link
+            </UButton>
+          </div>
+
+          <!-- Nickname Update -->
+          <UFormGroup label="Update Nickname" help="Optional: Change the user's nickname">
+            <UInput
+              v-model="editUserNickname"
+              placeholder="Leave empty to keep current"
+            />
+          </UFormGroup>
+
+          <p v-if="editError" class="text-sm text-red-400">
+            {{ editError }}
+          </p>
+        </div>
+
+        <template #footer>
+          <div class="flex flex-col-reverse sm:flex-row justify-end gap-2">
+            <UButton color="gray" variant="ghost" class="w-full sm:w-auto" @click="showEditModal = false">
+              Cancel
+            </UButton>
+            <UButton color="blue" :loading="editSaving" class="w-full sm:w-auto" @click="saveEdit">
+              Save Changes
+            </UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
+
     <!-- Link User to Registration Modal -->
     <UModal v-model="showLinkModal">
       <UCard class="glass max-w-lg">
@@ -346,12 +548,13 @@
 
           <UFormGroup label="Select registered user">
             <USelectMenu
-              v-model="selectedRegisteredUserId"
+              :model-value="selectedRegisteredUserId || undefined"
               :options="registrationOptions"
               value-attribute="value"
               option-attribute="label"
               placeholder="Choose a user from search results"
               :disabled="registrationOptions.length === 0"
+              @update:model-value="selectedRegisteredUserId = $event || null"
             />
           </UFormGroup>
 
@@ -448,6 +651,55 @@ const linkSaving = ref(false)
 const openMenuId = ref<string | null>(null)
 const menuPositions = ref<Record<string, 'top' | 'bottom'>>({})
 const openInfoTooltipId = ref<string | null>(null)
+
+// Edit user modal
+const showEditModal = ref(false)
+const selectedUserForEdit = ref<UserRow | null>(null)
+const discordIdForEdit = ref('')
+const discordLoadingForEdit = ref(false)
+const discordDetailsForEdit = ref<{
+  id: string
+  username: string
+  avatar: string | null
+  globalName?: string | null
+} | null>(null)
+const discordErrorForEdit = ref<string | null>(null)
+const editUserNickname = ref('')
+const editError = ref<string | null>(null)
+const editSaving = ref(false)
+
+// Discord connections
+const unlinkingIds = ref<Set<string>>(new Set())
+
+async function unlinkConnection(registeredUserId: string, discordUserName: string, ownerName: string) {
+  if (unlinkingIds.value.has(registeredUserId)) return
+
+  unlinkingIds.value.add(registeredUserId)
+  try {
+    await $fetch('/api/admin/discord-users/unlink', {
+      method: 'POST',
+      body: { registeredUserId }
+    })
+    
+    useToast().add({ 
+      title: 'Connection removed', 
+      description: `Unlinked ${discordUserName} from ${ownerName}'s registration`, 
+      color: 'green' 
+    })
+    
+    // Refresh the users table
+    await refreshRows()
+  } catch (e: any) {
+    console.error(e)
+    useToast().add({ 
+      title: 'Failed to unlink', 
+      description: e?.data?.message || 'An error occurred', 
+      color: 'red' 
+    })
+  } finally {
+    unlinkingIds.value.delete(registeredUserId)
+  }
+}
 
 const filteredRows = computed(() => {
   if (!rows.value) return []
@@ -639,6 +891,17 @@ function getUserMenuItems(row: UserRow) {
   
   menuItems.push([
     {
+      label: 'Edit User',
+      icon: 'i-heroicons-pencil',
+      click: () => {
+        openEditModal(row)
+        openMenuId.value = null
+      }
+    }
+  ])
+  
+  menuItems.push([
+    {
       label: 'Role',
       disabled: true,
       class: 'text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider'
@@ -682,14 +945,22 @@ function getUserMenuItems(row: UserRow) {
       },
       ...(row.linkedRegistrations && row.linkedRegistrations.length > 0
         ? [
-            {
-              label: `Linked with ${row.linkedRegistrations[0].owner.nickname}${row.linkedRegistrations.length > 1 ? ` +${row.linkedRegistrations.length - 1} more` : ''}`,
+            ...row.linkedRegistrations.map((registration) => ({
+              label: `Linked: ${registration.owner.nickname}`,
               disabled: true,
               icon: 'i-heroicons-link',
               class: 'text-xs text-slate-600 dark:text-white/70'
-            },
+            })),
+            ...row.linkedRegistrations.map((registration) => ({
+              label: `Unlink ${registration.owner.nickname}`,
+              icon: 'i-heroicons-x-mark',
+              click: async () => {
+                await unlinkConnection(registration.id, row.nickname, registration.owner.nickname)
+                openMenuId.value = null
+              }
+            })),
             {
-              label: 'Edit Link',
+              label: 'Edit Links',
               icon: 'i-heroicons-pencil',
               click: () => {
                 openLinkModal(row)
@@ -713,21 +984,118 @@ function getUserMenuItems(row: UserRow) {
   return menuItems
 }
 
-const newUser = reactive({ nickname: '', password: '', role: 'MANAGER' })
+const newUser = reactive({
+  nickname: '',
+  password: '',
+  role: 'MANAGER' as 'USER' | 'MANAGER' | 'SUPERADMIN',
+  useCustomNickname: false
+})
 const creating = ref(false)
 
-async function createNewUser() {
-  if (!newUser.nickname || newUser.password.length < 8) {
-    useToast().add({ title: 'Error', description: 'Nickname is required and password must be at least 8 characters', color: 'red' })
+// Discord ID for user creation
+const discordIdForCreation = ref('')
+const discordLoadingForCreation = ref(false)
+const discordDetailsForCreation = ref<{
+  id: string
+  username: string
+  avatar: string | null
+  globalName?: string | null
+} | null>(null)
+const discordErrorForCreation = ref<string | null>(null)
+
+async function fetchDiscordUserForCreation() {
+  const discordId = discordIdForCreation.value.trim()
+  discordDetailsForCreation.value = null
+  discordErrorForCreation.value = null
+
+  // Validate Discord ID format (18-19 digits)
+  if (!discordId) {
     return
   }
+
+  if (!/^\d{17,19}$/.test(discordId)) {
+    discordErrorForCreation.value = 'Invalid Discord ID format (must be 18-19 digits)'
+    return
+  }
+
+  discordLoadingForCreation.value = true
+  try {
+    const details = await $fetch<{
+      id: string
+      username: string
+      avatar: string | null
+      globalName?: string | null
+    }>(`/api/admin/discord-users/${discordId}`)
+
+    discordDetailsForCreation.value = details
+    
+    // Auto-fill nickname if not using custom nickname
+    if (!newUser.useCustomNickname) {
+      newUser.nickname = details.username
+    }
+  } catch (e: any) {
+    console.error(e)
+    discordErrorForCreation.value = e?.data?.message || 'Failed to fetch Discord user'
+    discordDetailsForCreation.value = null
+  } finally {
+    discordLoadingForCreation.value = false
+  }
+}
+
+// Watch for custom nickname checkbox
+watch(() => newUser.useCustomNickname, (useCustom) => {
+  if (!useCustom && discordDetailsForCreation.value) {
+    newUser.nickname = discordDetailsForCreation.value.username
+  }
+})
+
+async function createNewUser() {
+  // Validate: either Discord ID provided OR custom nickname + password provided
+  const discordId = discordIdForCreation.value.trim()
+  if (!discordId) {
+    if (!newUser.nickname || newUser.password.length < 8) {
+      useToast().add({ title: 'Error', description: 'Either provide a Discord ID or provide nickname and password (min 8 characters)', color: 'red' })
+      return
+    }
+  }
+
+  // If Discord ID is provided, validate format
+  if (discordId && !/^\d{17,19}$/.test(discordId)) {
+    useToast().add({ title: 'Error', description: 'Invalid Discord ID format (must be 18-19 digits)', color: 'red' })
+    return
+  }
+
   creating.value = true
   try {
-    await $fetch('/api/admin/users', { method: 'POST', body: newUser })
-    useToast().add({ title: 'User created', description: `User "${newUser.nickname}" has been created`, color: 'green' })
+    const body: any = {
+      role: newUser.role
+    }
+
+    if (discordId) {
+      // Create user from Discord
+      body.discordId = discordId
+      body.useCustomNickname = newUser.useCustomNickname
+      if (newUser.useCustomNickname && newUser.nickname) {
+        body.nickname = newUser.nickname
+      }
+    } else {
+      // Create traditional user
+      body.nickname = newUser.nickname
+      body.password = newUser.password
+    }
+
+    const result = await $fetch('/api/admin/users', { method: 'POST', body })
+    useToast().add({ title: 'User created', description: `User "${result.nickname}" has been created`, color: 'green' })
+    
+    // Reset form
     newUser.nickname = ''
     newUser.password = ''
     newUser.role = 'MANAGER'
+    newUser.useCustomNickname = false
+    discordIdForCreation.value = ''
+    discordDetailsForCreation.value = null
+    discordErrorForCreation.value = null
+    
     refreshRows()
   } catch (e: any) {
     useToast().add({ title: 'Failed to create user', description: e?.data?.message || e?.message, color: 'red' })
@@ -750,6 +1118,117 @@ async function copyToClipboard(text: string) {
     useToast().add({ title: 'Copied to clipboard', color: 'green' })
   } catch (e) {
     useToast().add({ title: 'Failed to copy', color: 'red' })
+  }
+}
+
+function openEditModal(row: UserRow) {
+  selectedUserForEdit.value = row
+  discordIdForEdit.value = row.discordId || ''
+  discordDetailsForEdit.value = null
+  discordErrorForEdit.value = null
+  editUserNickname.value = ''
+  editError.value = null
+  if (row.discordId) {
+    fetchDiscordUserForEdit()
+  }
+  showEditModal.value = true
+}
+
+async function fetchDiscordUserForEdit() {
+  const discordId = discordIdForEdit.value.trim()
+  discordDetailsForEdit.value = null
+  discordErrorForEdit.value = null
+
+  // Validate Discord ID format (18-19 digits)
+  if (!discordId) {
+    return
+  }
+
+  if (!/^\d{17,19}$/.test(discordId)) {
+    discordErrorForEdit.value = 'Invalid Discord ID format (must be 18-19 digits)'
+    return
+  }
+
+  discordLoadingForEdit.value = true
+  try {
+    const details = await $fetch<{
+      id: string
+      username: string
+      avatar: string | null
+      globalName?: string | null
+    }>(`/api/admin/discord-users/${discordId}`)
+
+    discordDetailsForEdit.value = details
+  } catch (e: any) {
+    console.error(e)
+    discordErrorForEdit.value = e?.data?.message || 'Failed to fetch Discord user'
+    discordDetailsForEdit.value = null
+  } finally {
+    discordLoadingForEdit.value = false
+  }
+}
+
+function clearDiscordLink() {
+  discordIdForEdit.value = ''
+  discordDetailsForEdit.value = null
+  discordErrorForEdit.value = null
+}
+
+async function saveEdit() {
+  if (!selectedUserForEdit.value) {
+    return
+  }
+
+  editSaving.value = true
+  editError.value = null
+
+  try {
+    const body: any = {}
+    const discordId = discordIdForEdit.value.trim()
+
+    if (discordId) {
+      // Validate Discord ID format
+      if (!/^\d{17,19}$/.test(discordId)) {
+        editError.value = 'Invalid Discord ID format (must be 18-19 digits)'
+        editSaving.value = false
+        return
+      }
+      body.discordId = discordId
+    } else if (selectedUserForEdit.value.discordId && !discordId) {
+      // Clear Discord link
+      body.discordId = null
+      body.discordUsername = null
+      body.discordAvatar = null
+      body.authProvider = 'local'
+    }
+
+    if (editUserNickname.value.trim()) {
+      body.nickname = editUserNickname.value.trim()
+    }
+
+    if (Object.keys(body).length === 0) {
+      editError.value = 'No changes to save'
+      editSaving.value = false
+      return
+    }
+
+    await $fetch(`/api/admin/users/${selectedUserForEdit.value.id}`, {
+      method: 'POST',
+      body
+    })
+
+    useToast().add({ title: 'User updated', description: 'User has been updated successfully', color: 'green' })
+    showEditModal.value = false
+    selectedUserForEdit.value = null
+    discordIdForEdit.value = ''
+    discordDetailsForEdit.value = null
+    discordErrorForEdit.value = null
+    await refreshRows()
+  } catch (e: any) {
+    console.error(e)
+    editError.value = e?.data?.message || 'Failed to update user'
+  } finally {
+    editSaving.value = false
   }
 }
 

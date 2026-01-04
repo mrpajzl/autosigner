@@ -1,6 +1,5 @@
 import { prisma } from '../../../utils/db'
 import { nanoid } from 'nanoid'
-import { linkDiscordUser } from '../../../utils/discord-linking'
 
 interface DiscordTokenResponse {
   access_token: string
@@ -103,7 +102,15 @@ export default defineEventHandler(async (event) => {
       })
       
       // Link with any existing RegisteredUser entries that match this Discord ID
-      await linkDiscordUser(user.id, discordUser.id, discordUsername, user.nickname)
+      await prisma.registeredUser.updateMany({
+        where: {
+          discordId: discordUser.id,
+          linkedUserId: null // Only link if not already linked
+        },
+        data: {
+          linkedUserId: user.id
+        }
+      })
     } else {
       // Update existing user's Discord info
       user = await prisma.user.update({
@@ -114,9 +121,17 @@ export default defineEventHandler(async (event) => {
         }
       })
       
-      // Always try to link with any existing RegisteredUser entries
-      // This ensures we catch new matches on every sign-in, especially if no connection exists
-      await linkDiscordUser(user.id, discordUser.id, discordUsername, user.nickname)
+      // Link with any existing RegisteredUser entries that match this Discord ID
+      // This ensures we catch new matches on every sign-in
+      await prisma.registeredUser.updateMany({
+        where: {
+          discordId: discordUser.id,
+          linkedUserId: null // Only link if not already linked
+        },
+        data: {
+          linkedUserId: user.id
+        }
+      })
     }
     
     // Create session

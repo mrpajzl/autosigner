@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     where: { ownerId: user.id },
     include: {
       devices: {
-        orderBy: { createdAt: 'desc' }
+        orderBy: { deviceNumber: 'asc' }
       },
       linkedUser: {
         select: {
@@ -55,40 +55,83 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Transform the data with Apple registration status
-  return registeredUsers.map(regUser => ({
-    id: regUser.id,
-    discordName: regUser.discordName,
-    discordId: regUser.discordId,
-    notes: regUser.notes,
-    paidForNextYear: regUser.paidForNextYear,
-    createdAt: regUser.createdAt,
-    updatedAt: regUser.updatedAt,
-    devices: regUser.devices.map(device => ({
-      id: device.id,
-      udid: device.udid,
-      name: device.name,
-      platform: device.platform,
-      createdAt: device.createdAt,
-      updatedAt: device.updatedAt,
-      isRegisteredInApple: includeAppleStatus 
-        ? appleDeviceUdids.has(device.udid.toLowerCase()) 
-        : undefined
-    })),
-    deviceCount: regUser.devices.length,
-    registeredInAppleCount: includeAppleStatus
-      ? regUser.devices.filter(d => appleDeviceUdids.has(d.udid.toLowerCase())).length
-      : undefined,
-    linkedUser: regUser.linkedUser
-      ? {
-          id: regUser.linkedUser.id,
-          nickname: regUser.linkedUser.nickname,
-          authProvider: regUser.linkedUser.authProvider,
-          discordId: regUser.linkedUser.discordId,
-          discordUsername: regUser.linkedUser.discordUsername,
-          discordAvatar: regUser.linkedUser.discordAvatar
+  // Fetch Discord avatars for users with discordId but no linkedUser avatar
+  const config = useRuntimeConfig()
+  // @ts-ignore - process.env is available in Node.js runtime
+  const botToken = config.discordBotToken || process.env.DISCORD_BOT_TOKEN
+
+  // Transform the data with Apple registration status and Discord avatars
+  const result = await Promise.all(registeredUsers.map(async (regUser) => {
+    let discordAvatar: string | null = null
+
+    // If user has linkedUser with avatar, use that
+    if (regUser.linkedUser?.discordAvatar) {
+      discordAvatar = regUser.linkedUser.discordAvatar
+    } 
+    // Otherwise, if user has discordId but no linkedUser avatar, fetch from Discord API
+    else if (regUser.discordId && botToken) {
+      try {
+        const discordUser = await $fetch<{
+          id: string
+          username: string
+          discriminator: string
+          avatar: string | null
+          global_name?: string | null
+        }>(`https://discord.com/api/v10/users/${regUser.discordId}`, {
+          headers: {
+            Authorization: `Bot ${botToken}`
+          }
+        })
+
+        if (discordUser.avatar) {
+          const extension = discordUser.avatar.startsWith('a_') ? 'gif' : 'png'
+          discordAvatar = `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.${extension}`
         }
-      : null
+      } catch (e) {
+        // If we can't fetch, just continue without avatar
+        console.error(`Failed to fetch Discord avatar for user ${regUser.discordId}:`, e)
+      }
+    }
+
+    return {
+      id: regUser.id,
+      discordName: regUser.discordName,
+      discordId: regUser.discordId,
+      discordAvatar, // Add the fetched avatar
+      notes: regUser.notes,
+      paidForNextYear: regUser.paidForNextYear,
+      createdAt: regUser.createdAt,
+      updatedAt: regUser.updatedAt,
+      devices: regUser.devices.map(device => ({
+        id: device.id,
+        udid: device.udid,
+        name: device.name,
+        deviceNumber: device.deviceNumber,
+        platform: device.platform,
+        appleDeviceId: device.appleDeviceId,
+        createdAt: device.createdAt,
+        updatedAt: device.updatedAt,
+        isRegisteredInApple: includeAppleStatus 
+          ? appleDeviceUdids.has(device.udid.toLowerCase()) 
+          : undefined
+      })),
+      deviceCount: regUser.devices.length,
+      registeredInAppleCount: includeAppleStatus
+        ? regUser.devices.filter(d => appleDeviceUdids.has(d.udid.toLowerCase())).length
+        : undefined,
+      linkedUser: regUser.linkedUser
+        ? {
+            id: regUser.linkedUser.id,
+            nickname: regUser.linkedUser.nickname,
+            authProvider: regUser.linkedUser.authProvider,
+            discordId: regUser.linkedUser.discordId,
+            discordUsername: regUser.linkedUser.discordUsername,
+            discordAvatar: regUser.linkedUser.discordAvatar
+          }
+        : null
+    }
   }))
+
+  return result
 })
 

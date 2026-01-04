@@ -5,9 +5,32 @@ import { H3Event, getCookie, setCookie, deleteCookie } from 'h3'
 
 const SESSION_COOKIE = 'as_session'
 
-export async function createUser(nickname: string, password: string, role: 'SUPERADMIN' | 'MANAGER' | 'USER' = 'USER') {
-  const passwordHash = await bcrypt.hash(password, 12)
-  return prisma.user.create({ data: { nickname, passwordHash, role, status: 'APPROVED' } })
+export async function createUser(
+  nickname: string,
+  password: string,
+  role: 'SUPERADMIN' | 'MANAGER' | 'USER' = 'USER',
+  options?: {
+    discordId?: string | null
+    discordUsername?: string | null
+    discordAvatar?: string | null
+    authProvider?: 'local' | 'discord'
+  }
+) {
+  const passwordHash = password ? await bcrypt.hash(password, 12) : null
+  const authProvider = options?.authProvider || (options?.discordId ? 'discord' : 'local')
+  
+  return prisma.user.create({
+    data: {
+      nickname,
+      passwordHash,
+      role,
+      status: 'APPROVED',
+      authProvider,
+      discordId: options?.discordId || null,
+      discordUsername: options?.discordUsername || null,
+      discordAvatar: options?.discordAvatar || null
+    }
+  })
 }
 
 export async function login(event: H3Event, nickname: string, password: string) {

@@ -49,6 +49,8 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     encryptionSecret: process.env.CRYPTO_SECRET || '',
+    discordBotToken: process.env.DISCORD_BOT_TOKEN || '',
+    discordGuildId: process.env.DISCORD_GUILD_ID || '',
     public: {
       baseUrl: process.env.PUBLIC_BASE_URL || ''
     }
