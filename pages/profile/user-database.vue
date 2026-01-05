@@ -138,11 +138,11 @@
           icon="i-heroicons-magnifying-glass"
           class="flex-1"
         />
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
           <div class="flex rounded-lg bg-white/5 p-1 gap-1">
             <button
               type="button"
-              class="px-3 py-1.5 text-sm font-medium rounded-md transition-all"
+              class="px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap"
               :class="paymentFilter === 'all' 
                 ? 'bg-white/15 text-white shadow-sm' 
                 : 'text-slate-400 hover:text-white hover:bg-white/5'"
@@ -152,7 +152,7 @@
             </button>
             <button
               type="button"
-              class="px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5"
+              class="px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 whitespace-nowrap"
               :class="paymentFilter === 'paid' 
                 ? 'bg-emerald-500/20 text-emerald-400 shadow-sm' 
                 : 'text-slate-400 hover:text-white hover:bg-white/5'"
@@ -163,7 +163,7 @@
             </button>
             <button
               type="button"
-              class="px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5"
+              class="px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 whitespace-nowrap"
               :class="paymentFilter === 'unpaid' 
                 ? 'bg-orange-500/20 text-orange-400 shadow-sm' 
                 : 'text-slate-400 hover:text-white hover:bg-white/5'"
@@ -171,6 +171,29 @@
             >
               <UIcon name="i-heroicons-exclamation-circle" class="w-4 h-4" />
               Unpaid
+            </button>
+          </div>
+          <div class="flex rounded-lg bg-white/5 p-1 gap-1">
+            <button
+              type="button"
+              class="px-3 py-1.5 text-sm font-medium rounded-md transition-all whitespace-nowrap"
+              :class="discordFilter === 'all' 
+                ? 'bg-white/15 text-white shadow-sm' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5'"
+              @click="discordFilter = 'all'"
+            >
+              All Discord
+            </button>
+            <button
+              type="button"
+              class="px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1.5 whitespace-nowrap"
+              :class="discordFilter === 'no-discord' 
+                ? 'bg-red-500/20 text-red-400 shadow-sm' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5'"
+              @click="discordFilter = 'no-discord'"
+            >
+              <UIcon name="i-heroicons-user-minus" class="w-4 h-4" />
+              No Discord ID
             </button>
           </div>
           <UButton
@@ -440,14 +463,33 @@
             </div>
             
             <UFormGroup label="Discord User ID" help="Enter Discord user ID (18-19 digit number)">
-              <UInput
-                v-model="userFormDiscordId"
-                placeholder="e.g. 123456789012345678"
-                class="flex-1"
-                :disabled="userFormDiscordLoading"
-                @input="fetchDiscordUserDetails"
-              />
+              <div class="flex gap-2">
+                <UInput
+                  v-model="userFormDiscordId"
+                  placeholder="e.g. 123456789012345678"
+                  class="flex-1"
+                  :disabled="userFormDiscordLoading"
+                  @input="fetchDiscordUserDetails"
+                  @keyup.enter="fetchDiscordUserDetails"
+                />
+                <UButton
+                  color="blue"
+                  variant="soft"
+                  icon="i-heroicons-magnifying-glass"
+                  :loading="userFormDiscordLoading"
+                  @click="fetchDiscordUserDetails"
+                  title="Fetch Discord user"
+                >
+                  Fetch
+                </UButton>
+              </div>
             </UFormGroup>
+
+            <!-- Loading Indicator -->
+            <div v-if="userFormDiscordLoading" class="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+              <UIcon name="i-heroicons-arrow-path" class="w-4 h-4 animate-spin" />
+              <span>Fetching Discord user information...</span>
+            </div>
 
             <!-- Discord User Details -->
             <div v-if="userFormDiscordDetails" class="p-3 rounded-lg bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-800">
@@ -849,6 +891,7 @@ interface RegisteredUser {
 const search = ref('')
 const refreshing = ref(false)
 const paymentFilter = ref<'all' | 'paid' | 'unpaid'>('all')
+const discordFilter = ref<'all' | 'no-discord'>('all')
 
 // Apple connection status
 const { data: appleStatus } = await useFetch('/api/apple/credentials')
@@ -870,6 +913,11 @@ const filteredUsers = computed(() => {
     result = result.filter(u => u.paidForNextYear)
   } else if (paymentFilter.value === 'unpaid') {
     result = result.filter(u => !u.paidForNextYear)
+  }
+  
+  // Apply Discord filter
+  if (discordFilter.value === 'no-discord') {
+    result = result.filter(u => !u.discordId)
   }
   
   // Apply search filter
@@ -1109,6 +1157,7 @@ async function fetchDiscordUserDetails() {
 
   userFormDiscordLoading.value = true
   try {
+    console.log('Fetching Discord user details for ID:', discordId)
     const details = await $fetch<{
       id: string
       username: string
@@ -1116,14 +1165,16 @@ async function fetchDiscordUserDetails() {
       globalName?: string | null
     }>(`/api/admin/discord-users/${discordId}`)
 
+    console.log('Discord user details fetched:', details)
     userFormDiscordDetails.value = details
     
     // Always auto-fill Discord name from verified Discord user
     // User can override with custom name checkbox if needed
     userForm.discordName = details.username
   } catch (e: any) {
-    console.error(e)
-    userFormDiscordError.value = e?.data?.message || 'Failed to fetch Discord user'
+    console.error('Error fetching Discord user:', e)
+    const errorMessage = e?.data?.message || e?.message || 'Failed to fetch Discord user'
+    userFormDiscordError.value = errorMessage
     userFormDiscordDetails.value = null
   } finally {
     userFormDiscordLoading.value = false

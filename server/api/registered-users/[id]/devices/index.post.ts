@@ -55,8 +55,8 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Get the next device number for this user
-  const deviceNumber = await getNextDeviceNumber(userId, prisma)
+  // Get the next device number for this user and platform
+  const deviceNumber = await getNextDeviceNumber(userId, platform, prisma)
   
   // Generate the unified device name
   const deviceName = generateDeviceName(registeredUser.discordName, platform, deviceNumber)

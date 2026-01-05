@@ -110,17 +110,22 @@ export function parseDeviceName(deviceName: string): {
 }
 
 /**
- * Get the next available device number for a user
+ * Get the next available device number for a user per platform
  * @param userId - The registered user ID
+ * @param platform - The device platform (IOS, MAC_OS, APPLE_TV)
  * @param prisma - Prisma client instance
- * @returns The next device number to use
+ * @returns The next device number to use for this platform
  */
 export async function getNextDeviceNumber(
   userId: string,
+  platform: string,
   prisma: any
 ): Promise<number> {
   const maxDevice = await prisma.userDevice.findFirst({
-    where: { registeredUserId: userId },
+    where: { 
+      registeredUserId: userId,
+      platform: platform
+    },
     orderBy: { deviceNumber: 'desc' },
     select: { deviceNumber: true }
   })

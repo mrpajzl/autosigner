@@ -170,8 +170,8 @@ export default defineEventHandler(async (event) => {
     let devicesAdded = 0
     for (const device of devices) {
       try {
-        // Get the next device number for this user
-        const deviceNumber = await getNextDeviceNumber(registeredUser.id, prisma)
+        // Get the next device number for this user and platform
+        const deviceNumber = await getNextDeviceNumber(registeredUser.id, device.platform, prisma)
         
         await prisma.userDevice.create({
           data: {
