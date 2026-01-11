@@ -32,6 +32,7 @@ export default defineEventHandler(async (event) => {
 
   // If Apple status is requested, fetch devices from Apple and compare
   let appleDeviceUdids: Set<string> = new Set()
+  let appleDeviceMap: Map<string, { name: string; id: string }> = new Map()
 
   if (includeAppleStatus) {
     const credentials = await prisma.appleDeveloperCredentials.findUnique({
@@ -48,6 +49,12 @@ export default defineEventHandler(async (event) => {
         })
         const appleDevices = await api.listDevices()
         appleDeviceUdids = new Set(appleDevices.map(d => d.attributes.udid.toLowerCase()))
+        appleDeviceMap = new Map(
+          appleDevices.map(d => [
+            d.attributes.udid.toLowerCase(),
+            { name: d.attributes.name, id: d.id }
+          ])
+        )
       } catch (e) {
         // If Apple API fails, just continue without status
         console.error('Failed to fetch Apple devices for status check:', e)
@@ -102,19 +109,24 @@ export default defineEventHandler(async (event) => {
       paidForNextYear: regUser.paidForNextYear,
       createdAt: regUser.createdAt,
       updatedAt: regUser.updatedAt,
-      devices: regUser.devices.map(device => ({
-        id: device.id,
-        udid: device.udid,
-        name: device.name,
-        deviceNumber: device.deviceNumber,
-        platform: device.platform,
-        appleDeviceId: device.appleDeviceId,
-        createdAt: device.createdAt,
-        updatedAt: device.updatedAt,
-        isRegisteredInApple: includeAppleStatus 
-          ? appleDeviceUdids.has(device.udid.toLowerCase()) 
-          : undefined
-      })),
+      devices: regUser.devices.map(device => {
+        const isRegistered = includeAppleStatus ? appleDeviceUdids.has(device.udid.toLowerCase()) : undefined
+        const appleDeviceInfo = includeAppleStatus ? appleDeviceMap.get(device.udid.toLowerCase()) : undefined
+        
+        return {
+          id: device.id,
+          udid: device.udid,
+          name: device.name,
+          deviceNumber: device.deviceNumber,
+          platform: device.platform,
+          appleDeviceId: device.appleDeviceId,
+          createdAt: device.createdAt,
+          updatedAt: device.updatedAt,
+          isRegisteredInApple: isRegistered,
+          appleDeviceName: appleDeviceInfo?.name,
+          needsSync: isRegistered && appleDeviceInfo ? device.name !== appleDeviceInfo.name : false
+        }
+      }),
       deviceCount: regUser.devices.length,
       registeredInAppleCount: includeAppleStatus
         ? regUser.devices.filter(d => appleDeviceUdids.has(d.udid.toLowerCase())).length

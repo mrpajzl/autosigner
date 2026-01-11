@@ -382,6 +382,9 @@
                 <div class="min-w-0">
                   <p class="font-medium truncate text-slate-900 dark:text-white">{{ device.name }}</p>
                   <p class="font-mono text-xs text-slate-500 dark:text-white/40 truncate">{{ device.udid }}</p>
+                  <p v-if="device.needsSync && !syncSuccess && !syncError" class="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    ⚠ Apple has: "{{ device.appleDeviceName }}"
+                  </p>
                   <p v-if="syncSuccess === device.id" class="text-xs text-green-600 dark:text-green-400 mt-1">
                     ✓ Synced to Apple Developer Portal
                   </p>
@@ -401,12 +404,12 @@
                 </UBadge>
                 <UBadge color="blue" variant="soft" size="xs">{{ device.platform }}</UBadge>
                 <button
-                  v-if="device.isRegisteredInApple"
+                  v-if="device.needsSync"
                   type="button"
-                  class="p-1.5 rounded-md text-slate-400 hover:text-green-400 hover:bg-green-500/10 transition-all"
+                  class="p-1.5 rounded-md text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 transition-all"
                   :disabled="syncingDevice === device.id"
                   @click="syncDeviceToApple(regUser, device)"
-                  title="Sync device name to Apple Developer Portal"
+                  :title="`Update name in Apple: '${device.appleDeviceName}' → '${device.name}'`"
                 >
                   <UIcon v-if="syncingDevice === device.id" name="i-heroicons-arrow-path" class="w-3.5 h-3.5 animate-spin" />
                   <UIcon v-else name="i-heroicons-arrow-path" class="w-3.5 h-3.5" />
@@ -864,6 +867,8 @@ interface Device {
   updatedAt: string
   isRegisteredInApple?: boolean
   appleDeviceId?: string
+  appleDeviceName?: string
+  needsSync?: boolean
 }
 
 interface RegisteredUser {
@@ -1471,11 +1476,29 @@ async function syncDeviceToApple(user: RegisteredUser, device: Device) {
   syncError.value = null
 
   try {
-    const result = await $fetch<{ success: boolean; deviceName: string }>(`/api/registered-users/${user.id}/devices/${device.id}/sync-to-apple`, {
+    const result = await $fetch<{ 
+      success: boolean
+      deviceName: string
+      platform: string
+      deviceClass: string
+    }>(`/api/registered-users/${user.id}/devices/${device.id}/sync-to-apple`, {
       method: 'POST'
     })
     
     if (result.success) {
+      // Update the device locally without refreshing the entire list
+      const userIndex = users.value.findIndex(u => u.id === user.id)
+      if (userIndex !== -1) {
+        const deviceIndex = users.value[userIndex].devices.findIndex(d => d.id === device.id)
+        if (deviceIndex !== -1) {
+          // Update the device properties
+          users.value[userIndex].devices[deviceIndex].name = result.deviceName
+          users.value[userIndex].devices[deviceIndex].platform = result.platform
+          users.value[userIndex].devices[deviceIndex].needsSync = false
+          users.value[userIndex].devices[deviceIndex].appleDeviceName = result.deviceName
+        }
+      }
+      
       syncSuccess.value = device.id
       // Clear success message after 3 seconds
       setTimeout(() => {
@@ -1483,8 +1506,6 @@ async function syncDeviceToApple(user: RegisteredUser, device: Device) {
           syncSuccess.value = null
         }
       }, 3000)
-      // Refresh to show updated device info
-      await refreshUsers()
     }
   } catch (e: any) {
     syncError.value = device.id
