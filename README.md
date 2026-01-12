@@ -14,9 +14,12 @@ FastSigner is a Nuxt app for signing iOS/tvOS applications on an M4 Mac server. 
 
 - **macOS** (tested on M4 Mac with Apple Silicon)
 - **Node.js** >= 22.12.0
+- **pnpm** (install with `npm install -g pnpm`)
 - **Xcode Command Line Tools** (for `codesign`, `security`, `plutil`)
 - **Valid Apple Developer Certificate** (.p12 format)
 - **Provisioning Profiles** (.mobileprovision)
+
+> **Note**: FastSigner runs **natively on macOS** (not in Docker) to access macOS code signing tools.
 
 ## Environment Variables
 
@@ -65,8 +68,11 @@ NODE_ENV="production"                     # Set to production for secure cookies
 ## Installation
 
 ```bash
+# Install pnpm globally if not already installed
+npm install -g pnpm
+
 # Install dependencies
-npm install
+pnpm install
 
 # Generate Prisma client
 npx prisma generate
@@ -114,18 +120,77 @@ The script walks `public/uploads`, copies every file to the configured bucket vi
 
 ```bash
 # Start development server
-npm run dev:local
+pnpm run dev:local
 ```
 
-## Production
+## Production (Automated)
+
+**Use the Management Console for production deployment:**
+
+```bash
+# Setup and start the manager
+./scripts/setup-autostart.sh
+./scripts/fastsigner-manager.sh
+```
+
+The manager provides:
+- **Automated builds** with `pnpm run build`
+- **Zero-downtime updates** from main branch
+- **Background process management**
+- **Auto-start on system boot**
+- **Health monitoring and recovery**
+
+## Production (Manual)
 
 ```bash
 # Build for production
-npm run build
+pnpm run build
 
-# Start production server
-npm run start
+# Start production server in background
+NODE_ENV=production pnpm run start &
 ```
+
+## 🚀 Management Console
+
+FastSigner includes a comprehensive terminal-based management console with keyboard navigation for easy deployment and maintenance on macOS systems.
+
+### Features
+
+- **🎮 Keyboard Navigation**: Arrow keys, Enter, or direct number input - smooth, flicker-free
+- **📊 Real-time Status**: Live dashboard showing app health, git status, and system resources
+- **🔄 Zero-Downtime Updates**: Automatic updates from main branch with no service interruption
+- **🏗️ Native macOS Build**: Uses `pnpm run build` for production-ready builds
+- **🔄 Background Process**: App runs independently in the background
+- **💾 Backup System**: Full backup and restore capabilities
+- **🗄️ Database Tools**: Migrations, reset, and status checking
+- **🧹 Maintenance**: Cleanup tools for logs and dependencies
+- **🏁 Auto-Start**: Opens automatically on macOS startup
+- **🛡️ Protected Console**: Ctrl+C trapped to prevent accidental exits
+- **📈 Health Monitoring**: Auto-recovery if app crashes
+
+### Quick Start
+
+```bash
+# Setup auto-start and launch agents
+./scripts/setup-autostart.sh
+
+# Run the manager
+./scripts/fastsigner-manager.sh
+```
+
+### Navigation
+
+- Use **↑↓ arrow keys** to navigate menus
+- Press **Enter** to select the highlighted option
+- Navigation is **arrow-key only** - no typing required
+- All submenus support the same consistent navigation
+- Smooth, flicker-free interface
+
+For detailed deployment and management documentation, see:
+- [DEPLOYMENT.md](./DEPLOYMENT.md) - Complete deployment guide
+- [KEYBOARD_NAVIGATION.md](./KEYBOARD_NAVIGATION.md) - Navigation tips and tricks
+- [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Common issues and solutions
+- [ZERO_DOWNTIME_DEPLOYMENT.md](./ZERO_DOWNTIME_DEPLOYMENT.md) - Zero-downtime deployment guide
 
 ## How Signing Works
 

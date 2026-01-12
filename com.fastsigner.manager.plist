@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.fastsigner.manager</string>
+    
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/osascript</string>
+        <string>-e</string>
+        <string>tell application "Terminal"
+            activate
+            do script "/Users/ondrejzraly/Projects/fastsigner/scripts/fastsigner-manager.sh"
+        end tell</string>
+    </array>
+    
+    <key>RunAtLoad</key>
+    <true/>
+    
+    <key>KeepAlive</key>
+    <false/>
+    
+    <key>StandardOutPath</key>
+    <string>/Users/ondrejzraly/Projects/fastsigner/logs/manager-startup.log</string>
+    
+    <key>StandardErrorPath</key>
+    <string>/Users/ondrejzraly/Projects/fastsigner/logs/manager-startup-error.log</string>
+</dict>
+</plist>
