@@ -400,7 +400,31 @@ pull_update() {
     git pull $git_remote main
     
     echo -e "${BLUE}→ Installing dependencies with pnpm...${NC}"
-    pnpm install
+    
+    # Try to install, and if it fails with permission error, offer to fix
+    if ! pnpm install 2>&1 | tee /tmp/pnpm-install.log; then
+        if grep -q "EACCES" /tmp/pnpm-install.log || grep -q "permission denied" /tmp/pnpm-install.log; then
+            echo -e "\n${YELLOW}⚠️  Permission denied error detected${NC}"
+            echo -e "${YELLOW}Some build files were created with sudo/root permissions.${NC}\n"
+            echo -e "${CYAN}To fix this, please run the following commands in a separate terminal:${NC}"
+            echo -e "${GREEN}  cd $PROJECT_ROOT${NC}"
+            echo -e "${GREEN}  sudo chown -R \$(whoami):staff .nuxt .output${NC}"
+            echo -e "${GREEN}  sudo rm -rf .nuxt .output${NC}"
+            echo -e "\n${CYAN}Then press Enter here to retry the update...${NC}"
+            read -r
+            
+            # Retry pnpm install
+            echo -e "${BLUE}→ Retrying pnpm install...${NC}"
+            pnpm install
+        else
+            log "ERROR" "pnpm install failed with unknown error"
+            echo -e "${RED}✗ Update failed${NC}"
+            echo -n -e "\nPress Enter to continue..."
+            read -r
+            return 1
+        fi
+    fi
+    rm -f /tmp/pnpm-install.log
     
     echo -e "${BLUE}→ Building application...${NC}"
     pnpm run build

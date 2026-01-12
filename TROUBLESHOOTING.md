@@ -36,7 +36,40 @@ The manager will automatically detect and use whatever remote name you have conf
 
 ---
 
-### Issue 1: Can't Exit Live Log Viewer
+### Issue 1: Permission Denied on .nuxt or .output Directories
+
+**Symptoms:**
+- `EACCES: permission denied, open '/Users/.../fastsigner/.nuxt/eslint.config.mjs'`
+- Update or build fails with permission errors
+- Files owned by `root` in `.nuxt` or `.output` directories
+
+**Cause:**
+Some build files were created with `sudo` or root permissions (possibly from an earlier troubleshooting step), and now the normal user can't write to them.
+
+**Solution:**
+
+The manager will detect this and prompt you, but you can also fix it manually:
+
+```bash
+# In a separate terminal, navigate to the project
+cd /Users/ondrejzraly/Projects/fastsigner
+
+# Option 1: Fix ownership (recommended)
+sudo chown -R $(whoami):staff .nuxt .output
+
+# Option 2: Delete and recreate (clean slate)
+sudo rm -rf .nuxt .output
+
+# Then retry the update or build in the manager
+```
+
+**Prevention:**
+- Never run `pnpm`, `npm`, or build commands with `sudo`
+- The manager now automatically handles this in future updates
+
+---
+
+### Issue 2: Can't Exit Live Log Viewer
 
 **Symptoms:**
 - Viewing live logs (option 6 → 1)
@@ -56,7 +89,7 @@ If you're on an older version, update the manager script.
 
 ---
 
-### Issue 2: Multiple Processes on Port 3000
+### Issue 3: Multiple Processes on Port 3000
 
 **Symptoms:**
 - "Application is already running" but you can't access it
@@ -113,7 +146,7 @@ cd /Users/ondrejzraly/Projects/fastsigner
 
 ---
 
-### Issue 3: No Application Logs
+### Issue 4: No Application Logs
 
 **Symptoms:**
 - "No application logs found yet"
@@ -147,7 +180,7 @@ echo $! > /tmp/fastsigner-app.pid
 
 ---
 
-### Issue 4: Application Won't Start
+### Issue 5: Application Won't Start
 
 **Symptoms:**
 - Timeout waiting for port
@@ -176,7 +209,7 @@ tail -50 /Users/ondrejzraly/Projects/fastsigner/logs/app.log
 
 ---
 
-### Issue 5: Stale PID File
+### Issue 6: Stale PID File
 
 **Symptoms:**
 - "Process not running (stale PID file)"
@@ -199,7 +232,7 @@ rm -f /tmp/fastsigner-*.lock
 
 ---
 
-### Issue 6: Build Failures
+### Issue 7: Build Failures
 
 **Symptoms:**
 - "Build failed"
@@ -226,7 +259,7 @@ pnpm run build
 
 ---
 
-### Issue 7: Database Migration Errors
+### Issue 8: Database Migration Errors
 
 **Symptoms:**
 - "Migration failed"
@@ -250,7 +283,7 @@ npx prisma migrate reset --force
 
 ---
 
-### Issue 8: Zero-Downtime Update Failed
+### Issue 9: Zero-Downtime Update Failed
 
 **Symptoms:**
 - New instance failed to start
@@ -286,7 +319,7 @@ npx prisma migrate deploy
 
 ---
 
-### Issue 9: Port Permission Denied
+### Issue 10: Port Permission Denied
 
 **Symptoms:**
 - "Permission denied" when binding to port
