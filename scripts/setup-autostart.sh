@@ -47,13 +47,13 @@ cp "$PROJECT_ROOT/com.fastsigner.autoupdate.plist" "$LAUNCH_AGENTS/"
 # Load launch agents
 echo "→ Loading launch agents..."
 
-# Unload if already loaded
-launchctl unload "$LAUNCH_AGENTS/com.fastsigner.manager.plist" 2>/dev/null || true
-launchctl unload "$LAUNCH_AGENTS/com.fastsigner.autoupdate.plist" 2>/dev/null || true
+# Unload if already loaded (using bootstrap/unbootstrap for modern macOS)
+launchctl bootout "gui/$(id -u)/com.fastsigner.manager" 2>/dev/null || true
+launchctl bootout "gui/$(id -u)/com.fastsigner.autoupdate" 2>/dev/null || true
 
-# Load the agents
-launchctl load "$LAUNCH_AGENTS/com.fastsigner.manager.plist"
-launchctl load "$LAUNCH_AGENTS/com.fastsigner.autoupdate.plist"
+# Load the agents using bootstrap (modern macOS)
+launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENTS/com.fastsigner.manager.plist"
+launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENTS/com.fastsigner.autoupdate.plist"
 
 echo ""
 echo "✅ Setup complete!"
@@ -66,8 +66,8 @@ echo "To start the manager now, run:"
 echo "  $PROJECT_ROOT/scripts/fastsigner-manager.sh"
 echo ""
 echo "To disable auto-start:"
-echo "  launchctl unload ~/Library/LaunchAgents/com.fastsigner.manager.plist"
+echo "  launchctl bootout gui/\$(id -u)/com.fastsigner.manager"
 echo ""
 echo "To disable auto-updates:"
-echo "  launchctl unload ~/Library/LaunchAgents/com.fastsigner.autoupdate.plist"
+echo "  launchctl bootout gui/\$(id -u)/com.fastsigner.autoupdate"
 echo ""

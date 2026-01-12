@@ -540,27 +540,39 @@ start_app() {
     echo -e "${BLUE}→ Starting application in background...${NC}"
     echo -e "${GRAY}Logs will be written to: $LOG_DIR/app.log${NC}"
     
-    # Start the app in the background and capture PID
-    NODE_ENV=production pnpm run start >> "$LOG_DIR/app.log" 2>&1 &
-    local pid=$!
-    echo "$pid" > "$PID_FILE"
+    # Start the app in background with nohup to isolate it from terminal signals
+    # nohup prevents SIGHUP and isolates the process
+    cd "$PROJECT_ROOT"
+    nohup bash -c "NODE_ENV=production pnpm run start >> \"$LOG_DIR/app.log\" 2>&1" > /dev/null 2>&1 &
+    # Small delay to let the process start
+    sleep 2
     
     echo -e "${BLUE}→ Waiting for application to be ready...${NC}"
     local max_wait=30
     local waited=0
+    local pid=""
+    
     while [ $waited -lt $max_wait ]; do
+        # Check if something is listening on the port
         if lsof -i :$APP_PORT -sTCP:LISTEN > /dev/null 2>&1; then
-            echo -e "${GREEN}✓ Application started successfully! (PID: $pid)${NC}"
-            echo -e "${GRAY}View logs with option 6 from the main menu${NC}"
-            log "INFO" "Application started successfully with PID: $pid"
-            echo -n -e "\nPress Enter to continue..."
-            read -r
-            return 0
+            # Find the actual process listening on the port
+            pid=$(lsof -ti :$APP_PORT -sTCP:LISTEN 2>/dev/null | head -1)
+            if [ -n "$pid" ]; then
+                echo "$pid" > "$PID_FILE"
+                echo -e "${GREEN}✓ Application started successfully! (PID: $pid)${NC}"
+                echo -e "${GRAY}View logs with option 6 from the main menu${NC}"
+                log "INFO" "Application started successfully with PID: $pid"
+                echo -n -e "\nPress Enter to continue..."
+                read -r
+                return 0
+            fi
         fi
         
-        # Check if process died
-        if ! ps -p "$pid" > /dev/null 2>&1; then
-            echo -e "${RED}✗ Application process died${NC}"
+        # Check if we can find any node/pnpm processes (to detect if startup failed)
+        # We check for processes rather than a specific PID since we're finding the real PID later
+        local node_procs=$(pgrep -f "pnpm.*start" 2>/dev/null | wc -l | xargs)
+        if [ "$waited" -gt 5 ] && [ "$node_procs" -eq 0 ]; then
+            echo -e "${RED}✗ Application process died during startup${NC}"
             if [ -f "$LOG_DIR/app.log" ]; then
                 echo -e "${YELLOW}Last log entries:${NC}"
                 tail -20 "$LOG_DIR/app.log"
@@ -690,20 +702,27 @@ restart_app() {
     fi
     
     echo -e "${BLUE}→ Starting application...${NC}"
-    NODE_ENV=production pnpm run start >> "$LOG_DIR/app.log" 2>&1 &
-    local new_pid=$!
-    echo "$new_pid" > "$PID_FILE"
+    cd "$PROJECT_ROOT"
+    nohup bash -c "NODE_ENV=production pnpm run start >> \"$LOG_DIR/app.log\" 2>&1" > /dev/null 2>&1 &
+    sleep 2
     
     echo -e "${BLUE}→ Waiting for application to be ready...${NC}"
     local max_wait=30
     local waited=0
+    local new_pid=""
+    
     while [ $waited -lt $max_wait ]; do
         if lsof -i :$APP_PORT -sTCP:LISTEN > /dev/null 2>&1; then
-            echo -e "${GREEN}✓ Application restarted successfully! (PID: $new_pid)${NC}"
-            log "INFO" "Application restarted successfully"
-            echo -n -e "\nPress Enter to continue..."
-            read -r
-            return 0
+            # Find the actual process listening on the port
+            new_pid=$(lsof -ti :$APP_PORT -sTCP:LISTEN 2>/dev/null | head -1)
+            if [ -n "$new_pid" ]; then
+                echo "$new_pid" > "$PID_FILE"
+                echo -e "${GREEN}✓ Application restarted successfully! (PID: $new_pid)${NC}"
+                log "INFO" "Application restarted successfully with PID: $new_pid"
+                echo -n -e "\nPress Enter to continue..."
+                read -r
+                return 0
+            fi
         fi
         sleep 1
         ((waited++))
@@ -730,8 +749,10 @@ restart_app_zero_downtime() {
     done
     
     echo -e "${BLUE}→ Starting new instance on port $new_port...${NC}"
-    PORT=$new_port NODE_ENV=production pnpm run start >> "$LOG_DIR/app-new.log" 2>&1 &
+    cd "$PROJECT_ROOT"
+    nohup bash -c "PORT=$new_port NODE_ENV=production pnpm run start >> \"$LOG_DIR/app-new.log\" 2>&1" > /dev/null 2>&1 &
     local new_pid=$!
+    disown $new_pid 2>/dev/null || true
     
     echo -e "${BLUE}→ Waiting for new instance to be ready...${NC}"
     local max_wait=30
@@ -776,8 +797,10 @@ restart_app_zero_downtime() {
     sleep 2
     
     # Start final instance on correct port
-    NODE_ENV=production pnpm run start >> "$LOG_DIR/app.log" 2>&1 &
+    cd "$PROJECT_ROOT"
+    nohup bash -c "NODE_ENV=production pnpm run start >> \"$LOG_DIR/app.log\" 2>&1" > /dev/null 2>&1 &
     local final_pid=$!
+    disown $final_pid 2>/dev/null || true
     echo "$final_pid" > "$PID_FILE"
     
     # Wait for final instance
@@ -887,18 +910,18 @@ view_logs() {
 view_application_logs() {
     clear
     echo -e "${CYAN}${BOLD}📊 Live Application Logs${NC}"
-    echo -e "${YELLOW}${BOLD}Press Ctrl+C to stop and return to menu${NC}"
-    echo -e "${GRAY}(You may need to press it twice)${NC}\n"
+    echo -e "${YELLOW}${BOLD}Press Ctrl+C to stop and return to menu${NC}\n"
     log "INFO" "Viewing application logs"
     
     # Check if app is running
     local app_running=$(get_app_status)
+    local app_pid_from_port=""
     
     if [ "$app_running" = "running" ]; then
         echo -e "${GREEN}✓ Application is running on port $APP_PORT${NC}"
         
         # Find the actual process
-        local app_pid_from_port=$(lsof -ti :$APP_PORT 2>/dev/null | head -1)
+        app_pid_from_port=$(lsof -ti :$APP_PORT 2>/dev/null | head -1)
         echo -e "${GRAY}Process PID: $app_pid_from_port${NC}"
         echo ""
     else
@@ -938,8 +961,9 @@ view_application_logs() {
                 
                 # Start with proper logging
                 cd "$PROJECT_ROOT"
-                NODE_ENV=production pnpm run start >> "$LOG_DIR/app.log" 2>&1 &
+                nohup bash -c "NODE_ENV=production pnpm run start >> \"$LOG_DIR/app.log\" 2>&1" > /dev/null 2>&1 &
                 local new_pid=$!
+                disown $new_pid 2>/dev/null || true
                 echo "$new_pid" > "$PID_FILE"
                 
                 echo -e "${BLUE}→ Waiting for application to start...${NC}"
@@ -949,29 +973,8 @@ view_application_logs() {
                     echo -e "${GREEN}✓ Application restarted with logging${NC}"
                     echo -e "${YELLOW}Streaming logs... (Press Ctrl+C to exit)${NC}\n"
                     
-                    # Set flag that we're viewing logs
-                    LOG_VIEWING=true
-                    
-                    # Start tail in background
-                    tail -n 100 -f "$LOG_DIR/app.log" 2>/dev/null &
-                    local tail_pid=$!
-                    
-                    # Temporarily disable 'exit on error' for wait
-                    set +e
-                    # Wait for tail process
-                    wait $tail_pid 2>/dev/null
-                    # Re-enable 'exit on error'
-                    set -e
-                    
-                    # Kill tail if still running
-                    kill $tail_pid 2>/dev/null
-                    
-                    # Reset flag
-                    LOG_VIEWING=false
-                    
-                    echo ""
-                    echo -e "${CYAN}Returning to menu...${NC}"
-                    sleep 1
+                    # View logs with proper signal handling
+                    _view_logs_with_trap "$LOG_DIR/app.log"
                 else
                     echo -e "${RED}✗ Failed to create log file${NC}"
                     echo -n -e "\nPress Enter to continue..."
@@ -1002,23 +1005,79 @@ view_application_logs() {
     echo -e "${GREEN}Showing logs from: $LOG_DIR/app.log${NC}"
     echo -e "${YELLOW}Streaming logs... (Press Ctrl+C to exit)${NC}\n"
     
+    # View logs with proper signal handling
+    _view_logs_with_trap "$LOG_DIR/app.log"
+    
+    return 0
+}
+
+# Helper function to view logs with proper signal isolation
+_view_logs_with_trap() {
+    local log_file=$1
+    local tail_pid=""
+    local app_pid=""
+    
+    # Get the application PID if it's running - we'll protect it from signals
+    if [ -f "$PID_FILE" ]; then
+        app_pid=$(cat "$PID_FILE" 2>/dev/null)
+    fi
+    
     # Set flag that we're viewing logs
     LOG_VIEWING=true
     
-    # Start tail in background
-    tail -n 100 -f "$LOG_DIR/app.log" 2>/dev/null &
-    local tail_pid=$!
+    # Signal handler that only kills tail, not the application
+    # This function will be called when Ctrl+C is pressed
+    log_view_handler() {
+        # Kill only the tail process, not the application
+        if [ -n "$tail_pid" ]; then
+            # Use kill with the specific PID to only kill tail
+            kill $tail_pid 2>/dev/null
+            # Wait a moment for it to die
+            sleep 0.1
+            # Force kill if still running
+            kill -9 $tail_pid 2>/dev/null
+        fi
+        # Reset the flag
+        LOG_VIEWING=false
+        echo -e "\n${CYAN}Stopped viewing logs${NC}"
+        # Explicitly prevent the signal from propagating
+        # by returning instead of letting it continue
+        return 0
+    }
+    
+    # Save the original signal handler
+    local original_handler=$(trap -p INT 2>/dev/null || echo "")
+    
+    # Trap SIGINT locally to only kill tail process
+    trap log_view_handler INT
+    
+    # Start tail in background in a new process group to isolate it
+    # Use tail with explicit output to ensure it doesn't interfere
+    tail -n 100 -f "$log_file" 2>/dev/null &
+    tail_pid=$!
     
     # Temporarily disable 'exit on error' for wait
     set +e
     # Wait for tail process (will be interrupted by Ctrl+C)
+    # The signal handler will kill tail and return, preventing propagation
     wait $tail_pid 2>/dev/null
+    local wait_status=$?
     # Re-enable 'exit on error'
     set -e
     
-    # If we get here, either tail exited or Ctrl+C was pressed
-    # Kill tail if still running
-    kill $tail_pid 2>/dev/null
+    # Clean up: kill tail if still running (shouldn't be, but just in case)
+    if [ -n "$tail_pid" ] && kill -0 $tail_pid 2>/dev/null 2>&1; then
+        kill $tail_pid 2>/dev/null
+        sleep 0.1
+        kill -9 $tail_pid 2>/dev/null
+    fi
+    
+    # Restore the original signal handler
+    if [ -n "$original_handler" ]; then
+        eval "$original_handler"
+    else
+        trap handle_signal INT
+    fi
     
     # Reset flag
     LOG_VIEWING=false
@@ -1027,8 +1086,6 @@ view_application_logs() {
     echo ""
     echo -e "${CYAN}Returning to menu...${NC}"
     sleep 1
-    
-    return 0
 }
 
 # View specific log file
@@ -1607,8 +1664,9 @@ diagnostics() {
             echo -e "\n${BLUE}→ Starting application...${NC}"
             cd "$PROJECT_ROOT"
             mkdir -p "$LOG_DIR"
-            NODE_ENV=production pnpm run start >> "$LOG_DIR/app.log" 2>&1 &
+            nohup bash -c "NODE_ENV=production pnpm run start >> \"$LOG_DIR/app.log\" 2>&1" > /dev/null 2>&1 &
             local new_pid=$!
+            disown $new_pid 2>/dev/null || true
             echo "$new_pid" > "$PID_FILE"
             echo -e "${GREEN}✓ Started with PID: $new_pid${NC}"
             sleep 3
@@ -1757,26 +1815,45 @@ ensure_app_running() {
         log "INFO" "Auto-starting application"
         
         cd "$PROJECT_ROOT"
-        NODE_ENV=production pnpm run start >> "$LOG_DIR/app.log" 2>&1 &
-        local pid=$!
-        echo "$pid" > "$PID_FILE"
+        nohup bash -c "NODE_ENV=production pnpm run start >> \"$LOG_DIR/app.log\" 2>&1" > /dev/null 2>&1 &
+        sleep 2
         
-        # Wait for it to start
+        # Wait for it to start and find the actual Node.js process
         local max_wait=30
         local waited=0
+        local pid=""
+        
         while [ $waited -lt $max_wait ]; do
-            if lsof -i :$APP_PORT -sTCP:LISTEN > /dev/null 2>&1; then
+            # Try to find the process listening on the port
+            pid=$(lsof -ti :$APP_PORT -sTCP:LISTEN 2>/dev/null | head -1)
+            if [ -n "$pid" ]; then
+                echo "$pid" > "$PID_FILE"
                 echo -e "${GREEN}✓ Application auto-started (PID: $pid)${NC}"
-                log "INFO" "Application auto-started successfully"
+                log "INFO" "Application auto-started successfully with PID: $pid"
                 sleep 2
                 return 0
             fi
+            
+            # Check if any node processes are running (to detect if startup failed)
+            local node_procs=$(pgrep -f "pnpm.*start" 2>/dev/null | wc -l | xargs)
+            if [ "$waited" -gt 5 ] && [ "$node_procs" -eq 0 ]; then
+                # No processes found after 5 seconds, likely failed to start
+                if [ -f "$LOG_DIR/app.log" ]; then
+                    echo -e "${RED}✗ Application failed to start${NC}"
+                    echo -e "${YELLOW}Last log entries:${NC}"
+                    tail -10 "$LOG_DIR/app.log"
+                fi
+                log "ERROR" "Application failed to start during auto-start"
+                sleep 2
+                return 1
+            fi
+            
             sleep 1
             ((waited++))
         done
         
-        echo -e "${RED}⚠️  Failed to auto-start application${NC}"
-        log "ERROR" "Failed to auto-start application"
+        echo -e "${RED}⚠️  Failed to auto-start application (timeout)${NC}"
+        log "ERROR" "Failed to auto-start application - timeout"
         sleep 2
     fi
 }

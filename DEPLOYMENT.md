@@ -206,12 +206,12 @@ The manager automatically opens in a Terminal window on system startup.
 
 **To disable:**
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.fastsigner.manager.plist
+launchctl bootout gui/$(id -u)/com.fastsigner.manager
 ```
 
 **To enable:**
 ```bash
-launchctl load ~/Library/LaunchAgents/com.fastsigner.manager.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.fastsigner.manager.plist
 ```
 
 ### Auto-Updates
@@ -220,7 +220,7 @@ The system automatically checks for updates daily at 3:00 AM and applies them if
 
 **To disable auto-updates:**
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.fastsigner.autoupdate.plist
+launchctl bootout gui/$(id -u)/com.fastsigner.autoupdate
 ```
 
 **To change update schedule:**

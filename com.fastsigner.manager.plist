@@ -11,7 +11,7 @@
         <string>-e</string>
         <string>tell application "Terminal"
             activate
-            do script "/Users/ondrejzraly/Projects/fastsigner/scripts/fastsigner-manager.sh"
+            do script "/Users/ondrejzraly/fastsigner/scripts/fastsigner-manager.sh"
         end tell</string>
     </array>
     
@@ -22,9 +22,9 @@
     <false/>
     
     <key>StandardOutPath</key>
-    <string>/Users/ondrejzraly/Projects/fastsigner/logs/manager-startup.log</string>
+    <string>/Users/ondrejzraly/fastsigner/logs/manager-startup.log</string>
     
     <key>StandardErrorPath</key>
-    <string>/Users/ondrejzraly/Projects/fastsigner/logs/manager-startup-error.log</string>
+    <string>/Users/ondrejzraly/fastsigner/logs/manager-startup-error.log</string>
 </dict>
 </plist>
