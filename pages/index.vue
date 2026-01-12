@@ -185,17 +185,11 @@
                         Registered
                       </UBadge>
                     </div>
-                    <span class="text-xs text-slate-500 dark:text-white/50 flex-shrink-0">
-                      {{ option.iosApps.length + option.tvosApps.length }} apps
-                    </span>
                   </div>
                 </template>
                 <template #label>
-                  <span v-if="selectedModerator" class="flex items-center gap-2">
+                  <span v-if="selectedModerator">
                     {{ selectedModerator.name }}
-                    <span class="text-xs text-slate-500 dark:text-white/50">
-                      ({{ selectedModerator.iosApps.length + selectedModerator.tvosApps.length }} apps)
-                    </span>
                   </span>
                   <span v-else class="text-slate-500 dark:text-white/60">Vyberte moderátora...</span>
                 </template>
@@ -203,23 +197,17 @@
             </div>
           </div>
 
-          <!-- Selected Moderator Info - Only show when selected -->
-          <div v-if="selectedModerator" class="flex items-center gap-3 pt-3 sm:pt-0 border-t sm:border-t-0 sm:border-l border-white/10 sm:pl-4">
-            <div class="flex items-center gap-2">
-              <UIcon name="i-heroicons-device-phone-mobile" class="w-4 h-4 text-blue-500" />
-              <span class="text-sm text-slate-600 dark:text-white/70">{{ selectedModerator.iosApps.length }} iOS</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <UIcon name="i-heroicons-tv" class="w-4 h-4 text-orange-500" />
-              <span class="text-sm text-slate-600 dark:text-white/70">{{ selectedModerator.tvosApps.length }} Apple TV</span>
-            </div>
+          <!-- Selected Moderator Info - Only show when selected and user is logged in -->
+          <div v-if="selectedModerator && user" class="flex items-center gap-3 pt-3 sm:pt-0 border-t sm:border-t-0 sm:border-l border-white/10 sm:pl-4">
             <UButton 
               icon="i-heroicons-information-circle" 
               variant="ghost" 
               color="gray" 
               size="sm"
               @click="openModeratorModal(selectedModerator)"
-            />
+            >
+              Informace o moderátorovi
+            </UButton>
           </div>
         </div>
       </div>
@@ -834,20 +822,25 @@ const filteredTvosApps = computed(() => {
 
 // Tabs with dynamic items
 const selectedTab = ref(0)
-const tabItems = computed(() => [
-  {
-    key: 'ios',
-    label: 'iOS',
-    icon: 'i-heroicons-device-phone-mobile',
-    apps: filteredIosApps.value
-  },
-  {
-    key: 'appletv',
-    label: 'Apple TV',
-    icon: 'i-heroicons-tv',
-    apps: filteredTvosApps.value
-  }
-])
+const tabItems = computed(() => {
+  const iosCount = selectedModerator.value?.iosApps.length || 0
+  const tvosCount = selectedModerator.value?.tvosApps.length || 0
+  
+  return [
+    {
+      key: 'ios',
+      label: `iOS (${iosCount})`,
+      icon: 'i-heroicons-device-phone-mobile',
+      apps: filteredIosApps.value
+    },
+    {
+      key: 'appletv',
+      label: `Apple TV (${tvosCount})`,
+      icon: 'i-heroicons-tv',
+      apps: filteredTvosApps.value
+    }
+  ]
+})
 
 // Modal
 const showModeratorModal = ref(false)
