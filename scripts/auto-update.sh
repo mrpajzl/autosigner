@@ -14,12 +14,21 @@ log "Auto-update check started"
 
 cd "$PROJECT_ROOT"
 
+# Detect the git remote name
+GIT_REMOTE=$(git remote | head -1)
+if [ -z "$GIT_REMOTE" ]; then
+    log "ERROR: No git remote configured"
+    exit 1
+fi
+
+log "Using git remote: $GIT_REMOTE"
+
 # Fetch latest changes
-git fetch origin main --quiet 2>&1 | tee -a "$LOG_FILE"
+git fetch $GIT_REMOTE main --quiet 2>&1 | tee -a "$LOG_FILE"
 
 # Check if update is available
 LOCAL_HASH=$(git rev-parse HEAD)
-REMOTE_HASH=$(git rev-parse origin/main)
+REMOTE_HASH=$(git rev-parse $GIT_REMOTE/main)
 
 if [ "$LOCAL_HASH" = "$REMOTE_HASH" ]; then
     log "No updates available"
@@ -29,7 +38,7 @@ fi
 log "Update available, applying..."
 
 # Pull changes
-git pull origin main 2>&1 | tee -a "$LOG_FILE"
+git pull $GIT_REMOTE main 2>&1 | tee -a "$LOG_FILE"
 
 # Install dependencies
 pnpm install 2>&1 | tee -a "$LOG_FILE"

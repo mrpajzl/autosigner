@@ -2,7 +2,41 @@
 
 ## 🚨 Common Issues and Solutions
 
-### Issue 0: Can't Exit Live Log Viewer
+### Issue 0: Git Remote Not Found
+
+**Symptoms:**
+- "Pull Latest & Update" fails
+- Error: "fatal: 'origin' does not appear to be a git repository"
+- Can't fetch updates
+
+**Cause:**
+The git repository doesn't have a remote named 'origin', or has a different remote name.
+
+**Solution:**
+
+The scripts now auto-detect your git remote name! But if you see this error on an older version:
+
+```bash
+# Check your current remotes
+git remote -v
+
+# If you have no remotes, add one:
+git remote add origin https://github.com/your-repo/fastsigner.git
+
+# If your remote has a different name (e.g., 'autosigner'), either:
+
+# Option 1: Let the script auto-detect it (recommended - now built-in)
+# Just use the latest version of the manager
+
+# Option 2: Add an 'origin' alias
+git remote add origin $(git remote get-url autosigner)
+```
+
+The manager will automatically detect and use whatever remote name you have configured.
+
+---
+
+### Issue 1: Can't Exit Live Log Viewer
 
 **Symptoms:**
 - Viewing live logs (option 6 → 1)
@@ -22,7 +56,7 @@ If you're on an older version, update the manager script.
 
 ---
 
-### Issue 1: Multiple Processes on Port 3000
+### Issue 2: Multiple Processes on Port 3000
 
 **Symptoms:**
 - "Application is already running" but you can't access it
@@ -79,7 +113,7 @@ cd /Users/ondrejzraly/Projects/fastsigner
 
 ---
 
-### Issue 2: No Application Logs
+### Issue 3: No Application Logs
 
 **Symptoms:**
 - "No application logs found yet"
@@ -113,7 +147,7 @@ echo $! > /tmp/fastsigner-app.pid
 
 ---
 
-### Issue 3: Application Won't Start
+### Issue 4: Application Won't Start
 
 **Symptoms:**
 - Timeout waiting for port
@@ -142,7 +176,7 @@ tail -50 /Users/ondrejzraly/Projects/fastsigner/logs/app.log
 
 ---
 
-### Issue 4: Stale PID File
+### Issue 5: Stale PID File
 
 **Symptoms:**
 - "Process not running (stale PID file)"
@@ -165,7 +199,7 @@ rm -f /tmp/fastsigner-*.lock
 
 ---
 
-### Issue 5: Build Failures
+### Issue 6: Build Failures
 
 **Symptoms:**
 - "Build failed"
@@ -192,7 +226,7 @@ pnpm run build
 
 ---
 
-### Issue 6: Database Migration Errors
+### Issue 7: Database Migration Errors
 
 **Symptoms:**
 - "Migration failed"
@@ -216,7 +250,7 @@ npx prisma migrate reset --force
 
 ---
 
-### Issue 7: Zero-Downtime Update Failed
+### Issue 8: Zero-Downtime Update Failed
 
 **Symptoms:**
 - New instance failed to start
@@ -252,7 +286,7 @@ npx prisma migrate deploy
 
 ---
 
-### Issue 8: Port Permission Denied
+### Issue 9: Port Permission Denied
 
 **Symptoms:**
 - "Permission denied" when binding to port

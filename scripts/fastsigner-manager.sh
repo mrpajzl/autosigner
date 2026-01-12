@@ -86,9 +86,17 @@ get_git_status() {
 # Check for available updates
 check_updates() {
     cd "$PROJECT_ROOT"
-    git fetch origin main --quiet 2>/dev/null || return 1
+    
+    # Detect the git remote name
+    local git_remote=$(git remote | head -1)
+    if [ -z "$git_remote" ]; then
+        echo "unknown"
+        return 1
+    fi
+    
+    git fetch $git_remote main --quiet 2>/dev/null || return 1
     local local_hash=$(git rev-parse HEAD)
-    local remote_hash=$(git rev-parse origin/main)
+    local remote_hash=$(git rev-parse $git_remote/main)
     
     if [ "$local_hash" != "$remote_hash" ]; then
         echo "available"
@@ -355,6 +363,20 @@ pull_update() {
     
     cd "$PROJECT_ROOT"
     
+    # Detect the git remote name
+    local git_remote=$(git remote | head -1)
+    if [ -z "$git_remote" ]; then
+        echo -e "${RED}✗ No git remote configured${NC}"
+        echo -e "${YELLOW}Please configure a git remote first:${NC}"
+        echo -e "${GRAY}  git remote add origin <repository-url>${NC}"
+        log "ERROR" "No git remote configured"
+        echo -n -e "\nPress Enter to continue..."
+        read -r
+        return 1
+    fi
+    
+    echo -e "${GRAY}Using git remote: $git_remote${NC}"
+    
     # Check for uncommitted changes
     if [ "$(git status --porcelain | wc -l)" -gt 0 ]; then
         echo -e "${YELLOW}⚠️  Warning: You have uncommitted changes${NC}"
@@ -365,15 +387,17 @@ pull_update() {
             log "INFO" "Stashed local changes"
         else
             echo -e "${RED}Update cancelled${NC}"
+            echo -n -e "\nPress Enter to continue..."
+            read -r
             return 1
         fi
     fi
     
     echo -e "${BLUE}→ Fetching latest changes...${NC}"
-    git fetch origin main
+    git fetch $git_remote main
     
     echo -e "${BLUE}→ Pulling main branch...${NC}"
-    git pull origin main
+    git pull $git_remote main
     
     echo -e "${BLUE}→ Installing dependencies with pnpm...${NC}"
     pnpm install
