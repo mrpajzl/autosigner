@@ -192,6 +192,23 @@ For detailed deployment and management documentation, see:
 - [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Common issues and solutions
 - [ZERO_DOWNTIME_DEPLOYMENT.md](./ZERO_DOWNTIME_DEPLOYMENT.md) - Zero-downtime deployment guide
 
+### Helper Scripts
+
+If you encounter issues, these utility scripts can help:
+
+```bash
+# Fix permission issues (EACCES errors)
+./scripts/fix-permissions.sh
+
+# Kill any process using port 3000
+./scripts/kill-port-3000.sh
+
+# Check if port 3000 is free
+./scripts/check-port.sh
+```
+
+These utilities are also accessible through the **Diagnostics** menu in the manager.
+
 ## How Signing Works
 
 1. **Certificate Upload**: User uploads a P12 certificate with password

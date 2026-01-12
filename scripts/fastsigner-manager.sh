@@ -1593,7 +1593,8 @@ diagnostics() {
     echo -e "  ${GREEN}1${NC}) Clean up stale files and start fresh"
     echo -e "  ${GREEN}2${NC}) Kill process on port $APP_PORT and start"
     echo -e "  ${GREEN}3${NC}) Show full process tree"
-    echo -e "  ${GREEN}4${NC}) Return to main menu"
+    echo -e "  ${GREEN}4${NC}) Fix file permissions (for EACCES errors)"
+    echo -e "  ${GREEN}5${NC}) Return to main menu"
     echo -n -e "\n${WHITE}Select option: ${NC}"
     read -r diag_choice
     
@@ -1642,7 +1643,13 @@ diagnostics() {
             echo -n -e "\nPress Enter to continue..."
             read -r
             ;;
-        *)
+        4)
+            echo -e "\n${BLUE}→ Running permission fix utility...${NC}\n"
+            "$PROJECT_ROOT/scripts/fix-permissions.sh"
+            echo -n -e "\nPress Enter to continue..."
+            read -r
+            ;;
+        5|*)
             return
             ;;
     esac

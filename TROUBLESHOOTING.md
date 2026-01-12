@@ -48,24 +48,43 @@ Some build files were created with `sudo` or root permissions (possibly from an 
 
 **Solution:**
 
-The manager will detect this and prompt you, but you can also fix it manually:
+**Option 1: Use the built-in fix script (Recommended)**
 
 ```bash
-# In a separate terminal, navigate to the project
+# Run the automated permission fix utility
+./scripts/fix-permissions.sh
+
+# Or use it from the manager:
+# Navigate to: Diagnostics → Option 4 (Fix file permissions)
+```
+
+The script will:
+- Scan for permission issues
+- Fix ownership of all affected directories
+- Optionally clean build directories for a fresh start
+
+**Option 2: Manual fix**
+
+```bash
+# In a terminal, navigate to the project
 cd /Users/ondrejzraly/Projects/fastsigner
 
-# Option 1: Fix ownership (recommended)
-sudo chown -R $(whoami):staff .nuxt .output
+# Fix ownership of build directories
+sudo chown -R $(whoami):staff .nuxt .output node_modules/.cache logs data
 
-# Option 2: Delete and recreate (clean slate)
-sudo rm -rf .nuxt .output
+# Make sure current user can write
+sudo chmod -R u+w .nuxt .output node_modules/.cache
 
-# Then retry the update or build in the manager
+# Or delete and recreate (clean slate)
+sudo rm -rf .nuxt .output node_modules/.cache
+
+# Then retry the update or build
 ```
 
 **Prevention:**
 - Never run `pnpm`, `npm`, or build commands with `sudo`
-- The manager now automatically handles this in future updates
+- The fix-permissions script should be run after any sudo usage
+- The manager now detects and helps fix permission errors automatically
 
 ---
 
