@@ -2,6 +2,7 @@ import { prisma } from '../../utils/db'
 import { decrypt } from '../../utils/crypto'
 import { AppleDeveloperAPI } from '../../utils/apple-api'
 import { getSessionUser } from '../../utils/auth'
+import { logAppleDeveloperWarning } from '../../utils/apple-warning-logger'
 
 type PublicApp = {
   id: string
@@ -42,7 +43,10 @@ type PublicModerator = {
 }
 
 // Helper function to fetch device counts for a user with Apple credentials
-async function fetchDeviceCounts(credentials: { keyId: string; issuerId: string; privateKeyEnc: string }): Promise<DeviceCounts | null> {
+async function fetchDeviceCounts(
+  credentials: { keyId: string; issuerId: string; privateKeyEnc: string; teamName?: string | null },
+  context: { moderatorId: string }
+): Promise<DeviceCounts | null> {
   try {
     const privateKey = decrypt(JSON.parse(credentials.privateKeyEnc)).toString()
     const api = new AppleDeveloperAPI({
@@ -72,7 +76,12 @@ async function fetchDeviceCounts(credentials: { keyId: string; issuerId: string;
     
     return counts
   } catch (e) {
-    console.error('Failed to fetch devices for moderator:', e)
+    logAppleDeveloperWarning({
+      scope: 'public-moderator-device-counts',
+      error: e,
+      moderatorId: context.moderatorId,
+      accountLabel: credentials.teamName
+    })
     return null
   }
 }
@@ -120,7 +129,7 @@ export default defineEventHandler(async (event) => {
     // Fetch device counts for all managers in parallel
     const deviceCountsPromises = managers.map(async (u) => {
       if (u.appleDeveloperCredentials) {
-        return fetchDeviceCounts(u.appleDeveloperCredentials)
+        return fetchDeviceCounts(u.appleDeveloperCredentials, { moderatorId: u.id })
       }
       return null
     })

@@ -111,7 +111,7 @@ export default defineEventHandler(async () => {
       ])
 
       const recentLog = await readLogTail('logs/app.log')
-      const hasRecentAgreementError = /required agreement is missing or has expired|in-effect agreement that has not been signed or has expired|REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED/i.test(recentLog || '')
+      const hasRecentAgreementError = /agreement missing or expired|required agreement is missing or has expired|in-effect agreement that has not been signed or has expired|REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED/i.test(recentLog || '')
 
       if (configuredTeams === 0) {
         return {

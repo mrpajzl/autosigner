@@ -75,6 +75,7 @@ export default defineNuxtConfig({
     })(),
     server: {
       https: (process.env.DEV_HTTPS ? (httpsOptions || true) : undefined) as any,
+      allowedHosts: ['fastsigner.eu'],
       watch: {
         // Use polling instead of native file watchers to avoid EMFILE errors on macOS
         usePolling: true,
