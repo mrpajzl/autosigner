@@ -45,7 +45,7 @@ type PublicModerator = {
 // Helper function to fetch device counts for a user with Apple credentials
 async function fetchDeviceCounts(
   credentials: { keyId: string; issuerId: string; privateKeyEnc: string; teamName?: string | null },
-  context: { moderatorId: string }
+  context: { moderatorId: string; moderatorName?: string | null }
 ): Promise<DeviceCounts | null> {
   try {
     const privateKey = decrypt(JSON.parse(credentials.privateKeyEnc)).toString()
@@ -80,7 +80,7 @@ async function fetchDeviceCounts(
       scope: 'public-moderator-device-counts',
       error: e,
       moderatorId: context.moderatorId,
-      accountLabel: credentials.teamName
+      accountLabel: credentials.teamName || context.moderatorName
     })
     return null
   }
@@ -129,7 +129,10 @@ export default defineEventHandler(async (event) => {
     // Fetch device counts for all managers in parallel
     const deviceCountsPromises = managers.map(async (u) => {
       if (u.appleDeveloperCredentials) {
-        return fetchDeviceCounts(u.appleDeveloperCredentials, { moderatorId: u.id })
+        return fetchDeviceCounts(u.appleDeveloperCredentials, {
+          moderatorId: u.id,
+          moderatorName: u.managerProfile?.displayName || u.nickname
+        })
       }
       return null
     })
