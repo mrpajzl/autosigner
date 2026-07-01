@@ -1,15 +1,17 @@
 import { requireRole } from '../../utils/auth'
 import { cleanupAllStaleWorkDirectories, cleanupOrphanedAppDirectories, runFullCleanup } from '../../utils/signer'
+import { cleanupOrphanedStoredUploads } from '../../utils/storage-cleanup'
 
 /**
  * Admin endpoint to manually trigger cleanup
  * POST /api/admin/cleanup
  * 
  * Query params:
- * - mode: 'stale' (default) | 'orphaned' | 'full'
+ * - mode: 'stale' (default) | 'orphaned' | 'stored' | 'full'
  *   - stale: Clean up stale work directories from signing operations
- *   - orphaned: Clean up directories that don't have matching database entries
- *   - full: Run both stale and orphaned cleanup
+ *   - orphaned: Clean up local directories that don't have matching database entries
+ *   - stored: Clean up orphaned upload objects from configured storage (local or MinIO/S3)
+ *   - full: Run all cleanup tasks
  */
 export default defineEventHandler(async (event) => {
   await requireRole(event, 'SUPERADMIN')
@@ -38,13 +40,21 @@ export default defineEventHandler(async (event) => {
       details.orphaned = result
       break
     }
+    case 'stored': {
+      const result = await cleanupOrphanedStoredUploads()
+      totalCleaned = result.totalCleaned
+      allErrors.push(...result.errors)
+      details.storedUploads = result
+      break
+    }
     case 'full':
     default: {
       const result = await runFullCleanup()
-      totalCleaned = result.staleWorkDirs.totalCleaned + result.orphaned.totalCleaned
-      allErrors.push(...result.staleWorkDirs.errors, ...result.orphaned.errors)
+      totalCleaned = result.staleWorkDirs.totalCleaned + result.orphaned.totalCleaned + result.storedUploads.totalCleaned
+      allErrors.push(...result.staleWorkDirs.errors, ...result.orphaned.errors, ...result.storedUploads.errors)
       details.staleWorkDirs = result.staleWorkDirs
       details.orphaned = result.orphaned
+      details.storedUploads = result.storedUploads
       break
     }
   }

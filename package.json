@@ -14,7 +14,8 @@
     "start": "dotenv -e .env -- node .output/server/index.mjs",
     "postinstall": "nuxt prepare",
     "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev"
+    "db:migrate": "prisma migrate dev",
+    "test:storage-cleanup": "node --experimental-strip-types scripts/test-storage-cleanup.ts"
   },
   "dependencies": {
     "@auth/core": "^0.41.1",

@@ -11,6 +11,7 @@ import type { App as AppModel } from '@prisma/client'
 import { prisma } from './db'
 import { decrypt } from './crypto'
 import { storage } from './storage'
+import { cleanupOrphanedStoredUploads } from './storage-cleanup'
 import { useRuntimeConfig } from '#imports'
 
 // Cleanup configuration
@@ -479,7 +480,7 @@ export async function cleanupAllStaleWorkDirectories(): Promise<{ totalCleaned: 
  */
 export async function cleanupOrphanedAppDirectories(): Promise<{ totalCleaned: number; errors: string[] }> {
   if (storage.driver !== 'local') {
-    return { totalCleaned: 0, errors: ['Orphan cleanup is only applicable to local storage.'] }
+    return { totalCleaned: 0, errors: [] }
   }
   const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
   let totalCleaned = 0
@@ -616,10 +617,12 @@ export async function cleanupOrphanedAppDirectories(): Promise<{ totalCleaned: n
 export async function runFullCleanup(): Promise<{
   staleWorkDirs: { totalCleaned: number; errors: string[] }
   orphaned: { totalCleaned: number; errors: string[] }
+  storedUploads: { totalCleaned: number; errors: string[] }
 }> {
   const staleWorkDirs = await cleanupAllStaleWorkDirectories()
   const orphaned = await cleanupOrphanedAppDirectories()
-  return { staleWorkDirs, orphaned }
+  const storedUploads = await cleanupOrphanedStoredUploads()
+  return { staleWorkDirs, orphaned, storedUploads }
 }
 
 export async function signApp(appId: string): Promise<void> {

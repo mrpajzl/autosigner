@@ -19,9 +19,9 @@ export default defineNitroPlugin((nitro) => {
     console.log('[Cleanup] Running initial cleanup...')
     try {
       const result = await runFullCleanup()
-      const totalCleaned = result.staleWorkDirs.totalCleaned + result.orphaned.totalCleaned
+      const totalCleaned = result.staleWorkDirs.totalCleaned + result.orphaned.totalCleaned + result.storedUploads.totalCleaned
       if (totalCleaned > 0) {
-        console.log(`[Cleanup] Initial cleanup: removed ${result.staleWorkDirs.totalCleaned} stale work dirs, ${result.orphaned.totalCleaned} orphaned items`)
+        console.log(`[Cleanup] Initial cleanup: removed ${result.staleWorkDirs.totalCleaned} stale work dirs, ${result.orphaned.totalCleaned} local orphaned items, ${result.storedUploads.totalCleaned} stored upload items`)
       }
     } catch (e) {
       console.error('[Cleanup] Initial cleanup failed:', e)
@@ -33,9 +33,9 @@ export default defineNitroPlugin((nitro) => {
     console.log('[Cleanup] Running scheduled cleanup...')
     try {
       const result = await runFullCleanup()
-      const totalCleaned = result.staleWorkDirs.totalCleaned + result.orphaned.totalCleaned
+      const totalCleaned = result.staleWorkDirs.totalCleaned + result.orphaned.totalCleaned + result.storedUploads.totalCleaned
       if (totalCleaned > 0) {
-        console.log(`[Cleanup] Scheduled cleanup: removed ${result.staleWorkDirs.totalCleaned} stale work dirs, ${result.orphaned.totalCleaned} orphaned items`)
+        console.log(`[Cleanup] Scheduled cleanup: removed ${result.staleWorkDirs.totalCleaned} stale work dirs, ${result.orphaned.totalCleaned} local orphaned items, ${result.storedUploads.totalCleaned} stored upload items`)
       }
     } catch (e) {
       console.error('[Cleanup] Scheduled cleanup failed:', e)
