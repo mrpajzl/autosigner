@@ -56,7 +56,10 @@ async function readLogTail(relativePath: string, maxBytes = 256 * 1024): Promise
 export default defineEventHandler(async () => {
   const checkedAt = new Date().toISOString()
 
-  const db: ComponentHealth = await (async () => {
+  // Run independent dependency checks concurrently. When an external dependency
+  // is unreachable, serial checks can exceed the watchdog's HTTP timeout and hide
+  // the useful degraded-health JSON behind a transport timeout.
+  const dbCheck = (async (): Promise<ComponentHealth> => {
     try {
       await prisma.$queryRaw`SELECT 1`
       return { status: 'ok', message: 'Database query succeeded' }
@@ -65,7 +68,7 @@ export default defineEventHandler(async () => {
     }
   })()
 
-  const storageHealth: ComponentHealth = await (async () => {
+  const storageHealthCheck = (async (): Promise<ComponentHealth> => {
     try {
       // Lightweight connectivity check. The prefix is intentionally not used by the app,
       // so this should avoid scanning large upload trees while still exercising the driver.
@@ -89,7 +92,7 @@ export default defineEventHandler(async () => {
         : 'Signing queue is idle'
   }
 
-  const apple: ComponentHealth = await (async () => {
+  const appleCheck = (async (): Promise<ComponentHealth> => {
     try {
       const [configuredTeams, activeManagers] = await Promise.all([
         prisma.appleDeveloperCredentials.count(),
@@ -143,6 +146,12 @@ export default defineEventHandler(async () => {
       return { status: 'warn', message: safeErrorMessage(error) }
     }
   })()
+
+  const [db, storageHealth, apple] = await Promise.all([
+    dbCheck,
+    storageHealthCheck,
+    appleCheck
+  ])
 
   const components = {
     db,
