@@ -18,6 +18,11 @@ function worstStatus(statuses: HealthStatus[]): HealthStatus {
 }
 
 function safeErrorMessage(error: unknown): string {
+  const statusCode = (error as { $metadata?: { httpStatusCode?: number } } | null)?.$metadata?.httpStatusCode
+  if (statusCode) {
+    const message = error instanceof Error && error.message ? `: ${error.message}` : ''
+    return `Upstream dependency returned HTTP ${statusCode}${message}`
+  }
   if (error instanceof Error && error.message) return error.message
   return 'Unknown error'
 }
