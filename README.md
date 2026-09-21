@@ -2,6 +2,13 @@
 
 FastSigner is a Nuxt app for signing iOS/tvOS applications on an M4 Mac server. Managers upload `.ipa` files with their provisioning profile and P12 certificate; the server signs them locally using macOS native `codesign` and generates OTA installation manifests.
 
+## VPS deployment with remote Mac signing
+
+FastSigner can run in Coolify on Linux with `SIGNING_BACKEND=ssh`. A standalone Mac
+command performs each signature and exits; the Mac does not run the web application.
+See [remote signing and migration](REMOTE_SIGNING.md) for runtime configuration,
+data/session preservation, queue migration, validation and rollback.
+
 ## Features
 
 - **Native macOS Signing**: Uses Apple's `codesign` tool for proper iOS/tvOS code signing

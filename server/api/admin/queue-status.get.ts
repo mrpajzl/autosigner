@@ -8,7 +8,7 @@ import { signingQueue } from '../../utils/signing-queue'
 export default defineEventHandler(async (event) => {
   await requireAnyRole(event, ['MANAGER', 'SUPERADMIN'])
   
-  const status = signingQueue.getStatus()
+  const status = await signingQueue.getStatus()
   
   return {
     queueLength: status.queueLength,

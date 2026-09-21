@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
 
   // Add to signing queue instead of fire-and-forget
   await signingQueue.enqueue(appId, user.id, signedVersion.id)
-  const queuePosition = signingQueue.getQueuePosition(signedVersion.id)
+  const queuePosition = await signingQueue.getQueuePosition(signedVersion.id)
 
   return { 
     ok: true, 

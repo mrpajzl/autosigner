@@ -1,221 +1,123 @@
-/**
- * Signing Job Queue
- * Limits concurrent signing operations to prevent system overload
- */
-
+import { randomUUID } from 'node:crypto'
 import { prisma } from './db'
 import { signAppForUser, signApp } from './signer'
-
-type JobType = 'owner' | 'user'
+import { SignerUnavailableError } from '../../signing/ssh-client'
 
 interface SigningJob {
   id: string
   appId: string
   signerId: string
-  signedVersionId: string | null // null for owner signing
-  jobType: JobType
+  signedVersionId: string | null
+  jobType: 'owner' | 'user'
   status: 'pending' | 'running' | 'completed' | 'failed'
   createdAt: Date
-  startedAt?: Date
-  completedAt?: Date
-  error?: string
+  startedAt: Date | null
+  attempts: number
+  leaseToken: string | null
 }
-
-// Configuration
-const MAX_CONCURRENT_JOBS = 2 // Limit concurrent signing operations
-const JOB_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes timeout per job
 
 class SigningQueue {
-  private queue: SigningJob[] = []
-  private running: Map<string, SigningJob> = new Map()
-  private processing = false
+  private timer?: ReturnType<typeof setInterval>
+  private active?: Promise<void>
+  private stopped = false
 
-  /**
-   * Add a signing job for a specific user (creates SignedVersion)
-   */
-  async enqueue(appId: string, signerId: string, signedVersionId: string): Promise<SigningJob> {
-    const job: SigningJob = {
-      id: `${signedVersionId}-${Date.now()}`,
-      appId,
-      signerId,
-      signedVersionId,
-      jobType: 'user',
-      status: 'pending',
-      createdAt: new Date()
-    }
+  start() {
+    if (this.timer || process.env.SIGNING_QUEUE_ENABLED === 'false') return
+    this.stopped = false
+    this.timer = setInterval(() => this.kick(), 15000)
+    this.timer.unref()
+    this.kick()
+  }
 
-    this.queue.push(job)
-    console.log(`[SigningQueue] Enqueued user job ${job.id} for app ${appId}, signer ${signerId}`)
-    
-    // Start processing if not already running
-    this.processQueue()
-    
+  async stop() {
+    this.stopped = true
+    if (this.timer) clearInterval(this.timer)
+    this.timer = undefined
+    // Let an active signing finish; container shutdown grace must exceed the job deadline.
+    await this.active
+  }
+
+  private kick() {
+    if (this.stopped || this.active || process.env.SIGNING_QUEUE_ENABLED === 'false') return
+    this.active = this.processNext().catch(() => {
+      console.error('[SigningQueue] Could not process queue; retrying on next tick')
+    }).finally(() => { this.active = undefined })
+  }
+
+  enqueue(appId: string, signerId: string, signedVersionId: string) {
+    return this.add(appId, signerId, signedVersionId)
+  }
+
+  enqueueOwnerSigning(appId: string, ownerId: string) {
+    return this.add(appId, ownerId, null)
+  }
+
+  private async add(appId: string, signerId: string, signedVersionId: string | null) {
+    const target = signedVersionId ? `user:${signedVersionId}` : `owner:${appId}`
+    const type = signedVersionId ? 'user' : 'owner'
+    const job = await prisma.$transaction(async tx => {
+      await tx.$executeRaw`INSERT INTO "RemoteSigningJob" ("id", "targetKey", "appId", "signerId", "signedVersionId", "jobType")
+        VALUES (${randomUUID()}, ${target}, ${appId}, ${signerId}, ${signedVersionId}, ${type}) ON CONFLICT DO NOTHING`
+      const [job] = await tx.$queryRaw<SigningJob[]>`SELECT * FROM "RemoteSigningJob" WHERE "targetKey" = ${target} AND "status" IN ('pending','running')`
+      if (!job) throw new Error('Unable to enqueue signing job')
+      return job
+    })
+    this.kick()
     return job
   }
 
-  /**
-   * Add a signing job for the app owner (updates App model directly)
-   */
-  async enqueueOwnerSigning(appId: string, ownerId: string): Promise<SigningJob> {
-    const job: SigningJob = {
-      id: `owner-${appId}-${Date.now()}`,
-      appId,
-      signerId: ownerId,
-      signedVersionId: null,
-      jobType: 'owner',
-      status: 'pending',
-      createdAt: new Date()
-    }
-
-    this.queue.push(job)
-    console.log(`[SigningQueue] Enqueued owner job ${job.id} for app ${appId}`)
-    
-    // Start processing if not already running
-    this.processQueue()
-    
-    return job
-  }
-
-  /**
-   * Process the queue - runs asynchronously
-   */
-  private async processQueue(): Promise<void> {
-    if (this.processing) return
-    this.processing = true
-
+  private async processNext() {
+    const token = randomUUID()
+    const job = await prisma.$transaction(async tx => {
+      // Serialize claims across overlapping deployments. Held only for this short transaction.
+      const [lock] = await tx.$queryRaw<{ locked: boolean }[]>`SELECT pg_try_advisory_xact_lock(76321894) AS locked`
+      if (!lock?.locked) return null
+      // Lease exceeds the hard 25-minute attempt deadline, so abandoned work cannot publish late.
+      await tx.$executeRaw`UPDATE "RemoteSigningJob" SET "status"='pending', "leaseToken"=NULL, "leaseUntil"=NULL WHERE "status"='running' AND "leaseUntil" < now()`
+      const [next] = await tx.$queryRaw<SigningJob[]>`UPDATE "RemoteSigningJob" SET "status"='running', "startedAt"=now(), "leaseUntil"=now()+interval '30 minutes', "leaseToken"=${token}, "attempts"="attempts"+1
+        WHERE "id"=(SELECT "id" FROM "RemoteSigningJob" WHERE "status"='pending' AND "availableAt" <= now()
+        AND NOT EXISTS (SELECT 1 FROM "RemoteSigningJob" WHERE "status"='running') ORDER BY "createdAt" LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING *`
+      return next || null
+    })
+    if (!job) return
+    const signal = AbortSignal.timeout(25 * 60 * 1000)
     try {
-      while (this.queue.length > 0 && this.running.size < MAX_CONCURRENT_JOBS) {
-        const job = this.queue.shift()
-        if (!job) break
-
-        // Start the job
-        job.status = 'running'
-        job.startedAt = new Date()
-        this.running.set(job.id, job)
-
-        // Run the signing job without awaiting (fire-and-forget with tracking)
-        this.runJob(job).catch((error) => {
-          console.error(`[SigningQueue] Job ${job.id} failed with unhandled error:`, error)
-        })
-      }
-    } finally {
-      this.processing = false
-    }
-  }
-
-  /**
-   * Run a single signing job
-   */
-  private async runJob(job: SigningJob): Promise<void> {
-    console.log(`[SigningQueue] Starting ${job.jobType} job ${job.id}`)
-    
-    // Set up timeout
-    const timeoutId = setTimeout(() => {
-      console.error(`[SigningQueue] Job ${job.id} timed out after ${JOB_TIMEOUT_MS}ms`)
-      this.completeJob(job, 'failed', 'Job timed out')
-    }, JOB_TIMEOUT_MS)
-
-    try {
-      if (job.jobType === 'owner') {
-        // Sign using App model (owner signing)
-        await signApp(job.appId)
+      if (job.jobType === 'owner') await signApp(job.appId, signal)
+      else await signAppForUser(job.appId, job.signerId, job.signedVersionId!, signal)
+      await prisma.$executeRaw`UPDATE "RemoteSigningJob" SET "status"='completed', "completedAt"=now(), "leaseUntil"=NULL, "error"=NULL WHERE "id"=${job.id} AND "leaseToken"=${token}`
+    } catch (error) {
+      if (error instanceof SignerUnavailableError) {
+        await prisma.$executeRaw`UPDATE "RemoteSigningJob" SET "status"='pending', "availableAt"=now()+interval '60 seconds', "leaseUntil"=NULL, "leaseToken"=NULL, "error"='Mac signer unavailable' WHERE "id"=${job.id} AND "leaseToken"=${token}`
       } else {
-        // Sign using SignedVersion model (user signing)
-        await signAppForUser(job.appId, job.signerId, job.signedVersionId!)
-      }
-      clearTimeout(timeoutId)
-      this.completeJob(job, 'completed')
-    } catch (error: any) {
-      clearTimeout(timeoutId)
-      const errorMessage = error?.message || String(error)
-      console.error(`[SigningQueue] Job ${job.id} failed:`, errorMessage)
-      
-      // Update status to FAILED
-      if (job.jobType === 'owner') {
-        await prisma.app.update({
-          where: { id: job.appId },
-          data: { status: 'FAILED' }
-        }).catch((dbError) => {
-          console.error(`[SigningQueue] Failed to update App status:`, dbError)
-        })
-      } else {
-        await prisma.signedVersion.update({
-          where: { id: job.signedVersionId! },
-          data: { status: 'FAILED' }
-        }).catch((dbError) => {
-          console.error(`[SigningQueue] Failed to update SignedVersion status:`, dbError)
+        // Store only a controlled message; signing credentials must never reach job logs.
+        await prisma.$transaction(async tx => {
+          const updated = await tx.$executeRaw`UPDATE "RemoteSigningJob" SET "status"='failed', "completedAt"=now(), "leaseUntil"=NULL, "error"='Signing failed; retry from application' WHERE "id"=${job.id} AND "leaseToken"=${token}`
+          if (updated) {
+            if (job.signedVersionId) await tx.signedVersion.updateMany({ where: { id: job.signedVersionId }, data: { status: 'FAILED' } })
+            else await tx.app.updateMany({ where: { id: job.appId }, data: { status: 'FAILED' } })
+          }
         })
       }
-      
-      this.completeJob(job, 'failed', errorMessage)
     }
   }
 
-  /**
-   * Mark a job as completed and continue processing
-   */
-  private completeJob(job: SigningJob, status: 'completed' | 'failed', error?: string): void {
-    job.status = status
-    job.completedAt = new Date()
-    job.error = error
-    this.running.delete(job.id)
-    
-    const duration = job.completedAt.getTime() - (job.startedAt?.getTime() || job.createdAt.getTime())
-    console.log(`[SigningQueue] Job ${job.id} ${status} in ${duration}ms`)
-    
-    // Continue processing remaining jobs
-    setImmediate(() => this.processQueue())
+  async getStatus() {
+    const jobs = await prisma.$queryRaw<SigningJob[]>`SELECT * FROM "RemoteSigningJob" WHERE "status" IN ('pending','running') ORDER BY "createdAt"`
+    const pending = jobs.filter(j => j.status === 'pending')
+    const running = jobs.filter(j => j.status === 'running')
+    return { queueLength: pending.length, runningCount: running.length, maxConcurrent: 1, jobs: { pending, running } }
   }
 
-  /**
-   * Get queue status
-   */
-  getStatus(): {
-    queueLength: number
-    runningCount: number
-    maxConcurrent: number
-    jobs: {
-      pending: SigningJob[]
-      running: SigningJob[]
-    }
-  } {
-    return {
-      queueLength: this.queue.length,
-      runningCount: this.running.size,
-      maxConcurrent: MAX_CONCURRENT_JOBS,
-      jobs: {
-        pending: [...this.queue],
-        running: [...this.running.values()]
-      }
-    }
+  async isProcessing(signedVersionId: string) {
+    return (await this.getQueuePosition(signedVersionId)) !== null
   }
 
-  /**
-   * Check if a specific signed version is being processed
-   */
-  isProcessing(signedVersionId: string): boolean {
-    const inQueue = this.queue.some(j => j.signedVersionId === signedVersionId)
-    const isRunning = [...this.running.values()].some(j => j.signedVersionId === signedVersionId)
-    return inQueue || isRunning
-  }
-
-  /**
-   * Get position in queue for a specific signed version
-   */
-  getQueuePosition(signedVersionId: string): number | null {
-    // Check if it's running
-    if ([...this.running.values()].some(j => j.signedVersionId === signedVersionId)) {
-      return 0 // Currently running
-    }
-    
-    // Check position in queue
-    const index = this.queue.findIndex(j => j.signedVersionId === signedVersionId)
-    if (index === -1) return null
-    
-    return index + 1 + this.running.size // Position accounting for running jobs
+  async getQueuePosition(signedVersionId: string) {
+    const { jobs } = await this.getStatus()
+    if (jobs.running.some(j => j.signedVersionId === signedVersionId)) return 0
+    const index = jobs.pending.findIndex(j => j.signedVersionId === signedVersionId)
+    return index < 0 ? null : index + 1 + jobs.running.length
   }
 }
 
-// Singleton instance
 export const signingQueue = new SigningQueue()
-
