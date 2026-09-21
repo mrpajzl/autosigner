@@ -15,7 +15,9 @@
     "postinstall": "nuxt prepare",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "test:storage-cleanup": "node --experimental-strip-types scripts/test-storage-cleanup.ts"
+    "test:storage-cleanup": "node --experimental-strip-types scripts/test-storage-cleanup.ts",
+    "build:signer": "node scripts/build-signer.mjs",
+    "test:signer": "node scripts/test-signer.mjs"
   },
   "dependencies": {
     "@auth/core": "^0.41.1",

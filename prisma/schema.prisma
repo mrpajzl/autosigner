@@ -31,6 +31,7 @@ model User {
   certificates   Certificate[]
   provisioningProfiles ProvisioningProfile[]
   signedVersions SignedVersion[]
+  remoteSigningJobs RemoteSigningJob[]
   appleDeveloperCredentials AppleDeveloperCredentials?
   registeredUsers RegisteredUser[] // For moderators managing user databases
   linkedRegistrations RegisteredUser[] @relation("DiscordUserLink") // For Discord users linked to registrations
@@ -87,6 +88,7 @@ model App {
 
   owner User @relation(fields: [ownerId], references: [id])
   signedVersions SignedVersion[]
+  remoteSigningJobs RemoteSigningJob[]
 
   @@index([ownerId])
   @@index([bundleId])
@@ -104,6 +106,7 @@ model SignedVersion {
   signedAt      DateTime?
   createdAt     DateTime  @default(now())
 
+  remoteSigningJobs RemoteSigningJob[]
   app    App  @relation(fields: [appId], references: [id], onDelete: Cascade)
   signer User @relation(fields: [signerId], references: [id])
 
@@ -206,3 +209,25 @@ model UserDevice {
   @@index([udid]) // For quick lookup when checking Apple registration
 }
 
+
+// Partial unique indexes and CHECK constraints are maintained by prisma/remote-signing/001_queue.sql.
+model RemoteSigningJob {
+  id              String @id
+  targetKey       String
+  appId           String
+  signerId        String
+  signedVersionId String?
+  jobType         String
+  status          String @default("pending")
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  startedAt       DateTime? @db.Timestamptz(6)
+  completedAt     DateTime? @db.Timestamptz(6)
+  availableAt     DateTime @default(now()) @db.Timestamptz(6)
+  leaseUntil      DateTime? @db.Timestamptz(6)
+  leaseToken      String?
+  attempts        Int @default(0)
+  error           String?
+  app             App @relation(fields: [appId], references: [id], onDelete: Cascade)
+  signer          User @relation(fields: [signerId], references: [id], onDelete: Cascade)
+  signedVersion   SignedVersion? @relation(fields: [signedVersionId], references: [id], onDelete: Cascade)
+}

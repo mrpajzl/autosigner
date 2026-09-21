@@ -84,13 +84,17 @@ export default defineEventHandler(async () => {
     }
   })()
 
-  const queueStatus = signingQueue.getStatus()
+  let queueError = false
+  const queueStatus = await signingQueue.getStatus().catch(() => {
+    queueError = true
+    return { runningCount: 0, queueLength: 0, maxConcurrent: 1 }
+  })
   const queue: ComponentHealth = {
-    status: queueStatus.runningCount >= queueStatus.maxConcurrent || queueStatus.queueLength > 0 ? 'warn' : 'ok',
+    status: queueError ? 'error' : queueStatus.runningCount >= queueStatus.maxConcurrent || queueStatus.queueLength > 0 ? 'warn' : 'ok',
     queueLength: queueStatus.queueLength,
     runningCount: queueStatus.runningCount,
     maxConcurrent: queueStatus.maxConcurrent,
-    message: queueStatus.queueLength > 0
+    message: queueError ? 'Signing queue database is unavailable' : queueStatus.queueLength > 0
       ? 'Signing jobs are waiting in the queue'
       : queueStatus.runningCount > 0
         ? 'Signing jobs are currently running'

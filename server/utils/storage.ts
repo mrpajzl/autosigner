@@ -1,6 +1,7 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import fse from 'fs-extra'
 import {
   S3Client,
@@ -85,7 +86,8 @@ async function ensureTmpRoot(): Promise<void> {
   await fse.ensureDir(tmpRoot)
 }
 
-async function saveFileFromPath(publicPath: string, sourcePath: string, contentType?: string): Promise<void> {
+async function saveFileFromPath(publicPath: string, sourcePath: string, contentType?: string, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted()
   const key = normalizePublicPath(publicPath)
   if (driver === 'local') {
     const dest = path.join(localPublicRoot, key)
@@ -94,16 +96,21 @@ async function saveFileFromPath(publicPath: string, sourcePath: string, contentT
     return
   }
 
-  const stream = fs.createReadStream(sourcePath)
-  await s3Client!.send(new PutObjectCommand({
-    Bucket: bucket,
-    Key: key,
-    Body: stream,
-    ContentType: contentType
-  }))
+  const stream = fs.createReadStream(sourcePath, { signal })
+  try {
+    await s3Client!.send(new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: stream,
+      ContentType: contentType
+    }), { abortSignal: signal })
+  } finally {
+    stream.destroy()
+  }
 }
 
-async function saveBuffer(publicPath: string, data: Buffer | string, contentType?: string): Promise<void> {
+async function saveBuffer(publicPath: string, data: Buffer | string, contentType?: string, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted()
   const key = normalizePublicPath(publicPath)
   if (driver === 'local') {
     const dest = path.join(localPublicRoot, key)
@@ -118,17 +125,18 @@ async function saveBuffer(publicPath: string, data: Buffer | string, contentType
     Key: key,
     Body: body,
     ContentType: contentType
-  }))
+  }), { abortSignal: signal })
 }
 
-async function createReadStream(publicPath: string, range?: { start?: number; end?: number }): Promise<Readable> {
+async function createReadStream(publicPath: string, range?: { start?: number; end?: number }, signal?: AbortSignal): Promise<Readable> {
+  signal?.throwIfAborted()
   const key = normalizePublicPath(publicPath)
   if (driver === 'local') {
     const filePath = path.join(localPublicRoot, key)
     if (!await fse.pathExists(filePath)) {
       throw createError({ statusCode: 404, statusMessage: 'File not found' })
     }
-    const options: any = {}
+    const options: any = { signal }
     if (range?.start !== undefined) options.start = range.start
     if (range?.end !== undefined) options.end = range.end
     return fs.createReadStream(filePath, options)
@@ -141,7 +149,7 @@ async function createReadStream(publicPath: string, range?: { start?: number; en
       Range: range
         ? `bytes=${range.start !== undefined ? range.start : ''}-${range.end !== undefined ? range.end : ''}`
         : undefined
-    }))
+    }), { abortSignal: signal })
     const body = result.Body
     if (!body) {
       throw createError({ statusCode: 404, statusMessage: 'File not found' })
@@ -159,7 +167,8 @@ async function createReadStream(publicPath: string, range?: { start?: number; en
   }
 }
 
-async function pathExists(publicPath: string): Promise<boolean> {
+async function pathExists(publicPath: string, signal?: AbortSignal): Promise<boolean> {
+  signal?.throwIfAborted()
   const key = normalizePublicPath(publicPath)
   if (driver === 'local') {
     const full = path.join(localPublicRoot, key)
@@ -167,7 +176,7 @@ async function pathExists(publicPath: string): Promise<boolean> {
   }
 
   try {
-    await s3Client!.send(new HeadObjectCommand({ Bucket: bucket, Key: key }))
+    await s3Client!.send(new HeadObjectCommand({ Bucket: bucket, Key: key }), { abortSignal: signal })
     return true
   } catch (e: any) {
     if (e?.$metadata?.httpStatusCode === 404) return false
@@ -248,33 +257,20 @@ async function listPrefix(publicPathPrefix: string): Promise<StoredObjectInfo[]>
   return results
 }
 
-async function downloadToTempFile(publicPath: string, label?: string): Promise<{ filePath: string; cleanup: () => Promise<void> }> {
+async function downloadToTempFile(publicPath: string, label?: string, signal?: AbortSignal): Promise<{ filePath: string; cleanup: () => Promise<void> }> {
+  signal?.throwIfAborted()
   await ensureTmpRoot()
   const key = normalizePublicPath(publicPath)
-  const baseName = path.basename(key) || 'object.bin'
-  const dirPrefix = path.join(tmpRoot, `${label || 'object'}-`)
-  const tmpDir = await fse.mkdtemp(dirPrefix)
-  const destPath = path.join(tmpDir, baseName)
-  if (driver === 'local') {
-    const source = path.join(localPublicRoot, key)
-    await fse.copy(source, destPath)
-    return {
-      filePath: destPath,
-      cleanup: async () => fse.remove(tmpDir).catch(() => {})
-    }
-  }
-
-  const stream = await createReadStream(publicPath)
-  await new Promise<void>((resolve, reject) => {
-    const writeStream = fs.createWriteStream(destPath)
-    stream.pipe(writeStream)
-    stream.on('error', reject)
-    writeStream.on('error', reject)
-    writeStream.on('finish', () => resolve())
-  })
-  return {
-    filePath: destPath,
-    cleanup: async () => fse.remove(tmpDir).catch(() => {})
+  const tmpDir = await fse.mkdtemp(path.join(tmpRoot, `${label || 'object'}-`))
+  const destPath = path.join(tmpDir, path.basename(key) || 'object.bin')
+  await fse.chmod(tmpDir, 0o700)
+  try {
+    const stream = await createReadStream(publicPath, undefined, signal)
+    await pipeline(stream, fs.createWriteStream(destPath, { mode: 0o600 }), { signal })
+    return { filePath: destPath, cleanup: async () => fse.remove(tmpDir).catch(() => {}) }
+  } catch (error) {
+    await fse.remove(tmpDir).catch(() => {})
+    throw error
   }
 }
 

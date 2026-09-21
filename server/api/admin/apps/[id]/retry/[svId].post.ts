@@ -59,7 +59,7 @@ export default defineEventHandler(async (event) => {
 
   // Add to signing queue
   await signingQueue.enqueue(appId, signedVersion.signerId, svId)
-  const queuePosition = signingQueue.getQueuePosition(svId)
+  const queuePosition = await signingQueue.getQueuePosition(svId)
 
   return { 
     ok: true, 

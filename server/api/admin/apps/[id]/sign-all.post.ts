@@ -88,7 +88,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const queueStatus = signingQueue.getStatus()
+  const queueStatus = await signingQueue.getStatus()
 
   return { 
     ok: true, 
