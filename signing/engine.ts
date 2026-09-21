@@ -5,6 +5,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import fse from 'fs-extra'
 import { execa } from 'execa'
 import plist from 'plist'
+import { nestedCodeTargets } from './nested-code'
 
 const context = new AsyncLocalStorage<AbortSignal>()
 async function run(command: string, args: string[], options: { cwd?: string } = {}) {
@@ -214,12 +215,7 @@ export async function signIpa(input: SignInput, signal: AbortSignal): Promise<vo
       }
       await fse.remove(path.join(appDir, '_CodeSignature'))
       const args = ['--force', '--sign', keychain.identity, '--entitlements', entitlementsPath, '--keychain', keychainPath]
-      // Preserve the existing signing behavior for frameworks and app extensions.
-      for (const dir of [path.join(appDir, 'Frameworks'), path.join(appDir, 'PlugIns')]) {
-        if (await fse.pathExists(dir)) {
-          for (const name of await fse.readdir(dir)) await run('codesign', [...args, path.join(dir, name)])
-        }
-      }
+      for (const target of await nestedCodeTargets(appDir, signal)) await run('codesign', [...args, target])
       await run('codesign', [...args, appDir])
       await run('codesign', ['--verify', '--deep', '--strict', appDir])
       await run('zip', ['-qry', path.resolve(input.outputPath), 'Payload'], { cwd: input.workDir })

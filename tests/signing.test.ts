@@ -1,7 +1,23 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, writeFile, rm, readFile, readdir } from 'node:fs/promises'
+import { mkdtemp, mkdir, symlink, writeFile, rm, readFile, readdir } from 'node:fs/promises'
+import { nestedCodeTargets } from '../signing/nested-code'
 import os from 'node:os'
+
+test('nested code includes Kodi libraries and extension binaries before their bundles, excluding resource folders and aliases', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'nested-code-'))
+  try {
+    const lib = path.join(dir, 'Frameworks/lib/python/module.so')
+    const extension = path.join(dir, 'PlugIns/Test.appex')
+    await mkdir(path.dirname(lib), { recursive: true })
+    await mkdir(extension, { recursive: true })
+    await writeFile(lib, Buffer.from([0xcf, 0xfa, 0xed, 0xfe]))
+    await writeFile(path.join(extension, 'Test'), Buffer.from([0xfe, 0xed, 0xfa, 0xcf]))
+    await writeFile(path.join(path.dirname(lib), 'resource.py'), 'print("resource")')
+    await symlink('module.so', path.join(path.dirname(lib), 'alias.so'))
+    assert.deepEqual(await nestedCodeTargets(dir, new AbortController().signal), [lib, path.join(extension, 'Test'), extension])
+  } finally { await rm(dir, { recursive: true, force: true }) }
+})
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { requestSchema } from '../signing/protocol'
