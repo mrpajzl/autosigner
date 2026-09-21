@@ -71,6 +71,10 @@ signing. Rebuild the standalone runner with `npm run build:signer`; deploy
    credentials. Set the container stop grace period to 1800 seconds for queue draining.
    After deploying, inspect the actual container mounts and run the SSH `health`
    command from inside the application container, followed by a real signing test.
+   For MinIO on the same VPS, enable its Coolify **Connect to Predefined Network**
+   option and set `MINIO_ENDPOINT` to the internal service URL (port 9000). Keep
+   `MINIO_PUBLIC` unchanged. Verify a large signed IPA upload: routing server-to-server
+   S3 writes through the public reverse proxy can fail even when small test files pass.
 5. Stage against a restored database and a separate S3 bucket with cleanup disabled.
    Test login, Apple read APIs, uploads, both signing platforms, manifest URLs and
    signed IPA downloads. Verify real session tokens against the new production
