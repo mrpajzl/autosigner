@@ -295,7 +295,7 @@ export async function signAppForUser(appId: string, signerId: string, signedVers
 
 async function signStoredApp(appId: string, signerId: string | undefined, signedVersionId: string | undefined, signal: AbortSignal): Promise<void> {
   const app = await prisma.app.findUniqueOrThrow({ where: { id: appId } })
-  const source = await pickAvailableIpa(app)
+  const source = await pickAvailableIpa(app, signal)
   if (!source.filePath) throw new Error('Source IPA not found on server storage')
   let jobRoot: string | undefined
   try {
@@ -311,30 +311,30 @@ async function signStoredApp(appId: string, signerId: string | undefined, signed
     if (process.env.SIGNING_BACKEND === 'ssh') await signIpaOverSsh(input, signal)
     else await signIpa(input, signal)
     signal.throwIfAborted()
-    if (signedVersionId && signerId) await finalizeSignedVersionArtifact(app, signerId, signedVersionId, input.outputPath)
-    else await finalizeSignedArtifact(app, input.outputPath)
+    if (signedVersionId && signerId) await finalizeSignedVersionArtifact(app, signerId, signedVersionId, input.outputPath, signal)
+    else await finalizeSignedArtifact(app, input.outputPath, signal)
   } finally {
     if (jobRoot) await fse.remove(jobRoot).catch(() => {})
     await source.cleanup().catch(() => {})
   }
 }
 
-async function pickAvailableIpa(app: AppModel): Promise<{ filePath: string; cleanup: () => Promise<void> }> {
+async function pickAvailableIpa(app: AppModel, signal: AbortSignal): Promise<{ filePath: string; cleanup: () => Promise<void> }> {
   const noop = async () => {}
   const candidates: (string | null | undefined)[] = [app.signedIpaPath, app.originalIpaPath]
   for (const publicPath of candidates) {
     if (!publicPath) continue
-    if (await storage.pathExists(publicPath)) {
-      return storage.downloadToTempFile(publicPath, app.id)
+    if (await storage.pathExists(publicPath, signal)) {
+      return storage.downloadToTempFile(publicPath, app.id, signal)
     }
   }
   return { filePath: '', cleanup: noop }
 }
 
-async function finalizeSignedArtifact(app: AppModel, signedFilePath: string): Promise<void> {
+async function finalizeSignedArtifact(app: AppModel, signedFilePath: string, signal: AbortSignal): Promise<void> {
   const fileName = `${app.id}-signed.ipa`
   const signedPublic = `/uploads/${app.ownerId}/${app.id}/${fileName}`
-  await storage.saveFileFromPath(signedPublic, signedFilePath, 'application/octet-stream')
+  await storage.saveFileFromPath(signedPublic, signedFilePath, 'application/octet-stream', signal)
 
   let manifestPublic: string | undefined
   const platform = (app.platform?.toUpperCase() as 'IOS' | 'TVOS') || 'IOS'
@@ -367,7 +367,8 @@ async function finalizeSignedArtifact(app: AppModel, signedFilePath: string): Pr
   }
   const plistXml = plist.build(manifest as any)
   manifestPublic = `/uploads/${app.ownerId}/${app.id}/manifest.plist`
-  await storage.saveBuffer(manifestPublic, plistXml, 'application/xml')
+  await storage.saveBuffer(manifestPublic, plistXml, 'application/xml', signal)
+  signal.throwIfAborted()
 
   await prisma.app.update({
     where: { id: app.id },
@@ -430,11 +431,12 @@ async function finalizeSignedVersionArtifact(
   app: AppModel,
   signerId: string,
   signedVersionId: string,
-  signedFilePath: string
+  signedFilePath: string,
+  signal: AbortSignal
 ): Promise<void> {
   const fileName = `${signedVersionId}-signed.ipa`
   const signedPublic = `/uploads/${signerId}/${signedVersionId}/${fileName}`
-  await storage.saveFileFromPath(signedPublic, signedFilePath, 'application/octet-stream')
+  await storage.saveFileFromPath(signedPublic, signedFilePath, 'application/octet-stream', signal)
   let manifestPublic: string | undefined
   const platform = (app.platform?.toUpperCase() as 'IOS' | 'TVOS') || 'IOS'
   
@@ -466,7 +468,8 @@ async function finalizeSignedVersionArtifact(
   }
   const plistXml = plist.build(manifest as any)
   manifestPublic = `/uploads/${signerId}/${signedVersionId}/manifest.plist`
-  await storage.saveBuffer(manifestPublic, plistXml, 'application/xml')
+  await storage.saveBuffer(manifestPublic, plistXml, 'application/xml', signal)
+  signal.throwIfAborted()
 
   await prisma.signedVersion.update({
     where: { id: signedVersionId },
