@@ -37,7 +37,7 @@ Runtime variables in Coolify:
 - `NUXT_DISCORD_BOT_TOKEN` / `NUXT_DISCORD_GUILD_ID`: same corresponding Discord values.
 - `SIGNING_BACKEND=ssh`, `SIGNING_QUEUE_ENABLED=true`.
 - `SIGNER_SSH_HOST`, `SIGNER_SSH_PORT`, `SIGNER_SSH_USER`.
-- `SIGNER_SSH_KEY_PATH`, `SIGNER_SSH_KNOWN_HOSTS`: read-only mounted SSH credential files.
+- `SIGNER_SSH_KEY_PATH`, `SIGNER_SSH_KNOWN_HOSTS`: mounted SSH credential files that the application cannot modify.
 - `DISABLE_AUTO_CLEANUP=true` during migration, staging, and rollback observation.
 
 The SSH client key on the Mac must have a forced command in `authorized_keys`:
@@ -62,8 +62,15 @@ signing. Rebuild the standalone runner with `npm run build:signer`; deploy
    adds the queue table/indexes. Historical `prisma/migrations` contain SQLite SQL:
    do **not** run them or `prisma db push --accept-data-loss` on production.
 4. Build using `Dockerfile`. No secrets are needed at build time. Set environment
-   variables as runtime-only in Coolify. Mount the SSH directory read-only and set
-   the container stop grace period to 1800 seconds for graceful queue draining.
+   variables as runtime-only in Coolify. Add the SSH directory through **Persistent
+   Storage → Directory Mount**, with host `/data/coolify/fastsigner-ssh` and destination
+   `/run/signer-ssh`. Do not use `custom_docker_run_options --volume`: Coolify can
+   silently omit this option from generated Compose files. Prefer a read-only mount;
+   if the directory mount is writable, use root ownership with group 1000, directory
+   mode 0550 and file mode 0440 so the non-root application can read but not modify
+   credentials. Set the container stop grace period to 1800 seconds for queue draining.
+   After deploying, inspect the actual container mounts and run the SSH `health`
+   command from inside the application container, followed by a real signing test.
 5. Stage against a restored database and a separate S3 bucket with cleanup disabled.
    Test login, Apple read APIs, uploads, both signing platforms, manifest URLs and
    signed IPA downloads. Verify real session tokens against the new production
